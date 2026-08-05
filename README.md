@@ -29,14 +29,9 @@ link tài liệu hoặc UI theo camera của từng người chơi.
 
 ## Video demo
 
-<p align="center">
-  <a href="media/Demo.mp4"><strong>▶ Xem video demo (MP4)</strong></a>
-</p>
+![HaoHan Display UI demo](media/Demo.gif)
 
-<video src="media/Demo.mp4" controls width="100%">
-  Trình duyệt không hỗ trợ phát video trực tiếp. Hãy mở
-  <a href="media/Demo.mp4">media/Demo.mp4</a>.
-</video>
+[Demo.MP4](media/Demo.mp4).
 
 Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 
@@ -578,6 +573,9 @@ HaoHanDisplayUI/
 ├─ src/main/resources/
 │  └─ plugin.yml
 ├─ src/test/java/
+├─ media/
+│  ├─ Demo.gif      Demo hiển thị trực tiếp trên GitHub
+│  └─ Demo.mp4      Video chất lượng cao có âm thanh
 ├─ build.gradle
 └─ settings.gradle
 ```

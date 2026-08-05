@@ -29,14 +29,10 @@ documentation links, or per-player camera-facing interfaces.
 
 ## Demo Video
 
-<p align="center">
-  <a href="media/Demo.mp4"><strong>▶ Watch the demo video (MP4)</strong></a>
-</p>
+![HaoHan Display UI demo](media/Demo.gif)
 
-<video src="media/Demo.mp4" controls width="100%">
-  This browser cannot play the video inline. Open
-  <a href="media/Demo.mp4">media/Demo.mp4</a> instead.
-</video>
+The GIF above is compatible with GitHub README rendering. [Watch or download the
+high-quality MP4 with audio](media/Demo.mp4).
 
 The video demonstrates `/hhdui demo` and its five test pages:
 
@@ -45,10 +41,6 @@ The video demonstrates `/hhdui demo` and its five test pages:
 3. Hover descriptions and clickable icon + text rows.
 4. Camera billboards, X/Y/Z axis locks, and 45-degree rotations.
 5. URL, player command, console command, and permission-tested command actions.
-
-The source video is available at [`media/Demo.mp4`](media/Demo.mp4). If a Markdown
-renderer does not support the `<video>` element, use the link above to view or
-download the MP4 directly.
 
 ## Features
 
@@ -588,7 +580,8 @@ HaoHanDisplayUI/
 │  └─ plugin.yml
 ├─ src/test/java/
 ├─ media/
-│  └─ Demo.mp4      Built-in demo video
+│  ├─ Demo.gif      GitHub-compatible inline demo
+│  └─ Demo.mp4      High-quality demo with audio
 ├─ build.gradle
 └─ settings.gradle
 ```
