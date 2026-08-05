@@ -592,3 +592,10 @@ HaoHanDisplayUI/
 - URL chỉ chấp nhận scheme `http` hoặc `https`.
 - Custom font cần tự hiệu chỉnh `contentWidth`/optical offset nếu metric khác font
   Minecraft mặc định.
+
+## Giấy phép
+
+Copyright (C) 2026 HaoHanSMP.
+
+HaoHanDisplayUI được phát hành theo GNU General Public License phiên bản 3 hoặc
+mới hơn (`GPL-3.0-or-later`). Xem [LICENSE](LICENSE) để biết toàn bộ điều khoản.

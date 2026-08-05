@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2026 HaoHanSMP
+ *
+ * This file is part of HaoHanDisplayUI.
+ *
+ * HaoHanDisplayUI is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * HaoHanDisplayUI is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
+ */
 package dev.haohansmp.displayui.api;
 
 import net.kyori.adventure.text.Component;
@@ -46,10 +64,6 @@ public record AlignedTextNode(
                 UiVerticalAlignment.CENTER, -2.0f, false, false);
     }
 
-    /**
-     * Backwards-compatible full constructor. Vertical placement used to be
-     * implicitly centered inside the box.
-     */
     public AlignedTextNode(Component text, float boxX, float boxY, float width,
                            float height, float depth, UiTextAlignment alignment,
                            float leftOffset, float rightOffset, float fontSize,
@@ -60,7 +74,6 @@ public record AlignedTextNode(
                 verticalOffset, shadow, seeThrough);
     }
 
-    /** Horizontal anchor calculated from the box and its side offsets. */
     @Override
     public float x() {
         return switch (alignment) {
@@ -70,7 +83,6 @@ public record AlignedTextNode(
         };
     }
 
-    /** Vertical anchor calculated from the box, font height and baseline correction. */
     @Override
     public float y() {
         float contentCenter = switch (verticalAlignment) {
@@ -91,18 +103,12 @@ public record AlignedTextNode(
         return offsets(bothSides, bothSides);
     }
 
-    /**
-     * Applies a small optical correction without changing text alignment.
-     * Useful for italic/custom-font glyphs whose visible edge differs from
-     * their measured layout edge.
-     */
     public AlignedTextNode nudgeX(float pixels) {
         return new AlignedTextNode(text, boxX + pixels, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
                 verticalAlignment, verticalOffset, shadow, seeThrough);
     }
 
-    /** Applies one of the standard manual optical-correction presets. */
     public AlignedTextNode opticalPreset(UiTextOpticalPreset preset) {
         return nudgeX(Objects.requireNonNull(preset, "preset").xOffset());
     }
@@ -120,7 +126,6 @@ public record AlignedTextNode(
                 verticalAlignment, verticalOffset, shadow, seeThrough);
     }
 
-    /** Moves this text box after an icon while preserving the old right edge. */
     public AlignedTextNode after(UiIconNode icon, float gap) {
         float newX = icon.right() + gap;
         float oldRight = boxX + width;
@@ -129,9 +134,6 @@ public record AlignedTextNode(
                 contentWidth, verticalAlignment, verticalOffset, shadow, seeThrough);
     }
 
-    /**
-     * Places this text after an icon and uses the icon bounds as its vertical box.
-     */
     public AlignedTextNode after(UiIconNode icon, float gap,
                                  UiVerticalAlignment verticalAlignment) {
         Objects.requireNonNull(icon, "icon");
@@ -150,7 +152,6 @@ public record AlignedTextNode(
                 value, verticalOffset, shadow, seeThrough);
     }
 
-    /** Additional logical-pixel correction applied after vertical alignment. */
     public AlignedTextNode verticalOffset(float offset) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,

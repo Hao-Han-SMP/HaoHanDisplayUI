@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2026 HaoHanSMP
+ *
+ * This file is part of HaoHanDisplayUI.
+ *
+ * HaoHanDisplayUI is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * HaoHanDisplayUI is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
+ */
 package dev.haohansmp.displayui.api;
 
 import org.bukkit.entity.Display;
@@ -21,12 +39,10 @@ public record UiCameraTransform(
         }
     }
 
-    /** Fixed in world space with no local angle correction. */
     public static UiCameraTransform fixed() {
         return new UiCameraTransform(true, true, true, 0, 0, 0);
     }
 
-    /** Follows camera yaw and pitch. Minecraft cameras do not expose roll. */
     public static UiCameraTransform cameraFacing() {
         return new UiCameraTransform(false, false, true, 0, 0, 0);
     }

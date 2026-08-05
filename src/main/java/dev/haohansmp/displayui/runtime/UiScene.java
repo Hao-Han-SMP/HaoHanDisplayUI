@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2026 HaoHanSMP
+ *
+ * This file is part of HaoHanDisplayUI.
+ *
+ * HaoHanDisplayUI is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * HaoHanDisplayUI is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
+ */
 package dev.haohansmp.displayui.runtime;
 
 import dev.haohansmp.displayui.HaoHanDisplayUIPlugin;
@@ -56,11 +74,9 @@ final class UiScene implements UiHandle {
     private final NamespacedKey sceneKey;
     private final NamespacedKey ownerDataKey;
     private final List<Display> entities = new ArrayList<>();
-    /** Display for each document node, kept in document order for in-place updates. */
     private final List<Display> nodeEntities = new ArrayList<>();
     private final Set<UUID> forcedVisible = new HashSet<>();
     private final Set<UUID> forcedHidden = new HashSet<>();
-    /** Players to whom the current entity generation has already been shown. */
     private final Set<UUID> visibleViewers = new HashSet<>();
     private final List<UiClickHandler> clickHandlers = new CopyOnWriteArrayList<>();
 
@@ -463,10 +479,6 @@ final class UiScene implements UiHandle {
         if (removed) throw new IllegalStateException("UI scene has been removed");
     }
 
-    /**
-     * Text animation should not rebuild the whole scene. If node geometry,
-     * styles and buttons are unchanged, only Adventure components are patched.
-     */
     private boolean canUpdateTextInPlace(UiDocument current, UiDocument next) {
         if (!current.buttons().equals(next.buttons())
                 || current.nodes().size() != next.nodes().size()

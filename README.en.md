@@ -598,3 +598,10 @@ HaoHanDisplayUI/
 - Console commands have full server authority and must only come from trusted data.
 - URLs only accept the `http` and `https` schemes.
 - Custom fonts may require manual `contentWidth` and optical-offset corrections.
+
+## License
+
+Copyright (C) 2026 HaoHanSMP.
+
+HaoHanDisplayUI is licensed under the GNU General Public License version 3 or
+later (`GPL-3.0-or-later`). See [LICENSE](LICENSE) for the full license text.
