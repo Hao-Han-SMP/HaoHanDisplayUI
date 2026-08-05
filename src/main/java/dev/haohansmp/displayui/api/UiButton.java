@@ -1,0 +1,76 @@
+package dev.haohansmp.displayui.api;
+
+import net.kyori.adventure.text.Component;
+
+import java.util.Objects;
+
+/** Invisible rectangular hit zone in the same logical-pixel space as UI nodes. */
+public record UiButton(
+        String id,
+        float x,
+        float y,
+        float width,
+        float height,
+        Component description,
+        UiButtonAction action,
+        float hitSlop
+) {
+    public UiButton {
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(description, "description");
+        Objects.requireNonNull(action, "action");
+        if (!id.matches("[a-z0-9_.-]+")) {
+            throw new IllegalArgumentException("button id must contain only [a-z0-9_.-]");
+        }
+        if (width <= 0.0f || height <= 0.0f) {
+            throw new IllegalArgumentException("button dimensions must be positive");
+        }
+        if (hitSlop < 0.0f || !Float.isFinite(hitSlop)) {
+            throw new IllegalArgumentException("button hitSlop must be finite and non-negative");
+        }
+    }
+
+    public UiButton(String id, float x, float y, float width, float height) {
+        this(id, x, y, width, height, Component.empty(), UiButtonAction.none(), 0.0f);
+    }
+
+    public UiButton(String id, float x, float y, float width, float height,
+                    Component description) {
+        this(id, x, y, width, height, description, UiButtonAction.none(), 0.0f);
+    }
+
+    public UiButton(String id, float x, float y, float width, float height,
+                    Component description, UiButtonAction action) {
+        this(id, x, y, width, height, description, action, 0.0f);
+    }
+
+    public UiButton describedBy(Component description) {
+        return new UiButton(id, x, y, width, height,
+                Objects.requireNonNull(description, "description"), action, hitSlop);
+    }
+
+    public UiButton withAction(UiButtonAction action) {
+        return new UiButton(id, x, y, width, height, description,
+                Objects.requireNonNull(action, "action"), hitSlop);
+    }
+
+    /** Expands the clickable bounds on every side without changing rendering. */
+    public UiButton hitSlop(float pixels) {
+        return new UiButton(id, x, y, width, height, description, action, pixels);
+    }
+
+    public static UiButton forText(String id, AlignedTextNode text) {
+        Objects.requireNonNull(text, "text");
+        return new UiButton(id, text.boxX(), text.boxY(), text.width(), text.height());
+    }
+
+    public static UiButton forIcon(String id, UiIconNode icon) {
+        Objects.requireNonNull(icon, "icon");
+        return new UiButton(id, icon.boxX(), icon.boxY(), icon.width(), icon.height());
+    }
+
+    public boolean contains(float localX, float localY) {
+        return localX >= x - hitSlop && localX <= x + width + hitSlop
+                && localY >= y - hitSlop && localY <= y + height + hitSlop;
+    }
+}

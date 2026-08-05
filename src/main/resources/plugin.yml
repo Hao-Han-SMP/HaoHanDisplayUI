@@ -1,0 +1,18 @@
+name: HaoHanDisplayUI
+version: '${project.version}'
+main: dev.haohansmp.displayui.HaoHanDisplayUIPlugin
+api-version: '1.21'
+description: Reusable in-world Display UI engine for HaoHanSMP plugins
+authors: [ HaoHanSMP ]
+website: https://haohansmp.dev
+
+commands:
+  hhdui:
+    description: HaoHan Display UI engine commands
+    usage: /hhdui <info|demo|clear>
+    permission: haohansmp.displayui.admin
+
+permissions:
+  haohansmp.displayui.admin:
+    description: Manage and test HaoHan Display UI
+    default: op
