@@ -18,6 +18,9 @@
  */
 package dev.haohansmp.displayui.api;
 
+import dev.haohansmp.displayui.api.interaction.UiClickHandler;
+import dev.haohansmp.displayui.api.layout.UiCameraTransform;
+import dev.haohansmp.displayui.api.view.UiAudience;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 

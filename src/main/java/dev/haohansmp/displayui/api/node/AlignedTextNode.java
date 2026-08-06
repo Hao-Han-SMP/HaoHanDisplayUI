@@ -16,8 +16,13 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api;
+package dev.haohansmp.displayui.api.node;
 
+import dev.haohansmp.displayui.api.layout.UiRect;
+import dev.haohansmp.displayui.api.text.UiText;
+import dev.haohansmp.displayui.api.text.UiTextAlignment;
+import dev.haohansmp.displayui.api.text.UiTextOpticalPreset;
+import dev.haohansmp.displayui.api.text.UiVerticalAlignment;
 import net.kyori.adventure.text.Component;
 
 import java.util.Objects;
@@ -62,6 +67,11 @@ public record AlignedTextNode(
         this(text, x, y, width, height, 0.002f, alignment,
                 0.0f, 0.0f, 10.0f, UiText.estimateWidth(text, 10.0f),
                 UiVerticalAlignment.CENTER, -2.0f, false, false);
+    }
+
+    public AlignedTextNode(Component text, UiRect bounds, UiTextAlignment alignment) {
+        this(text, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(),
+                bounds.width(), bounds.height(), alignment);
     }
 
     public AlignedTextNode(Component text, float boxX, float boxY, float width,

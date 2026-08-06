@@ -16,11 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api;
+package dev.haohansmp.displayui.api.text;
 
-/** One renderable node in a UI document. Coordinates are logical pixels. */
-public sealed interface UiNode permits TextNode, AlignedTextNode, ItemNode, UiIconNode, BlockNode {
-    float x();
-    float y();
-    float depth();
+/** Vertical placement of text inside its logical layout box. */
+public enum UiVerticalAlignment {
+    TOP,
+    CENTER,
+    BOTTOM
 }

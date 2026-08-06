@@ -146,6 +146,33 @@ permission này theo mặc định.
 
 ## API cơ bản
 
+Public API được nhóm theo trách nhiệm thay vì đặt toàn bộ type trong một package
+phẳng:
+
+| Package | Trách nhiệm |
+| --- | --- |
+| `api` | Service, document, handle và tùy chọn của scene. |
+| `api.layout` | Rectangle, anchor và camera transform. |
+| `api.node` | Các node text, item, icon và block có thể render. |
+| `api.text` | Builder rich text và helper căn chỉnh text. |
+| `api.interaction` | Button, action và click callback. |
+| `api.interaction.event` | Bukkit event của interaction. |
+| `api.icon` | Đăng ký icon tái sử dụng. |
+| `api.view` | Chính sách audience/viewer. |
+
+Ví dụ, consumer thông thường bắt đầu với các import tập trung sau:
+
+```java
+import dev.haohansmp.displayui.api.DisplayUiService;
+import dev.haohansmp.displayui.api.UiDocument;
+import dev.haohansmp.displayui.api.UiHandle;
+import dev.haohansmp.displayui.api.interaction.UiButton;
+import dev.haohansmp.displayui.api.layout.UiRect;
+import dev.haohansmp.displayui.api.node.AlignedTextNode;
+import dev.haohansmp.displayui.api.node.UiIconNode;
+import dev.haohansmp.displayui.api.text.UiTextAlignment;
+```
+
 Lấy service từ Bukkit `ServicesManager`:
 
 ```java
@@ -241,6 +268,55 @@ Ví dụ panel `180 × 116 px` với `pixelsPerBlock = 40` có kích thước kh
 | `BlockNode` | Nền/panel/block-model layer. |
 
 `UiDocument` là immutable snapshot. Node render theo thứ tự `depth` tăng dần.
+
+## Rectangle, anchor và layout theo panel
+
+`UiRect` mô tả bounds theo logical pixel, với `x/y` là góc trên-trái. Một panel
+có thể làm layout root; node con lấy vị trí từ cạnh hoặc anchor của panel thay
+vì dùng tọa độ scene rời rạc:
+
+```java
+UiRect panel = UiRect.centered(0, 0, 180, 116);
+UiRect content = panel.inset(8);
+UiRect closeButton = panel.place(
+    UiAnchor.TOP_RIGHT, UiAnchor.TOP_RIGHT,
+    16, 16, -8, 8
+);
+
+AlignedTextNode title = new AlignedTextNode(
+    Component.text("Ancient Forge"),
+    panel.place(UiAnchor.TOP_LEFT, UiAnchor.TOP_LEFT, 140, 18, 8, 8),
+    UiTextAlignment.LEFT
+);
+```
+
+`place(parentAnchor, childAnchor, ...)` ghép anchor của node con vào anchor của
+panel rồi áp dụng offset. Vì bounds của glyph/resource-pack không thể đo chính
+xác ở server, consumer cần khai báo kích thước logic của background một lần.
+
+## Registry custom icon cho plugin bên thứ ba
+
+`DisplayUiService.icons()` cung cấp registry dùng chung cho icon dựa trên
+`ItemStack`. Plugin sở hữu đăng ký một key một lần; engine clone item khi tạo
+node và tự gỡ toàn bộ registration khi plugin đó bị disable:
+
+```java
+DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
+NamespacedKey iconKey = new NamespacedKey(plugin, "icon/embersteel_ingot");
+
+ItemStack customIcon = new ItemStack(Material.IRON_INGOT);
+ItemMeta meta = customIcon.getItemMeta();
+meta.setItemModel(new NamespacedKey(plugin, "embersteel_ingot"));
+customIcon.setItemMeta(meta);
+
+ui.icons().register(plugin, iconKey, customIcon);
+UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
+```
+
+Texture/model vẫn phải nằm trong resource pack, ví dụ item model
+`assets/<namespace>/items/embersteel_ingot.json`. `width/height` của `UiRect`
+là kích thước layout thật; text có thể đặt bằng `icon.right() + gap` và không
+phụ thuộc vùng alpha bên trong texture. Registry không dùng bitmap-font atlas.
 
 ## Text layout
 

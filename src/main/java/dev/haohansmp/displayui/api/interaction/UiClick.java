@@ -16,11 +16,17 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api;
+package dev.haohansmp.displayui.api.interaction;
 
-/** Vertical placement of text inside its logical layout box. */
-public enum UiVerticalAlignment {
-    TOP,
-    CENTER,
-    BOTTOM
-}
+import dev.haohansmp.displayui.api.UiHandle;
+import org.bukkit.entity.Player;
+
+/** Data delivered to scene-local click callbacks. */
+public record UiClick(
+        UiHandle handle,
+        UiButton button,
+        Player player,
+        float localX,
+        float localY,
+        double distance
+) {}

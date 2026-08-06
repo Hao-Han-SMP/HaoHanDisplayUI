@@ -16,8 +16,9 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api;
+package dev.haohansmp.displayui.api.node;
 
+import dev.haohansmp.displayui.api.layout.UiRect;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.inventory.ItemStack;
 
@@ -52,6 +53,18 @@ public record UiIconNode(
                       float uWidth, float vHeight) {
         this(item, x, y, 0.003f, width, height, uWidth, vHeight,
                 ItemDisplay.ItemDisplayTransform.FIXED);
+    }
+
+    public UiIconNode(ItemStack item, UiRect bounds, float uWidth, float vHeight) {
+        this(item, bounds, 0.003f, uWidth, vHeight,
+                ItemDisplay.ItemDisplayTransform.FIXED);
+    }
+
+    public UiIconNode(ItemStack item, UiRect bounds, float depth,
+                      float uWidth, float vHeight,
+                      ItemDisplay.ItemDisplayTransform transform) {
+        this(item, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(), depth,
+                bounds.width(), bounds.height(), uWidth, vHeight, transform);
     }
 
     @Override public ItemStack item() { return item.clone(); }

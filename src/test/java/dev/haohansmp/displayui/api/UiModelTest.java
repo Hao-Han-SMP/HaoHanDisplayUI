@@ -18,6 +18,18 @@
  */
 package dev.haohansmp.displayui.api;
 
+import dev.haohansmp.displayui.api.interaction.UiButton;
+import dev.haohansmp.displayui.api.interaction.UiButtonAction;
+import dev.haohansmp.displayui.api.layout.UiAnchor;
+import dev.haohansmp.displayui.api.layout.UiCameraTransform;
+import dev.haohansmp.displayui.api.layout.UiRect;
+import dev.haohansmp.displayui.api.node.AlignedTextNode;
+import dev.haohansmp.displayui.api.node.TextNode;
+import dev.haohansmp.displayui.api.node.UiNode;
+import dev.haohansmp.displayui.api.text.UiText;
+import dev.haohansmp.displayui.api.text.UiTextAlignment;
+import dev.haohansmp.displayui.api.text.UiTextOpticalPreset;
+import dev.haohansmp.displayui.api.text.UiVerticalAlignment;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.entity.TextDisplay;
@@ -31,6 +43,46 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UiModelTest {
+    @Test
+    void rectDerivesEdgesInsetsAndAnchoredChildren() {
+        UiRect panel = UiRect.centered(0, 0, 192, 128);
+        assertEquals(-96.0f, panel.left());
+        assertEquals(-64.0f, panel.top());
+        assertEquals(96.0f, panel.right());
+        assertEquals(64.0f, panel.bottom());
+
+        UiRect content = panel.inset(8, 10);
+        assertEquals(-88.0f, content.left());
+        assertEquals(-54.0f, content.top());
+        assertEquals(176.0f, content.width());
+        assertEquals(108.0f, content.height());
+
+        UiRect close = panel.place(UiAnchor.TOP_RIGHT, UiAnchor.TOP_RIGHT,
+                16, 16, -8, 8);
+        assertEquals(72.0f, close.left());
+        assertEquals(-56.0f, close.top());
+        assertEquals(88.0f, close.right());
+        assertEquals(-40.0f, close.bottom());
+
+        AlignedTextNode title = new AlignedTextNode(
+                Component.text("Title"), content, UiTextAlignment.LEFT);
+        UiButton button = new UiButton("content", content);
+        assertEquals(content.left(), title.boxX());
+        assertEquals(content.top(), title.boxY());
+        assertEquals(content, new UiRect(
+                button.x(), button.y(), button.width(), button.height()));
+    }
+
+    @Test
+    void rectRejectsInvalidGeometry() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new UiRect(0, 0, 0, 10));
+        assertThrows(IllegalArgumentException.class,
+                () -> UiRect.centered(0, 0, Float.NaN, 10));
+        assertThrows(IllegalArgumentException.class,
+                () -> new UiRect(0, 0, 10, 10).inset(6));
+    }
+
     @Test
     void documentDefensivelyCopiesItsNodeList() {
         var source = new ArrayList<UiNode>();
@@ -140,8 +192,11 @@ class UiModelTest {
     @Test
     void defaultFontWidthEstimateScalesWithFontSize() {
         Component text = Component.text("Hi!");
-        assertEquals(10.0f, UiText.estimateWidth(text, 10.0f));
-        assertEquals(5.0f, UiText.estimateWidth(text, 5.0f));
+        assertEquals(5.0f, UiText.estimateWidth(text, 10.0f));
+        assertEquals(2.5f, UiText.estimateWidth(text, 5.0f));
+        assertEquals(UiText.estimateWidth(Component.text("Blaze Rod"), 6.8f),
+                UiText.estimateWidth(Component.translatable("item.minecraft.blaze_rod")
+                        .fallback("Blaze Rod"), 6.8f));
     }
 
     @Test

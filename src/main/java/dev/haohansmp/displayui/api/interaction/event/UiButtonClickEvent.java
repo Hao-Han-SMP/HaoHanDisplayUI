@@ -16,10 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api.event;
+package dev.haohansmp.displayui.api.interaction.event;
 
-import dev.haohansmp.displayui.api.UiButton;
 import dev.haohansmp.displayui.api.UiHandle;
+import dev.haohansmp.displayui.api.interaction.UiButton;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;

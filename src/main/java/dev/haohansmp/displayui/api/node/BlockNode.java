@@ -16,35 +16,38 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api;
+package dev.haohansmp.displayui.api.node;
 
-import org.bukkit.entity.ItemDisplay;
-import org.bukkit.inventory.ItemStack;
+import dev.haohansmp.displayui.api.layout.UiRect;
+import org.bukkit.block.data.BlockData;
 
 import java.util.Objects;
 
-public record ItemNode(
-        ItemStack item,
+/** A block-model layer; useful for panels that do not rely on font glyphs. */
+public record BlockNode(
+        BlockData block,
         float x,
         float y,
         float depth,
-        float scale,
-        ItemDisplay.ItemDisplayTransform transform
+        float width,
+        float height,
+        float thickness
 ) implements UiNode {
-    public ItemNode {
-        Objects.requireNonNull(item, "item");
-        Objects.requireNonNull(transform, "transform");
-        if (item.getType().isAir()) throw new IllegalArgumentException("item cannot be air");
-        if (scale <= 0.0f) throw new IllegalArgumentException("scale must be positive");
-        item = item.clone();
+    public BlockNode {
+        Objects.requireNonNull(block, "block");
+        if (width <= 0 || height <= 0 || thickness <= 0) {
+            throw new IllegalArgumentException("block dimensions must be positive");
+        }
+        block = block.clone();
     }
 
     @Override
-    public ItemStack item() {
-        return item.clone();
+    public BlockData block() {
+        return block.clone();
     }
 
-    public static ItemNode fixed(ItemStack item, float x, float y, float scale) {
-        return new ItemNode(item, x, y, 0.003f, scale, ItemDisplay.ItemDisplayTransform.FIXED);
+    public BlockNode(BlockData block, UiRect bounds, float depth, float thickness) {
+        this(block, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(), depth,
+                bounds.width(), bounds.height(), thickness);
     }
 }

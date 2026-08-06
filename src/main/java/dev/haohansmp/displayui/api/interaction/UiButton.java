@@ -16,8 +16,11 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api;
+package dev.haohansmp.displayui.api.interaction;
 
+import dev.haohansmp.displayui.api.layout.UiRect;
+import dev.haohansmp.displayui.api.node.AlignedTextNode;
+import dev.haohansmp.displayui.api.node.UiIconNode;
 import net.kyori.adventure.text.Component;
 
 import java.util.Objects;
@@ -50,6 +53,11 @@ public record UiButton(
 
     public UiButton(String id, float x, float y, float width, float height) {
         this(id, x, y, width, height, Component.empty(), UiButtonAction.none(), 0.0f);
+    }
+
+    public UiButton(String id, UiRect bounds) {
+        this(id, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(),
+                bounds.width(), bounds.height());
     }
 
     public UiButton(String id, float x, float y, float width, float height,

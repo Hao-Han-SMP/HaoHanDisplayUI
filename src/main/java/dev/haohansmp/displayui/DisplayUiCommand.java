@@ -18,19 +18,19 @@
  */
 package dev.haohansmp.displayui;
 
-import dev.haohansmp.displayui.api.AlignedTextNode;
-import dev.haohansmp.displayui.api.BlockNode;
-import dev.haohansmp.displayui.api.UiButton;
-import dev.haohansmp.displayui.api.UiButtonAction;
-import dev.haohansmp.displayui.api.UiCameraTransform;
 import dev.haohansmp.displayui.api.UiDocument;
 import dev.haohansmp.displayui.api.UiHandle;
-import dev.haohansmp.displayui.api.UiIconNode;
 import dev.haohansmp.displayui.api.UiOptions;
-import dev.haohansmp.displayui.api.UiText;
-import dev.haohansmp.displayui.api.UiTextAlignment;
-import dev.haohansmp.displayui.api.UiTextOpticalPreset;
-import dev.haohansmp.displayui.api.UiVerticalAlignment;
+import dev.haohansmp.displayui.api.interaction.UiButton;
+import dev.haohansmp.displayui.api.interaction.UiButtonAction;
+import dev.haohansmp.displayui.api.layout.UiCameraTransform;
+import dev.haohansmp.displayui.api.node.AlignedTextNode;
+import dev.haohansmp.displayui.api.node.BlockNode;
+import dev.haohansmp.displayui.api.node.UiIconNode;
+import dev.haohansmp.displayui.api.text.UiText;
+import dev.haohansmp.displayui.api.text.UiTextAlignment;
+import dev.haohansmp.displayui.api.text.UiTextOpticalPreset;
+import dev.haohansmp.displayui.api.text.UiVerticalAlignment;
 import dev.haohansmp.displayui.runtime.DisplayUiServiceImpl;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;

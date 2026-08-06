@@ -20,10 +20,11 @@ package dev.haohansmp.displayui.runtime;
 
 import dev.haohansmp.displayui.HaoHanDisplayUIPlugin;
 import dev.haohansmp.displayui.api.DisplayUiService;
-import dev.haohansmp.displayui.api.UiAudience;
 import dev.haohansmp.displayui.api.UiDocument;
 import dev.haohansmp.displayui.api.UiHandle;
 import dev.haohansmp.displayui.api.UiOptions;
+import dev.haohansmp.displayui.api.icon.UiIconRegistry;
+import dev.haohansmp.displayui.api.view.UiAudience;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -40,11 +41,17 @@ import java.util.UUID;
 
 public final class DisplayUiServiceImpl implements DisplayUiService {
     private final HaoHanDisplayUIPlugin plugin;
+    private final UiIconRegistryImpl icons = new UiIconRegistryImpl();
     private final Map<UUID, UiScene> scenes = new LinkedHashMap<>();
     private final Map<UUID, HoverTarget> hovered = new LinkedHashMap<>();
 
     public DisplayUiServiceImpl(HaoHanDisplayUIPlugin plugin) {
         this.plugin = plugin;
+    }
+
+    @Override
+    public UiIconRegistry icons() {
+        return icons;
     }
 
     @Override
@@ -106,6 +113,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
         hovered.clear();
         new ArrayList<>(scenes.values()).forEach(UiScene::remove);
         scenes.clear();
+        icons.clear();
     }
 
     private void forget(UUID id) {

@@ -19,22 +19,23 @@
 package dev.haohansmp.displayui.runtime;
 
 import dev.haohansmp.displayui.HaoHanDisplayUIPlugin;
-import dev.haohansmp.displayui.api.BlockNode;
-import dev.haohansmp.displayui.api.AlignedTextNode;
-import dev.haohansmp.displayui.api.ItemNode;
-import dev.haohansmp.displayui.api.UiIconNode;
-import dev.haohansmp.displayui.api.TextNode;
-import dev.haohansmp.displayui.api.UiAudience;
-import dev.haohansmp.displayui.api.UiButton;
-import dev.haohansmp.displayui.api.UiButtonAction;
-import dev.haohansmp.displayui.api.UiCameraTransform;
-import dev.haohansmp.displayui.api.UiClick;
-import dev.haohansmp.displayui.api.UiClickHandler;
 import dev.haohansmp.displayui.api.UiDocument;
 import dev.haohansmp.displayui.api.UiHandle;
-import dev.haohansmp.displayui.api.UiNode;
 import dev.haohansmp.displayui.api.UiOptions;
-import dev.haohansmp.displayui.api.event.UiButtonClickEvent;
+import dev.haohansmp.displayui.api.interaction.UiButton;
+import dev.haohansmp.displayui.api.interaction.UiButtonAction;
+import dev.haohansmp.displayui.api.interaction.UiClick;
+import dev.haohansmp.displayui.api.interaction.UiClickHandler;
+import dev.haohansmp.displayui.api.interaction.event.UiButtonClickEvent;
+import dev.haohansmp.displayui.api.layout.UiCameraTransform;
+import dev.haohansmp.displayui.api.node.AlignedTextNode;
+import dev.haohansmp.displayui.api.node.BlockNode;
+import dev.haohansmp.displayui.api.node.ItemNode;
+import dev.haohansmp.displayui.api.node.TextNode;
+import dev.haohansmp.displayui.api.node.UiIconNode;
+import dev.haohansmp.displayui.api.node.UiNode;
+import dev.haohansmp.displayui.api.text.UiTextAlignment;
+import dev.haohansmp.displayui.api.view.UiAudience;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -414,7 +415,7 @@ final class UiScene implements UiHandle {
     }
 
     private TextDisplay.TextAlignment screenAlignment(
-            dev.haohansmp.displayui.api.UiTextAlignment alignment) {
+            UiTextAlignment alignment) {
         return switch (alignment) {
             case LEFT -> TextDisplay.TextAlignment.RIGHT;
             case RIGHT -> TextDisplay.TextAlignment.LEFT;

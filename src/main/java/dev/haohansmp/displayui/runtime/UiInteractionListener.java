@@ -25,6 +25,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.event.server.PluginDisableEvent;
 
 public final class UiInteractionListener implements Listener {
     private final DisplayUiServiceImpl service;
@@ -46,5 +47,10 @@ public final class UiInteractionListener implements Listener {
         if (event.getHand() != EquipmentSlot.HAND) return;
         if (!event.getRightClicked().getScoreboardTags().contains("hhdui_interaction")) return;
         if (service.handleRightClick(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPluginDisable(PluginDisableEvent event) {
+        service.icons().unregisterAll(event.getPlugin());
     }
 }

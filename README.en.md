@@ -147,6 +147,33 @@ receive this permission by default.
 
 ## Basic API
 
+The public API is grouped by responsibility instead of placing every type in one
+flat package:
+
+| Package | Responsibility |
+| --- | --- |
+| `api` | Service, document, handle, and scene options. |
+| `api.layout` | Rectangles, anchors, and camera transforms. |
+| `api.node` | Renderable text, item, icon, and block nodes. |
+| `api.text` | Rich-text builders and text alignment helpers. |
+| `api.interaction` | Buttons, actions, and click callbacks. |
+| `api.interaction.event` | Bukkit interaction events. |
+| `api.icon` | Reusable icon registration. |
+| `api.view` | Audience/viewer policies. |
+
+For example, a typical consumer starts with these focused imports:
+
+```java
+import dev.haohansmp.displayui.api.DisplayUiService;
+import dev.haohansmp.displayui.api.UiDocument;
+import dev.haohansmp.displayui.api.UiHandle;
+import dev.haohansmp.displayui.api.interaction.UiButton;
+import dev.haohansmp.displayui.api.layout.UiRect;
+import dev.haohansmp.displayui.api.node.AlignedTextNode;
+import dev.haohansmp.displayui.api.node.UiIconNode;
+import dev.haohansmp.displayui.api.text.UiTextAlignment;
+```
+
 Load the service from Bukkit's `ServicesManager`:
 
 ```java
@@ -243,6 +270,57 @@ A `180 × 116 px` panel at `pixelsPerBlock = 40` is approximately
 | `BlockNode` | Background, panel, or block-model layer. |
 
 `UiDocument` is an immutable snapshot. Nodes render in ascending `depth` order.
+
+## Rectangles, anchors, and panel-relative layout
+
+`UiRect` describes bounds in logical pixels, with `x/y` at the visual top-left.
+A panel can act as the layout root so child nodes derive their positions from
+its edges or anchors instead of unrelated scene coordinates:
+
+```java
+UiRect panel = UiRect.centered(0, 0, 180, 116);
+UiRect content = panel.inset(8);
+UiRect closeButton = panel.place(
+    UiAnchor.TOP_RIGHT, UiAnchor.TOP_RIGHT,
+    16, 16, -8, 8
+);
+
+AlignedTextNode title = new AlignedTextNode(
+    Component.text("Ancient Forge"),
+    panel.place(UiAnchor.TOP_LEFT, UiAnchor.TOP_LEFT, 140, 18, 8, 8),
+    UiTextAlignment.LEFT
+);
+```
+
+`place(parentAnchor, childAnchor, ...)` joins the child's anchor to the panel
+anchor and then applies an offset. Because the server cannot measure custom
+resource-pack glyph bounds exactly, consumers declare the background's logical
+size once.
+
+## Third-party custom icon registry
+
+`DisplayUiService.icons()` exposes a shared registry for `ItemStack`-backed
+icons. The owning plugin registers a key once; the engine clones items when
+building nodes and automatically removes registrations when that plugin is
+disabled:
+
+```java
+DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
+NamespacedKey iconKey = new NamespacedKey(plugin, "icon/embersteel_ingot");
+
+ItemStack customIcon = new ItemStack(Material.IRON_INGOT);
+ItemMeta meta = customIcon.getItemMeta();
+meta.setItemModel(new NamespacedKey(plugin, "embersteel_ingot"));
+customIcon.setItemMeta(meta);
+
+ui.icons().register(plugin, iconKey, customIcon);
+UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
+```
+
+The texture/model still belongs in the resource pack, for example
+`assets/<namespace>/items/embersteel_ingot.json`. The `UiRect` width/height are
+the real layout bounds, so text can start at `icon.right() + gap` regardless of
+transparent texture margins. The registry does not use a bitmap-font atlas.
 
 ## Text Layout
 

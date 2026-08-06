@@ -18,7 +18,7 @@
  */
 package dev.haohansmp.displayui.runtime;
 
-import dev.haohansmp.displayui.api.UiButton;
+import dev.haohansmp.displayui.api.interaction.UiButton;
 import org.bukkit.entity.Player;
 
 record UiHit(

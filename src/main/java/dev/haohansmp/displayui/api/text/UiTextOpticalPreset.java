@@ -16,16 +16,26 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package dev.haohansmp.displayui.api;
+package dev.haohansmp.displayui.api.text;
 
-import org.bukkit.entity.Player;
+/**
+ * Manual optical X corrections for Minecraft text whose visible glyph edge
+ * differs from its measured layout edge.
+ */
+public enum UiTextOpticalPreset {
+    ITALIC(-1.0f),
+    PLAIN(0.0f),
+    GRADIENT(1.0f),
+    BOLD(2.0f),
+    BOLD_GRADIENT(3.0f);
 
-/** Data delivered to scene-local click callbacks. */
-public record UiClick(
-        UiHandle handle,
-        UiButton button,
-        Player player,
-        float localX,
-        float localY,
-        double distance
-) {}
+    private final float xOffset;
+
+    UiTextOpticalPreset(float xOffset) {
+        this.xOffset = xOffset;
+    }
+
+    public float xOffset() {
+        return xOffset;
+    }
+}

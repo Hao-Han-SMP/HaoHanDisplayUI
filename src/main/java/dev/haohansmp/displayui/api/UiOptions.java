@@ -18,6 +18,8 @@
  */
 package dev.haohansmp.displayui.api;
 
+import dev.haohansmp.displayui.api.layout.UiCameraTransform;
+
 /** Runtime behavior shared by every node in a display group. */
 public record UiOptions(
         float pixelsPerBlock,
