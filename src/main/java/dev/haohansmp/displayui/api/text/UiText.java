@@ -58,10 +58,10 @@ public final class UiText {
                 default -> 6.0f;
             };
         }
-        // AlignedTextNode renders at fontSize / 20, so the measured logical
-        // width must use the same scale. Using /10 made layout bounds twice as
-        // wide as the text that the client actually renders.
-        return Math.max(1.0f, pixels * fontSize / 20.0f);
+        // Minecraft's default font is approximately ten pixels tall. fontSize
+        // is expressed in logical UI pixels, so glyph widths use the same
+        // fontSize / 10 ratio as the original aligned-text layout.
+        return Math.max(1.0f, pixels * fontSize / 10.0f);
     }
 
     public static Component gradient(String text, TextColor from, TextColor to,

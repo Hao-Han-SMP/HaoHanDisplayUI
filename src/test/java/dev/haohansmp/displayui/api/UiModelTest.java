@@ -192,8 +192,8 @@ class UiModelTest {
     @Test
     void defaultFontWidthEstimateScalesWithFontSize() {
         Component text = Component.text("Hi!");
-        assertEquals(5.0f, UiText.estimateWidth(text, 10.0f));
-        assertEquals(2.5f, UiText.estimateWidth(text, 5.0f));
+        assertEquals(10.0f, UiText.estimateWidth(text, 10.0f));
+        assertEquals(5.0f, UiText.estimateWidth(text, 5.0f));
         assertEquals(UiText.estimateWidth(Component.text("Blaze Rod"), 6.8f),
                 UiText.estimateWidth(Component.translatable("item.minecraft.blaze_rod")
                         .fallback("Blaze Rod"), 6.8f));
