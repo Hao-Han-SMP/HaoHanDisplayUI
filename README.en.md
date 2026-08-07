@@ -124,7 +124,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'dev.haohansmp:HaoHanDisplayUI:1.0.0'
+    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.0'
 }
 ```
 
@@ -164,14 +164,14 @@ flat package:
 For example, a typical consumer starts with these focused imports:
 
 ```java
-import dev.haohansmp.displayui.api.DisplayUiService;
-import dev.haohansmp.displayui.api.UiDocument;
-import dev.haohansmp.displayui.api.UiHandle;
-import dev.haohansmp.displayui.api.interaction.UiButton;
-import dev.haohansmp.displayui.api.layout.UiRect;
-import dev.haohansmp.displayui.api.node.AlignedTextNode;
-import dev.haohansmp.displayui.api.node.UiIconNode;
-import dev.haohansmp.displayui.api.text.UiTextAlignment;
+import vn.haohan.displayui.api.DisplayUiService;
+import vn.haohan.displayui.api.UiDocument;
+import vn.haohan.displayui.api.UiHandle;
+import vn.haohan.displayui.api.interaction.UiButton;
+import vn.haohan.displayui.api.layout.UiRect;
+import vn.haohan.displayui.api.node.AlignedTextNode;
+import vn.haohan.displayui.api.node.UiIconNode;
+import vn.haohan.displayui.api.text.UiTextAlignment;
 ```
 
 Load the service from Bukkit's `ServicesManager`:

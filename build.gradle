@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
 }
 
-group = 'dev.haohansmp'
+group = 'vn.haohan'
 version = '1.0.1'
 
 base {
