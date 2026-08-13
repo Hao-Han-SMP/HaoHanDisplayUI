@@ -42,7 +42,9 @@ public final class HaoHanDisplayUIPlugin extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new UiInteractionListener(service), this);
 
         Bukkit.getScheduler().runTask(this, this::removeOrphanedDisplays);
-        Bukkit.getScheduler().runTaskTimer(this, service::tick, 1L, 5L);
+        // Animation frames are advanced every tick; Display interpolation
+        // smooths the metadata updates on the client.
+        Bukkit.getScheduler().runTaskTimer(this, service::tick, 1L, 1L);
         getLogger().info("HaoHan Display UI engine is ready. API service: "
                 + DisplayUiService.class.getName());
     }

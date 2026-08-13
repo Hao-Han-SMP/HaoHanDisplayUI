@@ -18,8 +18,12 @@
  */
 package vn.haohan.displayui.api;
 
+import vn.haohan.displayui.api.animation.UiAnimation;
+import vn.haohan.displayui.api.animation.UiEasing;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiButtonAction;
+import vn.haohan.displayui.api.interaction.UiCheckbox;
+import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.layout.UiAnchor;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.layout.UiRect;
@@ -37,6 +41,7 @@ import org.bukkit.entity.Display;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -112,6 +117,65 @@ class UiModelTest {
         assertEquals(8.0, options.maxDistance());
         assertEquals("haohan_display_ui", options.scoreboardTag());
         assertEquals(Display.Billboard.FIXED, options.cameraTransform().billboard());
+        assertEquals("minecraft:ui.button.click", options.clickSound());
+        assertEquals(0.7f, options.clickSoundVolume());
+        assertTrue(options.cullItemBackfaces());
+    }
+
+    @Test
+    void itemBackfaceCullingIsOptIn() {
+        UiOptions options = UiOptions.defaults().withItemBackfaceCulling(true);
+        assertTrue(options.cullItemBackfaces());
+        assertTrue(options.withCameraTransform(
+                UiCameraTransform.cameraFacing()).cullItemBackfaces());
+    }
+
+    @Test
+    void interactionSoundCanBeCustomizedOrDisabled() {
+        UiOptions options = UiOptions.defaults()
+                .withClickSound("my_pack:menu.tick", 0.4f, 1.2f);
+        assertEquals("my_pack:menu.tick", options.clickSound());
+        assertEquals(0.4f, options.clickSoundVolume());
+        assertEquals(1.2f, options.clickSoundPitch());
+        assertEquals(null, options.withoutClickSound().clickSound());
+        assertThrows(IllegalArgumentException.class,
+                () -> options.withClickSound("bad", -1.0f, 1.0f));
+    }
+
+    @Test
+    void animationPresetsAreEasyToComposeAndValidate() {
+        UiAnimation slide = UiAnimation.slideIn(
+                8, UiAnimation.Direction.TOP, 24.0f, UiEasing.QUAD_OUT).delay(2);
+        assertEquals(8, slide.durationTicks());
+        assertEquals(2, slide.delayTicks());
+        assertEquals(-24.0f, slide.offsetY());
+        assertEquals(UiEasing.QUAD_OUT, slide.easing());
+
+        UiAnimation combined = UiAnimation.builder()
+                .durationTicks(12)
+                .easing(UiEasing.EASE_IN_OUT)
+                .opacity(0.0f, 1.0f)
+                .scale(0.8f, 1.0f)
+                .offset(UiAnimation.Direction.BOTTOM, 10.0f)
+                .build();
+        assertEquals(0.0f, combined.fromOpacity());
+        assertEquals(0.8f, combined.fromScale());
+        assertEquals(10.0f, combined.offsetY());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> UiAnimation.fadeIn(0));
+        assertThrows(IllegalArgumentException.class,
+                () -> UiAnimation.builder().opacity(-0.1f, 1.0f).build());
+    }
+
+    @Test
+    void easingCurvesAreNormalizedAtTheirEndpoints() {
+        for (UiEasing easing : UiEasing.values()) {
+            assertEquals(0.0, easing.apply(0.0), 0.000001, easing.name());
+            assertEquals(1.0, easing.apply(1.0), 0.000001, easing.name());
+        }
+        assertTrue(UiEasing.EASE_OUT.apply(0.5) > 0.5);
+        assertTrue(UiEasing.EASE_IN.apply(0.5) < 0.5);
     }
 
     @Test
@@ -164,6 +228,45 @@ class UiModelTest {
                 () -> new UiButton("Bad ID", 0, 0, 10, 10));
         UiButton described = button.describedBy(Component.text("Next page"));
         assertEquals(Component.text("Next page"), described.description());
+    }
+
+    @Test
+    void sliderMapsClicksToClampedAndSteppedValues() {
+        UiSlider slider = new UiSlider("volume", 10, 20, 100, 12,
+                0.0, 1.0, 0.5, 0.1, Component.text("Volume"));
+        assertEquals(0.0, slider.valueAt(0), 0.000001);
+        assertEquals(0.5, slider.valueAt(60), 0.000001);
+        assertEquals(1.0, slider.valueAt(1000), 0.000001);
+        assertEquals(0.5, slider.withValue(0.54).value(), 0.000001);
+        assertEquals(0.5, slider.progress(), 0.000001);
+        assertEquals(100.0f, slider.trackRect().width());
+        assertEquals(50.0f, slider.fillRect(0).width(), 0.000001f);
+        assertEquals(60.0f, slider.thumbRect(8, 10).centerX(), 0.000001f);
+        assertThrows(IllegalArgumentException.class,
+                () -> new UiSlider("bad", 0, 0, 10, 10, 1, 1, 1));
+    }
+
+    @Test
+    void checkboxIsImmutableAndTogglesCleanly() {
+        UiCheckbox checkbox = new UiCheckbox("enabled", 0, 0, 16, 16, false);
+        assertTrue(!checkbox.checked());
+        assertTrue(checkbox.checked(true).checked());
+        assertTrue(checkbox.contains(16, 16));
+        assertEquals(16.0f, checkbox.indicatorRect().width());
+    }
+
+    @Test
+    void documentSupportsControlsAndRejectsDuplicateInteractionIds() {
+        UiSlider slider = new UiSlider("value", 0, 0, 100, 12, 0, 10, 5);
+        UiCheckbox checkbox = new UiCheckbox("enabled", 0, 20, 16, 16, false);
+        UiDocument document = UiDocument.builder()
+                .slider(slider)
+                .checkbox(checkbox)
+                .build();
+        assertEquals(2, document.controls().size());
+        assertThrows(IllegalArgumentException.class, () -> new UiDocument(
+                List.of(), List.of(new UiButton("same", 0, 0, 1, 1)),
+                List.of(new UiCheckbox("same", 0, 0, 1, 1, false))));
     }
 
     @Test

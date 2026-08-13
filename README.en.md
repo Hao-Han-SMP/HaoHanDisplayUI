@@ -34,13 +34,15 @@ documentation links, or per-player camera-facing interfaces.
 The GIF above is compatible with GitHub README rendering. [Watch or download the
 high-quality MP4 with audio](media/Demo.mp4).
 
-The video demonstrates `/hhdui demo` and its five test pages:
+The video demonstrates `/hhdui demo` and its six test pages:
 
 1. Plain, bold, italic, animated gradient, obfuscated, and mixed RGB text.
 2. Text lists, icon lists, and icons paired with text.
 3. Hover descriptions and clickable icon + text rows.
 4. Camera billboards, X/Y/Z axis locks, and 45-degree rotations.
 5. URL, player command, console command, and permission-tested command actions.
+6. Slider, checkbox, and control callbacks.
+7. Shapes, icons, and text with independent random animations.
 
 ## Features
 
@@ -241,9 +243,127 @@ handle.hide(player);
 handle.remove();
 ```
 
+Buttons, sliders, and checkboxes play `minecraft:ui.button.click` by default
+after a non-cancelled interaction. You can customize it, including a resource
+pack sound, or disable it:
+
+```java
+UiOptions options = UiOptions.defaults()
+    .withClickSound("my_pack:menu.tick", 0.7f, 1.1f);
+
+UiHandle handle = ui.create("plugin:menu", location, document, options, audience);
+// Use options.withoutClickSound() to disable it.
+```
+
+Backface culling for `ItemDisplay`/`UiIconNode` is enabled by default, is
+implemented per player, and applies to fixed scenes:
+
+```java
+UiOptions options = UiOptions.defaults()
+    .withItemBackfaceCulling(false); // disable if the UI must show from behind
+```
+
 Consumers should retain their `UiHandle` and call `remove()` when the associated
 machine or menu is removed. Use `removeOwnedBy(ownerKey)` to clean up every UI
 owned by a module.
+
+## Animations and easing
+
+Animations are configured on the handle and run on every node in the scene.
+The engine advances them every tick and uses Display Entity interpolation for
+smooth client-side motion:
+
+```java
+import vn.haohan.displayui.api.animation.UiAnimation;
+import vn.haohan.displayui.api.animation.UiEasing;
+
+handle.animate(UiAnimation.slideIn(
+    10, UiAnimation.Direction.BOTTOM, 18, UiEasing.EASE_OUT));
+
+// Combine fade, scale, movement, delay, and any easing curve in one builder.
+handle.animate(UiAnimation.builder()
+    .durationTicks(14)
+    .delayTicks(2)
+    .easing(UiEasing.BACK_OUT)
+    .opacity(0.0f, 1.0f)
+    .scale(0.85f, 1.0f)
+    .offset(UiAnimation.Direction.BOTTOM, 12.0f)
+    .build());
+
+handle.stopAnimation();
+```
+
+Convenience presets include `fadeIn`, `fadeOut`, `slideIn`, and `scaleIn`.
+Available curves include linear, quadratic, cubic, ease-in/out, back, and
+elastic variants. Opacity is supported by `TextDisplay`; scale and movement
+work for text, item, icon, and block nodes.
+
+## Slider and checkbox controls
+
+Controls are immutable and can be added directly to a document. A slider uses
+the click position to calculate its value; a checkbox toggles on click. Both
+share one callback and one cancellable Bukkit event:
+
+```java
+UiSlider volume = new UiSlider("volume", -70, 24, 140, 14,
+    0.0, 1.0, 0.5, 0.05, Component.text("Volume"));
+UiCheckbox enabled = new UiCheckbox("enabled", -70, 44, 16, 16, true);
+
+UiDocument page = UiDocument.builder()
+    .add(panel)
+    .slider(volume)
+    .checkbox(enabled)
+    .build();
+
+handle = ui.create("plugin:settings", location, page);
+handle.onControlChange(change -> {
+    if (change.control().id().equals("volume")) {
+        plugin.setVolume(change.value());
+    }
+});
+```
+
+The same `UiControl` extension point is used for future controls such as
+radio buttons, dropdowns, switches, and text inputs.
+
+Slider updates are optimized in place: changing only the value keeps the same
+node geometry and interaction hitbox, so the scene does not respawn or flicker.
+Display and item transformations are also updated in place, so a custom thumb,
+fill, indicator, or icon can change position and size dynamically.
+
+Style helpers make custom visuals small and predictable:
+
+```java
+UiRect track = slider.trackRect();
+UiRect fill = slider.fillRect(2);
+UiRect thumb = slider.thumbRect(10, 18);
+UiRect indicator = checkbox.indicatorRect();
+```
+
+Sliders support continuous drag: right-click the slider and move your aim to
+update the value every tick. Left-clicking, leaving the slider, changing page,
+or quitting ends the drag.
+While the drag is held but the player's position/view does not change, raycasts
+are skipped; the drag state remains active and resumes on the next movement.
+
+For per-node motion, pass one animation per document node:
+
+```java
+handle.animateNodes(List.of(
+    UiAnimation.scaleIn(18),
+    UiAnimation.slideIn(22, UiAnimation.Direction.LEFT, 16),
+    UiAnimation.fadeIn(14)
+));
+```
+
+The demo moving gradient updates every server tick (up to 20 FPS). Minecraft
+does not interpolate `TextDisplay` text content, so server-driven text cannot be
+fully independent of game ticks. For truly client-timed animation, use an
+animated resource-pack model/texture on an `ItemDisplay`, or a client shader/mod.
+
+Page updates are incremental: unchanged entities are retained, same-type nodes
+only update metadata/transformation, and only new or incompatible nodes are
+replaced. This prevents the whole page from flashing during navigation.
 
 ## Coordinate System and Layers
 
@@ -587,7 +707,8 @@ UiHandle handle = ui.create(
 
 - If only Adventure Components changed, the relevant `TextDisplay` entities are
   updated in place.
-- If geometry, node types, or buttons changed, the engine respawns the scene.
+- Same-type nodes are updated in place; only new or incompatible nodes are
+  replaced.
 - Text animation does not respawn the panel or icons and does not flicker.
 - Visibility is cached; `showEntity/hideEntity` packets are only sent on changes.
 
@@ -629,6 +750,8 @@ Pages:
 | 3 | Hover/click rows sharing one hit zone. |
 | 4 | Fixed, yaw, pitch, camera-facing, and X/Y/Z 45-degree presets. |
 | 5 | URL and command action types. |
+| 6 | Slider, checkbox, and control callbacks. |
+| 7 | Shapes, icons, and text with independent random easing/animation. |
 
 ## Tests
 

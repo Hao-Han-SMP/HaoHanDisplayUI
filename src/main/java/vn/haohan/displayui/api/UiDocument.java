@@ -20,6 +20,9 @@ package vn.haohan.displayui.api;
 
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiButtonAction;
+import vn.haohan.displayui.api.interaction.UiCheckbox;
+import vn.haohan.displayui.api.interaction.UiControl;
+import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
@@ -29,16 +32,24 @@ import java.util.List;
 import java.util.Objects;
 
 /** Immutable scene description. Nodes render in ascending depth order. */
-public record UiDocument(List<UiNode> nodes, List<UiButton> buttons) {
+public record UiDocument(List<UiNode> nodes, List<UiButton> buttons,
+                         List<UiControl> controls) {
     public UiDocument {
         Objects.requireNonNull(nodes, "nodes");
         Objects.requireNonNull(buttons, "buttons");
+        Objects.requireNonNull(controls, "controls");
         nodes = List.copyOf(nodes);
         buttons = List.copyOf(buttons);
+        controls = List.copyOf(controls);
+        validateUniqueIds(buttons, controls);
     }
 
     public UiDocument(List<UiNode> nodes) {
-        this(nodes, List.of());
+        this(nodes, List.of(), List.of());
+    }
+
+    public UiDocument(List<UiNode> nodes, List<UiButton> buttons) {
+        this(nodes, buttons, List.of());
     }
 
     public static Builder builder() {
@@ -48,6 +59,7 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons) {
     public static final class Builder {
         private final List<UiNode> nodes = new ArrayList<>();
         private final List<UiButton> buttons = new ArrayList<>();
+        private final List<UiControl> controls = new ArrayList<>();
 
         public Builder add(UiNode node) {
             nodes.add(Objects.requireNonNull(node, "node"));
@@ -57,6 +69,19 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons) {
         public Builder button(UiButton button) {
             buttons.add(Objects.requireNonNull(button, "button"));
             return this;
+        }
+
+        public Builder control(UiControl control) {
+            controls.add(Objects.requireNonNull(control, "control"));
+            return this;
+        }
+
+        public Builder slider(UiSlider slider) {
+            return control(slider);
+        }
+
+        public Builder checkbox(UiCheckbox checkbox) {
+            return control(checkbox);
         }
 
         public Builder interactiveText(String id, AlignedTextNode text,
@@ -80,7 +105,19 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons) {
         }
 
         public UiDocument build() {
-            return new UiDocument(nodes, buttons);
+            return new UiDocument(nodes, buttons, controls);
         }
+    }
+
+    private static void validateUniqueIds(List<UiButton> buttons, List<UiControl> controls) {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        buttons.forEach(button -> {
+            if (!ids.add(button.id())) throw new IllegalArgumentException(
+                    "duplicate interaction id: " + button.id());
+        });
+        controls.forEach(control -> {
+            if (!ids.add(control.id())) throw new IllegalArgumentException(
+                    "duplicate interaction id: " + control.id());
+        });
     }
 }

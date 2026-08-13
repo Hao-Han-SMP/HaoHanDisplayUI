@@ -19,11 +19,13 @@
 package vn.haohan.displayui.runtime;
 
 import vn.haohan.displayui.api.interaction.UiButton;
+import vn.haohan.displayui.api.interaction.UiControl;
 import org.bukkit.entity.Player;
 
 record UiHit(
         UiScene scene,
         UiButton button,
+        UiControl control,
         Player player,
         float localX,
         float localY,

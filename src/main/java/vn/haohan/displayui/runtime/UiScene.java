@@ -22,11 +22,18 @@ import vn.haohan.displayui.HaoHanDisplayUIPlugin;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.UiOptions;
+import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiButtonAction;
+import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiClick;
 import vn.haohan.displayui.api.interaction.UiClickHandler;
+import vn.haohan.displayui.api.interaction.UiControl;
+import vn.haohan.displayui.api.interaction.UiControlChange;
+import vn.haohan.displayui.api.interaction.UiControlChangeHandler;
+import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.interaction.event.UiButtonClickEvent;
+import vn.haohan.displayui.api.interaction.event.UiControlChangeEvent;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
@@ -60,6 +67,9 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -80,6 +90,8 @@ final class UiScene implements UiHandle {
     private final Set<UUID> forcedHidden = new HashSet<>();
     private final Set<UUID> visibleViewers = new HashSet<>();
     private final List<UiClickHandler> clickHandlers = new CopyOnWriteArrayList<>();
+    private final List<UiControlChangeHandler> controlChangeHandlers = new CopyOnWriteArrayList<>();
+    private final Map<String, UiControl> controlStates = new LinkedHashMap<>();
 
     private Location origin;
     private UiDocument document;
@@ -87,6 +99,10 @@ final class UiScene implements UiHandle {
     private UiCameraTransform cameraTransform;
     private boolean removed;
     private Interaction interactionEntity;
+    private UiAnimation animation;
+    private int animationAge;
+    private List<UiAnimation> nodeAnimations = List.of();
+    private int[] nodeAnimationAges = new int[0];
 
     UiScene(HaoHanDisplayUIPlugin plugin, UUID id, String ownerKey, Location origin,
             UiDocument document, UiOptions options, UiAudience audience,
@@ -100,6 +116,7 @@ final class UiScene implements UiHandle {
         this.cameraTransform = options.cameraTransform();
         this.audience = audience;
         this.onRemove = onRemove;
+        document.controls().forEach(control -> controlStates.put(control.id(), control));
         this.sceneKey = new NamespacedKey(plugin, "scene_id");
         this.ownerDataKey = new NamespacedKey(plugin, "owner_key");
     }
@@ -116,13 +133,14 @@ final class UiScene implements UiHandle {
     public void update(UiDocument document) {
         ensureValid();
         UiDocument next = Objects.requireNonNull(document, "document");
-        if (canUpdateTextInPlace(this.document, next)) {
-            applyTextUpdate(this.document, next);
-            this.document = next;
-            return;
-        }
+        if (animation != null || !nodeAnimations.isEmpty()) stopAnimation();
+        nodeAnimations = List.of();
+        nodeAnimationAges = new int[0];
+        UiDocument previous = this.document;
+        updateControlStates(next);
         this.document = next;
-        respawn();
+        if (!incrementalUpdate(previous, next)) respawn();
+        else syncViewers();
     }
 
     @Override
@@ -149,6 +167,57 @@ final class UiScene implements UiHandle {
     }
 
     @Override
+    public void animate(UiAnimation animation) {
+        ensureValid();
+        nodeAnimations = List.of();
+        nodeAnimationAges = new int[0];
+        this.animation = Objects.requireNonNull(animation, "animation");
+        this.animationAge = -animation.delayTicks();
+        applyAnimation(animationProgress());
+    }
+
+    @Override
+    public void animateNodes(List<UiAnimation> animations) {
+        ensureValid();
+        Objects.requireNonNull(animations, "animations");
+        if (animations.size() != document.nodes().size()) {
+            throw new IllegalArgumentException("animations must contain one entry per document node");
+        }
+        nodeAnimations = List.copyOf(animations);
+        nodeAnimationAges = new int[animations.size()];
+        for (int i = 0; i < nodeAnimationAges.length; i++) {
+            nodeAnimationAges[i] = -animations.get(i).delayTicks();
+        }
+        animation = null;
+        applyNodeAnimations();
+    }
+
+    @Override
+    public void stopAnimation() {
+        if (removed || (animation == null && nodeAnimations.isEmpty())) return;
+        if (animation != null) applyAnimation(1.0);
+        if (!nodeAnimations.isEmpty()) {
+            for (int i = 0; i < nodeAnimations.size(); i++) {
+                applyAnimationToNode(i, nodeAnimations.get(i), 1.0);
+            }
+        }
+        animation = null;
+        nodeAnimations = List.of();
+        nodeAnimationAges = new int[0];
+    }
+
+    @Override
+    public boolean isAnimating() {
+        return !removed && (animation != null || !nodeAnimations.isEmpty());
+    }
+
+    @Override
+    public Optional<UiControl> control(String id) {
+        ensureValid();
+        return Optional.ofNullable(controlStates.get(Objects.requireNonNull(id, "id")));
+    }
+
+    @Override
     public void onClick(UiClickHandler handler) {
         ensureValid();
         clickHandlers.add(Objects.requireNonNull(handler, "handler"));
@@ -157,6 +226,17 @@ final class UiScene implements UiHandle {
     @Override
     public void clearClickHandlers() {
         clickHandlers.clear();
+    }
+
+    @Override
+    public void onControlChange(UiControlChangeHandler handler) {
+        ensureValid();
+        controlChangeHandlers.add(Objects.requireNonNull(handler, "handler"));
+    }
+
+    @Override
+    public void clearControlChangeHandlers() {
+        controlChangeHandlers.clear();
     }
 
     @Override
@@ -185,18 +265,20 @@ final class UiScene implements UiHandle {
 
     void tick() {
         if (removed) return;
-        boolean missingInteraction = !document.buttons().isEmpty()
+        boolean missingInteraction = (!document.buttons().isEmpty() || !controlStates.isEmpty())
                 && (interactionEntity == null || !interactionEntity.isValid());
         if (entities.isEmpty() || entities.stream().anyMatch(entity -> !entity.isValid())
                 || missingInteraction) {
             clearEntities();
             spawnIfLoaded();
         }
+        tickAnimation();
         syncViewers();
     }
 
     UiHit hit(Player player) {
-        if (removed || document.buttons().isEmpty() || !shouldShow(player)) return null;
+        if (removed || (document.buttons().isEmpty() && controlStates.isEmpty())
+                || !shouldShow(player)) return null;
 
         PlaneBasis basis = planeBasis(player);
         UiRaycaster.Projection projection = UiRaycaster.project(
@@ -206,20 +288,33 @@ final class UiScene implements UiHandle {
                 options.pixelsPerBlock(), options.maxDistance());
         if (projection == null) return null;
 
-        return document.buttons().stream()
+        UiHit buttonHit = document.buttons().stream()
                 .filter(button -> button.contains(projection.localX(), projection.localY()))
                 .findFirst()
-                .map(button -> new UiHit(this, button, player,
+                .map(button -> new UiHit(this, button, null, player,
+                        projection.localX(), projection.localY(), projection.distance()))
+                .orElse(null);
+
+        if (buttonHit != null) return buttonHit;
+        return controlStates.values().stream()
+                .filter(control -> control.contains(projection.localX(), projection.localY()))
+                .findFirst()
+                .map(control -> new UiHit(this, null, control, player,
                         projection.localX(), projection.localY(), projection.distance()))
                 .orElse(null);
     }
 
     void activate(UiHit hit) {
+        if (hit.control() != null) {
+            activateControl(hit);
+            return;
+        }
         UiButtonClickEvent event = new UiButtonClickEvent(
                 this, hit.button(), hit.player(), hit.localX(), hit.localY(), hit.distance());
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) return;
 
+        playClickSound(hit.player());
         executeAction(hit.button(), hit.player());
 
         UiClick click = new UiClick(this, hit.button(), hit.player(),
@@ -232,6 +327,73 @@ final class UiScene implements UiHandle {
                         "UI click handler failed for " + ownerKey + "/" + hit.button().id(), exception);
             }
         }
+    }
+
+    /** Updates a slider while its owning player keeps the drag gesture active. */
+    boolean dragSlider(Player player, String controlId) {
+        if (removed) return false;
+        UiControl state = controlStates.get(controlId);
+        if (!(state instanceof UiSlider slider) || !shouldShow(player)) return false;
+
+        PlaneBasis basis = planeBasis(player);
+        UiRaycaster.Projection projection = UiRaycaster.project(
+                player.getEyeLocation().toVector(),
+                player.getEyeLocation().getDirection(),
+                origin.toVector(), basis.normal(), basis.right(), basis.up(),
+                options.pixelsPerBlock(), options.maxDistance());
+        if (projection == null) return false;
+
+        UiHit dragHit = new UiHit(this, null, slider, player,
+                projection.localX(), projection.localY(), projection.distance());
+        return changeControl(dragHit, slider.valueAt(projection.localX()), false);
+    }
+
+    private void activateControl(UiHit hit) {
+        UiControl control = hit.control();
+        double nextValue = control instanceof UiSlider slider
+                ? slider.valueAt(hit.localX())
+                : ((UiCheckbox) control).checked() ? 0.0 : 1.0;
+        changeControl(hit, nextValue, true);
+    }
+
+    private boolean changeControl(UiHit hit, double nextValue, boolean playSound) {
+        UiControl control = hit.control();
+        double oldValue = controlValue(control);
+        if (Double.compare(oldValue, nextValue) == 0) return false;
+
+        UiControlChangeEvent event = new UiControlChangeEvent(this, control, hit.player(),
+                oldValue, nextValue, hit.localX(), hit.localY(), hit.distance());
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) return false;
+
+        UiControl nextControl = control instanceof UiSlider slider
+                ? slider.withValue(nextValue)
+                : ((UiCheckbox) control).checked(nextValue >= 0.5);
+        controlStates.put(control.id(), nextControl);
+        if (playSound) playClickSound(hit.player());
+        UiControlChange change = new UiControlChange(this, nextControl, hit.player(),
+                oldValue, controlValue(nextControl), hit.localX(), hit.localY(), hit.distance());
+        for (UiControlChangeHandler handler : controlChangeHandlers) {
+            try {
+                handler.onChange(change);
+            } catch (RuntimeException exception) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                        "UI control handler failed for " + ownerKey + "/" + control.id(), exception);
+            }
+        }
+        return true;
+    }
+
+    private double controlValue(UiControl control) {
+        if (control instanceof UiSlider slider) return slider.value();
+        if (control instanceof UiCheckbox checkbox) return checkbox.checked() ? 1.0 : 0.0;
+        throw new IllegalArgumentException("Unsupported UI control: " + control.getClass().getName());
+    }
+
+    private void playClickSound(Player player) {
+        if (options.clickSound() == null || options.clickSoundVolume() <= 0.0f) return;
+        player.playSound(player.getLocation(), options.clickSound(),
+                options.clickSoundVolume(), options.clickSoundPitch());
     }
 
     private void respawn() {
@@ -255,6 +417,77 @@ final class UiScene implements UiHandle {
                     nodeEntities.set(index, display);
                 });
         spawnInteraction();
+        applyAnimation(animationProgress());
+        applyNodeAnimations();
+    }
+
+    /** Updates only nodes whose type/content changed; stable entities survive page updates. */
+    private boolean incrementalUpdate(UiDocument previous, UiDocument next) {
+        World world = origin.getWorld();
+        if (world == null || !world.isChunkLoaded(origin.getBlockX() >> 4, origin.getBlockZ() >> 4)) {
+            return false;
+        }
+        int common = Math.min(previous.nodes().size(), next.nodes().size());
+        boolean entitySetChanged = previous.nodes().size() != next.nodes().size();
+        for (int i = 0; i < common; i++) {
+            UiNode oldNode = previous.nodes().get(i);
+            UiNode newNode = next.nodes().get(i);
+            Display current = i < nodeEntities.size() ? nodeEntities.get(i) : null;
+            if (current == null || !current.isValid()) return false;
+            if (oldNode.getClass() != newNode.getClass()) {
+                replaceNode(i, newNode);
+                entitySetChanged = true;
+            } else if (!oldNode.equals(newNode)) {
+                updateNode(current, newNode);
+            }
+        }
+        for (int i = common; i < next.nodes().size(); i++) {
+            Display display = spawnNode(next.nodes().get(i));
+            nodeEntities.add(display);
+            entities.add(display);
+        }
+        while (nodeEntities.size() > next.nodes().size()) {
+            int last = nodeEntities.size() - 1;
+            Display display = nodeEntities.remove(last);
+            if (display != null && display.isValid()) display.remove();
+            entities.remove(display);
+        }
+
+        if (!sameInteractionLayout(previous, next)) {
+            if (interactionEntity != null && interactionEntity.isValid()) interactionEntity.remove();
+            interactionEntity = null;
+            spawnInteraction();
+        }
+        // Newly spawned/replaced entities need a fresh showEntity packet even
+        // when the player was already visible for the previous document.
+        if (entitySetChanged) visibleViewers.clear();
+        return true;
+    }
+
+    private void replaceNode(int index, UiNode node) {
+        Display previous = nodeEntities.get(index);
+        if (previous != null && previous.isValid()) previous.remove();
+        entities.remove(previous);
+        Display replacement = spawnNode(node);
+        nodeEntities.set(index, replacement);
+        entities.add(replacement);
+    }
+
+    private void updateControlStates(UiDocument next) {
+        Map<String, UiControl> previous = new LinkedHashMap<>(controlStates);
+        controlStates.clear();
+        next.controls().forEach(control -> {
+            UiControl old = previous.get(control.id());
+            if (old instanceof UiSlider oldSlider && control instanceof UiSlider slider
+                    && sameControlLayout(oldSlider, slider)) {
+                controlStates.put(control.id(), slider.withValue(oldSlider.value()));
+            } else if (old instanceof UiCheckbox oldCheckbox && control instanceof UiCheckbox checkbox
+                    && sameControlLayout(oldCheckbox, checkbox)) {
+                controlStates.put(control.id(), checkbox.checked(oldCheckbox.checked()));
+            } else {
+                controlStates.put(control.id(), control);
+            }
+        });
     }
 
     private Display spawnNode(UiNode node) {
@@ -325,33 +558,33 @@ final class UiScene implements UiHandle {
         return origin.getWorld().spawn(origin, BlockDisplay.class, display -> {
             configure(display, node);
             display.setBlock(node.block());
-            float pixels = options.pixelsPerBlock();
-            Quaternionf rotation = localRotation();
-            Vector3f translation = new Vector3f(node.x() / pixels,
-                    -(node.y() + node.height()) / pixels,
-                    node.depth() - node.thickness() / pixels);
-            rotation.transform(translation);
-            display.setTransformation(new Transformation(
-                    translation,
-                    rotation,
-                    new Vector3f(node.width() / pixels,
-                            node.height() / pixels, node.thickness() / pixels),
-                    new Quaternionf()));
+            display.setTransformation(blockTransform(node, 1.0f, 0.0f, 0.0f, 0.0f));
         });
     }
 
     private void spawnInteraction() {
-        if (document.buttons().isEmpty()) return;
+        if (document.buttons().isEmpty() && controlStates.isEmpty()) return;
+        List<UiControl> controls = List.copyOf(controlStates.values());
         float minX = document.buttons().stream().map(button -> button.x() - button.hitSlop())
-                .min(Float::compare).orElse(0.0f);
+                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
+        minX = Math.min(minX, controls.stream().map(control -> control.x() - control.hitSlop())
+                .min(Float::compare).orElse(0.0f));
         float maxX = document.buttons().stream()
                 .map(button -> button.x() + button.width() + button.hitSlop())
-                .max(Float::compare).orElse(0.0f);
+                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
+        maxX = Math.max(maxX, controls.stream()
+                .map(control -> control.x() + control.width() + control.hitSlop())
+                .max(Float::compare).orElse(0.0f));
         float minY = document.buttons().stream().map(button -> button.y() - button.hitSlop())
-                .min(Float::compare).orElse(0.0f);
+                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
+        minY = Math.min(minY, controls.stream().map(control -> control.y() - control.hitSlop())
+                .min(Float::compare).orElse(0.0f));
         float maxY = document.buttons().stream()
                 .map(button -> button.y() + button.height() + button.hitSlop())
-                .max(Float::compare).orElse(0.0f);
+                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
+        maxY = Math.max(maxY, controls.stream()
+                .map(control -> control.y() + control.height() + control.hitSlop())
+                .max(Float::compare).orElse(0.0f));
         float pixels = options.pixelsPerBlock();
 
         Vector normal = origin.getDirection().setY(0.0);
@@ -362,10 +595,12 @@ final class UiScene implements UiHandle {
         Location hitboxLocation = origin.clone()
                 .add(right.multiply(centerX))
                 .add(0.0, -maxY / pixels, 0.0);
+        final float hitboxWidth = maxX - minX;
+        final float hitboxHeight = maxY - minY;
 
         interactionEntity = origin.getWorld().spawn(hitboxLocation, Interaction.class, interaction -> {
-            interaction.setInteractionWidth(Math.max(0.2f, (maxX - minX) / pixels));
-            interaction.setInteractionHeight(Math.max(0.2f, (maxY - minY) / pixels));
+            interaction.setInteractionWidth(Math.max(0.2f, hitboxWidth / pixels));
+            interaction.setInteractionHeight(Math.max(0.2f, hitboxHeight / pixels));
             interaction.setResponsive(true);
             interaction.setPersistent(false);
             interaction.setInvulnerable(true);
@@ -396,12 +631,128 @@ final class UiScene implements UiHandle {
     }
 
     private Transformation transform(UiNode node, float sx, float sy, float sz) {
+        return transform(node, sx, sy, sz, 0.0f, 0.0f, 0.0f);
+    }
+
+    private Transformation transform(UiNode node, float sx, float sy, float sz,
+                                      float offsetX, float offsetY, float offsetZ) {
         Quaternionf rotation = localRotation();
-        Vector3f translation = new Vector3f(node.x() / options.pixelsPerBlock(),
-                -node.y() / options.pixelsPerBlock(), node.depth());
+        float pixels = options.pixelsPerBlock();
+        Vector3f translation = new Vector3f((node.x() + offsetX) / pixels,
+                -(node.y() + offsetY) / pixels, node.depth() + offsetZ);
         rotation.transform(translation);
         return new Transformation(
                 translation, rotation, new Vector3f(sx, sy, sz), new Quaternionf());
+    }
+
+    private Transformation blockTransform(BlockNode node, float scale,
+                                           float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        Quaternionf rotation = localRotation();
+        Vector3f translation = new Vector3f(
+                (node.x() + offsetX) / pixels,
+                -(node.y() + node.height() + offsetY) / pixels,
+                node.depth() + offsetZ - node.thickness() / pixels);
+        rotation.transform(translation);
+        return new Transformation(
+                translation, rotation,
+                new Vector3f(node.width() / pixels * scale,
+                        node.height() / pixels * scale,
+                        node.thickness() / pixels * scale),
+                new Quaternionf());
+    }
+
+    private void tickAnimation() {
+        if (animation != null) {
+            animationAge++;
+            applyAnimation(animationProgress());
+            if (animationAge >= animation.durationTicks()) {
+                applyAnimation(1.0);
+                animation = null;
+            }
+        }
+        if (!nodeAnimations.isEmpty()) {
+            boolean running = false;
+            for (int i = 0; i < nodeAnimations.size(); i++) {
+                UiAnimation current = nodeAnimations.get(i);
+                nodeAnimationAges[i]++;
+                applyAnimationToNode(i, current, nodeAnimationProgress(i));
+                if (nodeAnimationAges[i] < current.durationTicks()) running = true;
+                else applyAnimationToNode(i, current, 1.0);
+            }
+            if (!running) {
+                nodeAnimations = List.of();
+                nodeAnimationAges = new int[0];
+            }
+        }
+    }
+
+    private double animationProgress() {
+        if (animation == null || animationAge <= 0) return 0.0;
+        return Math.min(1.0, animationAge / (double) animation.durationTicks());
+    }
+
+    private void applyAnimation(double progress) {
+        if (animation == null || nodeEntities.isEmpty()) return;
+        for (int i = 0; i < nodeEntities.size(); i++) {
+            applyAnimationToNode(i, animation, progress);
+        }
+    }
+
+    private void applyNodeAnimations() {
+        if (nodeAnimations.isEmpty()) return;
+        for (int i = 0; i < nodeAnimations.size(); i++) {
+            applyAnimationToNode(i, nodeAnimations.get(i), nodeAnimationProgress(i));
+        }
+    }
+
+    private double nodeAnimationProgress(int index) {
+        UiAnimation current = nodeAnimations.get(index);
+        int age = nodeAnimationAges[index];
+        if (age <= 0) return 0.0;
+        return Math.min(1.0, age / (double) current.durationTicks());
+    }
+
+    private void applyAnimationToNode(int index, UiAnimation current, double progress) {
+        if (index >= nodeEntities.size()) return;
+        Display display = nodeEntities.get(index);
+        if (display == null || !display.isValid()) return;
+        double eased = current.easing().apply(progress);
+        float scale = interpolate(current.fromScale(), current.toScale(), eased);
+        float opacity = Math.max(0.0f, Math.min(1.0f,
+                interpolate(current.fromOpacity(), current.toOpacity(), eased)));
+        float offsetX = current.offsetX() * (1.0f - (float) eased);
+        float offsetY = current.offsetY() * (1.0f - (float) eased);
+        float offsetZ = current.offsetZ() * (1.0f - (float) eased);
+        UiNode node = document.nodes().get(index);
+        if (node instanceof BlockNode block) {
+            display.setTransformation(blockTransform(block, scale, offsetX, offsetY, offsetZ));
+        } else if (node instanceof AlignedTextNode text) {
+            float displayScale = text.fontSize() / 20.0f * scale;
+            display.setTransformation(transform(text, displayScale, displayScale,
+                    displayScale, offsetX, offsetY, offsetZ));
+        } else if (node instanceof TextNode text) {
+            float displayScale = text.scale() * scale;
+            display.setTransformation(transform(text, displayScale, displayScale,
+                    displayScale, offsetX, offsetY, offsetZ));
+        } else if (node instanceof ItemNode item) {
+            float displayScale = item.scale() * scale;
+            display.setTransformation(transform(item, displayScale, displayScale,
+                    displayScale, offsetX, offsetY, offsetZ));
+        } else if (node instanceof UiIconNode icon) {
+            float pixels = options.pixelsPerBlock();
+            display.setTransformation(transform(icon, icon.width() / pixels * scale,
+                    icon.height() / pixels * scale,
+                    Math.min(icon.width(), icon.height()) / pixels * scale,
+                    offsetX, offsetY, offsetZ));
+        }
+        if (display instanceof TextDisplay textDisplay) {
+            textDisplay.setTextOpacity((byte) Math.round(opacity * 255.0f));
+        }
+    }
+
+    private float interpolate(float from, float to, double progress) {
+        return (float) (from + (to - from) * progress);
     }
 
     private TextDisplay.TextAlignment screenAlignment(TextDisplay.TextAlignment alignment) {
@@ -438,13 +789,35 @@ final class UiScene implements UiHandle {
     private void syncPlayer(Player player) {
         boolean visible = shouldShow(player);
         boolean alreadyVisible = visibleViewers.contains(player.getUniqueId());
-        if (visible == alreadyVisible) return;
-        for (Display display : entities) {
-            if (visible) player.showEntity(plugin, display);
+        if (visible != alreadyVisible) {
+            for (Display display : entities) {
+                if (visible) player.showEntity(plugin, display);
+                else player.hideEntity(plugin, display);
+            }
+            if (visible) visibleViewers.add(player.getUniqueId());
+            else visibleViewers.remove(player.getUniqueId());
+        }
+        if (visible && options.cullItemBackfaces()) syncItemBackfaces(player);
+    }
+
+    private void syncItemBackfaces(Player player) {
+        if (cameraTransform.billboard() != Display.Billboard.FIXED) return;
+        boolean frontFacing = isFrontFacing(player);
+        for (int i = 0; i < nodeEntities.size(); i++) {
+            UiNode node = document.nodes().get(i);
+            if (!(node instanceof ItemNode) && !(node instanceof UiIconNode)) continue;
+            Display display = nodeEntities.get(i);
+            if (display == null || !display.isValid()) continue;
+            if (frontFacing) player.showEntity(plugin, display);
             else player.hideEntity(plugin, display);
         }
-        if (visible) visibleViewers.add(player.getUniqueId());
-        else visibleViewers.remove(player.getUniqueId());
+    }
+
+    private boolean isFrontFacing(Player player) {
+        Vector normal = planeBasis(player).normal();
+        Vector toPlayer = player.getEyeLocation().toVector().subtract(origin.toVector());
+        if (toPlayer.lengthSquared() < 0.0001) return true;
+        return normal.dot(toPlayer.normalize()) > 0.0;
     }
 
     private boolean shouldShow(Player player) {
@@ -480,56 +853,72 @@ final class UiScene implements UiHandle {
         if (removed) throw new IllegalStateException("UI scene has been removed");
     }
 
-    private boolean canUpdateTextInPlace(UiDocument current, UiDocument next) {
-        if (!current.buttons().equals(next.buttons())
-                || current.nodes().size() != next.nodes().size()
-                || nodeEntities.size() != current.nodes().size()) {
-            return false;
+    private void updateNode(Display display, UiNode node) {
+        if (node instanceof TextNode text) {
+                TextDisplay textDisplay = (TextDisplay) display;
+                textDisplay.text(text.text());
+                textDisplay.setAlignment(screenAlignment(text.alignment()));
+                textDisplay.setLineWidth(text.lineWidth());
+                textDisplay.setShadowed(text.shadow());
+                textDisplay.setSeeThrough(text.seeThrough());
+                textDisplay.setTransformation(transform(text, text.scale(), text.scale(), text.scale()));
+            } else if (node instanceof AlignedTextNode text) {
+                TextDisplay textDisplay = (TextDisplay) display;
+                textDisplay.text(text.text());
+                textDisplay.setLineWidth(Math.max(1,
+                        Math.round(text.width() * 20.0f / text.fontSize())));
+                textDisplay.setShadowed(text.shadow());
+                textDisplay.setSeeThrough(text.seeThrough());
+                float scale = text.fontSize() / 20.0f;
+                textDisplay.setTransformation(transform(text, scale, scale, scale));
+            } else if (node instanceof ItemNode item) {
+                ItemDisplay itemDisplay = (ItemDisplay) display;
+                itemDisplay.setItemStack(item.item());
+                itemDisplay.setItemDisplayTransform(item.transform());
+                itemDisplay.setTransformation(transform(item, item.scale(), item.scale(), item.scale()));
+            } else if (node instanceof UiIconNode icon) {
+                ItemDisplay itemDisplay = (ItemDisplay) display;
+                itemDisplay.setItemStack(icon.item());
+                itemDisplay.setItemDisplayTransform(icon.transform());
+                float pixels = options.pixelsPerBlock();
+                itemDisplay.setTransformation(transform(icon, icon.width() / pixels,
+                        icon.height() / pixels, Math.min(icon.width(), icon.height()) / pixels));
+            } else if (node instanceof BlockNode block) {
+                BlockDisplay blockDisplay = (BlockDisplay) display;
+                blockDisplay.setBlock(block.block());
+                blockDisplay.setTransformation(blockTransform(block, 1.0f, 0.0f, 0.0f, 0.0f));
         }
-        for (int i = 0; i < current.nodes().size(); i++) {
-            Display display = nodeEntities.get(i);
-            if (display == null || !display.isValid()
-                    || !sameLayout(current.nodes().get(i), next.nodes().get(i))) {
-                return false;
-            }
+    }
+
+    private boolean sameInteractionLayout(UiDocument current, UiDocument next) {
+        if (current.buttons().size() != next.buttons().size()
+                || current.controls().size() != next.controls().size()) return false;
+        for (int i = 0; i < current.buttons().size(); i++) {
+            UiButton a = current.buttons().get(i);
+            UiButton b = next.buttons().get(i);
+            if (!a.id().equals(b.id()) || a.x() != b.x() || a.y() != b.y()
+                    || a.width() != b.width() || a.height() != b.height()
+                    || a.hitSlop() != b.hitSlop()) return false;
+        }
+        return sameControlLayouts(current.controls(), next.controls());
+    }
+
+    private boolean sameControlLayout(UiControl current, UiControl next) {
+        return current.id().equals(next.id()) && current.getClass() == next.getClass()
+                && current.x() == next.x() && current.y() == next.y()
+                && current.width() == next.width() && current.height() == next.height()
+                && current.hitSlop() == next.hitSlop()
+                && (!(current instanceof UiSlider left) || !(next instanceof UiSlider right)
+                || (left.minimum() == right.minimum()
+                && left.maximum() == right.maximum() && left.step() == right.step()));
+    }
+
+    private boolean sameControlLayouts(List<UiControl> current, List<UiControl> next) {
+        if (current.size() != next.size()) return false;
+        for (int i = 0; i < current.size(); i++) {
+            if (!sameControlLayout(current.get(i), next.get(i))) return false;
         }
         return true;
-    }
-
-    private boolean sameLayout(UiNode current, UiNode next) {
-        if (current instanceof AlignedTextNode a && next instanceof AlignedTextNode b) {
-            return a.boxX() == b.boxX() && a.boxY() == b.boxY()
-                    && a.width() == b.width() && a.height() == b.height()
-                    && a.depth() == b.depth() && a.alignment() == b.alignment()
-                    && a.leftOffset() == b.leftOffset() && a.rightOffset() == b.rightOffset()
-                    && a.fontSize() == b.fontSize() && a.contentWidth() == b.contentWidth()
-                    && a.verticalAlignment() == b.verticalAlignment()
-                    && a.verticalOffset() == b.verticalOffset()
-                    && a.shadow() == b.shadow() && a.seeThrough() == b.seeThrough();
-        }
-        if (current instanceof TextNode a && next instanceof TextNode b) {
-            return a.x() == b.x() && a.y() == b.y() && a.depth() == b.depth()
-                    && a.lineWidth() == b.lineWidth() && a.scale() == b.scale()
-                    && a.alignment() == b.alignment() && a.shadow() == b.shadow()
-                    && a.seeThrough() == b.seeThrough();
-        }
-        return current.equals(next);
-    }
-
-    private void applyTextUpdate(UiDocument current, UiDocument next) {
-        for (int i = 0; i < next.nodes().size(); i++) {
-            UiNode oldNode = current.nodes().get(i);
-            UiNode newNode = next.nodes().get(i);
-            if (oldNode instanceof AlignedTextNode oldText
-                    && newNode instanceof AlignedTextNode text
-                    && !oldText.text().equals(text.text())) {
-                ((TextDisplay) nodeEntities.get(i)).text(text.text());
-            } else if (oldNode instanceof TextNode oldText
-                    && newNode instanceof TextNode text
-                    && !oldText.text().equals(text.text())) {
-                ((TextDisplay) nodeEntities.get(i)).text(text.text());
-            }
-        }
     }
 
     private Quaternionf localRotation() {

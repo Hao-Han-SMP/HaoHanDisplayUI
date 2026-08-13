@@ -40,6 +40,8 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 3. Hover description và các hàng icon + text có thể click.
 4. Camera billboard, khóa trục X/Y/Z và góc xoay 45°.
 5. URL, player command, console command và command permission test.
+6. Slider, checkbox và control callback.
+7. Shape, icon và text chạy random animation theo từng node.
 
 ## Tính năng
 
@@ -135,7 +137,7 @@ permission này theo mặc định.
 | Lệnh | Mô tả |
 | --- | --- |
 | `/hhdui info` | Hiển thị số scene đang hoạt động và tên API service. |
-| `/hhdui demo` | Tạo UI demo năm trang riêng cho người chạy lệnh. |
+| `/hhdui demo` | Tạo UI demo bảy trang riêng cho người chạy lệnh. |
 | `/hhdui clear` | Xóa toàn bộ scene demo đang được quản lý. |
 
 ## Permission
@@ -239,6 +241,116 @@ handle.show(player);
 handle.hide(player);
 handle.remove();
 ```
+
+Mặc định, button/slider/checkbox sẽ phát sound `minecraft:ui.button.click`
+sau khi interaction không bị cancel. Có thể đổi sound (kể cả sound custom từ
+resource pack) hoặc tắt hoàn toàn:
+
+```java
+UiOptions options = UiOptions.defaults()
+    .withClickSound("my_pack:menu.tick", 0.7f, 1.1f);
+
+UiHandle handle = ui.create("plugin:menu", location, document, options, audience);
+// options.withoutClickSound() để tắt.
+```
+
+Backface culling cho `ItemDisplay`/`UiIconNode` mặc định được bật, là software
+culling theo từng player và áp dụng cho scene fixed:
+
+```java
+UiOptions options = UiOptions.defaults()
+    .withItemBackfaceCulling(false); // tắt nếu UI cần hiển thị từ mặt sau
+```
+
+## Animation và easing
+
+Animation được cài đặt trực tiếp trên `UiHandle`, chạy mỗi tick và kết hợp
+Display Entity interpolation để chuyển động mượt:
+
+```java
+import vn.haohan.displayui.api.animation.UiAnimation;
+import vn.haohan.displayui.api.animation.UiEasing;
+
+handle.animate(UiAnimation.slideIn(
+    10, UiAnimation.Direction.BOTTOM, 18, UiEasing.EASE_OUT));
+
+handle.animate(UiAnimation.builder()
+    .durationTicks(14)
+    .delayTicks(2)
+    .easing(UiEasing.BACK_OUT)
+    .opacity(0.0f, 1.0f)
+    .scale(0.85f, 1.0f)
+    .offset(UiAnimation.Direction.BOTTOM, 12.0f)
+    .build());
+
+handle.stopAnimation();
+```
+
+Preset có sẵn: `fadeIn`, `fadeOut`, `slideIn`, `scaleIn`. Easing gồm
+`LINEAR`, quadratic, cubic, ease-in/out, `BACK_OUT` và `ELASTIC_OUT`.
+Opacity áp dụng cho `TextDisplay`; scale và movement áp dụng cho text, item,
+icon và block.
+
+## Slider và checkbox
+
+Control là immutable và được thêm trực tiếp vào document. Slider lấy vị trí
+click để tính giá trị; checkbox đổi trạng thái khi click. Cả hai dùng chung
+callback và Bukkit event có thể cancel:
+
+```java
+UiSlider volume = new UiSlider("volume", -70, 24, 140, 14,
+    0.0, 1.0, 0.5, 0.05, Component.text("Volume"));
+UiCheckbox enabled = new UiCheckbox("enabled", -70, 44, 16, 16, true);
+
+UiDocument page = UiDocument.builder()
+    .add(panel)
+    .slider(volume)
+    .checkbox(enabled)
+    .build();
+
+handle = ui.create("plugin:settings", location, page);
+handle.onControlChange(change -> {
+    if (change.control().id().equals("volume")) {
+        plugin.setVolume(change.value());
+    }
+});
+```
+
+`UiControl` là extension point chung cho các control sau này như radio button,
+dropdown, switch và text input.
+
+Slider được update tại chỗ: khi chỉ thay đổi value, geometry và hitbox giữ
+nguyên nên scene không respawn và không bị flicker.
+Transformation của display/item cũng được update tại chỗ, nên dev có thể đổi
+vị trí và kích thước thumb, fill, indicator hoặc icon động.
+
+Helper tạo style custom:
+
+```java
+UiRect track = slider.trackRect();
+UiRect fill = slider.fillRect(2);
+UiRect thumb = slider.thumbRect(10, 18);
+UiRect indicator = checkbox.indicatorRect();
+```
+
+Slider hỗ trợ drag liên tục: right-click vào slider rồi di chuyển tâm ngắm,
+giá trị cập nhật theo từng tick. Left-click, rời khỏi slider, đổi trang hoặc
+thoát game sẽ kết thúc drag.
+Trong lúc giữ drag nhưng player không đổi vị trí/hướng nhìn, engine tạm bỏ qua
+raycast; state drag vẫn được giữ và tự tiếp tục ngay khi player di chuyển tiếp.
+
+Có thể chạy animation độc lập cho từng node bằng `animateNodes(...)`, theo
+đúng thứ tự node trong document.
+
+Moving gradient text trong demo được update mỗi server tick (tối đa 20 FPS).
+`TextDisplay` không interpolation nội dung text, nên animation text thuần
+server không thể mượt hoàn toàn độc lập với game tick. Muốn animation không
+phụ thuộc tick cần dùng resource pack với animated model/texture cho
+`ItemDisplay`, hoặc client-side shader/mod.
+
+Khi chuyển page, engine diff theo từng node: entity không đổi được giữ lại,
+node cùng loại chỉ cập nhật metadata/transformation, còn node mới hoặc khác
+loại mới bị thay thế. Vì vậy page không còn nhấp nháy toàn bộ.
 
 Consumer nên giữ `UiHandle` và gọi `remove()` khi machine/menu tương ứng bị xóa.
 Có thể dùng `removeOwnedBy(ownerKey)` để cleanup toàn bộ UI của một module.
@@ -621,6 +733,8 @@ Các trang:
 | 3 | Hover/click rows với hitbox dùng chung. |
 | 4 | Fixed, yaw, pitch, camera-facing và X/Y/Z 45°. |
 | 5 | URL và các loại command action. |
+| 6 | Slider, checkbox, control callback và animation. |
+| 7 | Shape, icon và text với random easing/animation độc lập. |
 
 ## Test
 

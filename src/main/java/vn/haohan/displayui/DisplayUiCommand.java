@@ -21,8 +21,14 @@ package vn.haohan.displayui;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.UiOptions;
+import vn.haohan.displayui.api.animation.UiAnimation;
+import vn.haohan.displayui.api.animation.UiEasing;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiButtonAction;
+import vn.haohan.displayui.api.interaction.UiCheckbox;
+import vn.haohan.displayui.api.interaction.UiControlChange;
+import vn.haohan.displayui.api.interaction.UiSlider;
+import vn.haohan.displayui.api.layout.UiRect;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
@@ -47,13 +53,16 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 final class DisplayUiCommand implements CommandExecutor {
     private static final String LEGACY_DEMO_OWNER = "haohandisplayui:demo";
-    private static final int PAGE_COUNT = 5;
+    private static final int PAGE_COUNT = 7;
     private static final float PANEL_X = -96;
     private static final float PANEL_Y = -64;
     private static final float PANEL_WIDTH = 192;
@@ -66,7 +75,9 @@ final class DisplayUiCommand implements CommandExecutor {
     DisplayUiCommand(HaoHanDisplayUIPlugin plugin, DisplayUiServiceImpl service) {
         this.plugin = plugin;
         this.service = service;
-        Bukkit.getScheduler().runTaskTimer(plugin, this::animateDemos, 3L, 3L);
+        // Text content itself is not client-interpolated. Update the demo
+        // gradient every server tick for the smoothest server-side result.
+        Bukkit.getScheduler().runTaskTimer(plugin, this::animateDemos, 1L, 1L);
     }
 
     @Override
@@ -107,6 +118,8 @@ final class DisplayUiCommand implements CommandExecutor {
                         0.2f, "haohan_display_ui", session.cameraTransform),
                 candidate -> candidate.getUniqueId().equals(player.getUniqueId()));
         session.handle.onClick(click -> onDemoClick(session, click.button().id(), click.player()));
+        session.handle.onControlChange(change -> onDemoControlChange(session, change));
+        session.handle.animate(UiAnimation.fadeIn(12, UiEasing.EASE_OUT));
         demos.put(player.getUniqueId(), session);
 
         sender.sendMessage("§aDemo UI created. Aim at a row to see its description, "
@@ -120,11 +133,11 @@ final class DisplayUiCommand implements CommandExecutor {
         switch (buttonId) {
             case "previous_page" -> {
                 session.page = Math.floorMod(session.page - 1, PAGE_COUNT);
-                session.handle.update(buildPage(session));
+                showPage(session);
             }
             case "next_page" -> {
                 session.page = (session.page + 1) % PAGE_COUNT;
-                session.handle.update(buildPage(session));
+                showPage(session);
             }
             case "diamond_action" -> player.sendMessage("§bDiamond row clicked.");
             case "gold_action" -> player.sendMessage("§6Gold row clicked.");
@@ -146,6 +159,20 @@ final class DisplayUiCommand implements CommandExecutor {
         }
     }
 
+    private void onDemoControlChange(DemoSession session, UiControlChange change) {
+        switch (change.control().id()) {
+            case "demo_volume" -> session.volume = change.value();
+            case "demo_enabled" -> session.enabled = change.checked();
+            default -> { return; }
+        }
+        session.handle.update(buildPage(session));
+    }
+
+    private void showPage(DemoSession session) {
+        session.handle.update(buildPage(session));
+        if (session.page == 6) playRandomNodeAnimations(session);
+    }
+
     private void setCamera(DemoSession session, UiCameraTransform transform) {
         session.cameraTransform = transform;
         session.handle.cameraTransform(transform);
@@ -162,6 +189,8 @@ final class DisplayUiCommand implements CommandExecutor {
             case 2 -> addInteractivePage(builder);
             case 3 -> addCameraPage(builder);
             case 4 -> addActionPage(builder);
+            case 5 -> addControlPage(builder, session);
+            case 6 -> addAnimationPage(builder);
             default -> throw new IllegalStateException("Unknown demo page " + session.page);
         }
         addFooter(builder, session.page);
@@ -183,7 +212,9 @@ final class DisplayUiCommand implements CommandExecutor {
                     case 1 -> "LIST LAYOUTS";
                     case 2 -> "INTERACTION + HOVER";
                     case 3 -> "CAMERA + AXIS LOCK";
-                    default -> "LINK + COMMAND ACTIONS";
+                    case 4 -> "LINK + COMMAND ACTIONS";
+                    case 5 -> "LIVE CONTROLS";
+                    default -> "RANDOM NODE ANIMATIONS";
                 }, NamedTextColor.DARK_GRAY),
                 -86, -43, 172, 9, UiTextAlignment.RIGHT)
                 .fontSize(5).verticalOffset(-1));
@@ -367,6 +398,106 @@ final class DisplayUiCommand implements CommandExecutor {
                         Component.text(description, NamedTextColor.YELLOW), action));
     }
 
+    private void addControlPage(UiDocument.Builder builder, DemoSession session) {
+        builder.add(new AlignedTextNode(Component.text("Native item/block controls — click to change",
+                        NamedTextColor.GRAY), -86, -35, 172, 9, UiTextAlignment.LEFT)
+                .fontSize(5).verticalOffset(-1));
+
+        UiSlider slider = new UiSlider("demo_volume", -42, -23, 104, 14,
+                0.0, 1.0, session.volume, 0.05,
+                Component.text("Click to set volume"));
+        UiRect track = slider.trackRect();
+        UiRect fill = slider.fillRect(2.0f);
+        UiRect thumb = slider.thumbRect(9.0f, 18.0f);
+        builder.add(new AlignedTextNode(Component.text("Volume", NamedTextColor.YELLOW,
+                        TextDecoration.BOLD), -86, -25, 38, 18, UiTextAlignment.LEFT)
+                .fontSize(6).verticalAlignment(UiVerticalAlignment.CENTER));
+        builder.add(new BlockNode(Material.GRAY_CONCRETE.createBlockData(),
+                track.x(), track.y() + 4, 0.001f, track.width(), 6, 1));
+        builder.add(new BlockNode(Material.BLUE_CONCRETE.createBlockData(),
+                fill.x(), fill.y() + 4, 0.004f, fill.width(), 6, 1));
+        builder.add(new UiIconNode(new ItemStack(Material.SLIME_BALL),
+                thumb.x(), thumb.y(), thumb.width(), thumb.height(), 16, 16));
+        builder.add(new AlignedTextNode(Component.text(
+                        String.format("%.0f%%", session.volume * 100), NamedTextColor.WHITE),
+                66, -25, 26, 18, UiTextAlignment.RIGHT)
+                .fontSize(5).verticalAlignment(UiVerticalAlignment.CENTER));
+        builder.slider(slider);
+
+        UiCheckbox checkbox = new UiCheckbox("demo_enabled", -86, 3, 20, 20,
+                session.enabled, Component.text("Toggle enabled"));
+        UiRect indicator = checkbox.indicatorRect();
+        builder.add(new BlockNode(session.enabled
+                        ? Material.LIME_CONCRETE.createBlockData()
+                        : Material.RED_CONCRETE.createBlockData(),
+                indicator.x(), indicator.y(), 0.001f,
+                indicator.width(), indicator.height(), 1));
+        builder.add(new UiIconNode(new ItemStack(session.enabled
+                        ? Material.LIME_DYE : Material.GRAY_DYE),
+                indicator.x() + 3, indicator.y() + 3, 14, 14, 16, 16));
+        builder.add(new AlignedTextNode(Component.text("Enabled · "
+                                + (session.enabled ? "checked" : "unchecked"),
+                        NamedTextColor.YELLOW, TextDecoration.BOLD),
+                -62, 3, 110, 20, UiTextAlignment.LEFT)
+                .fontSize(6).verticalAlignment(UiVerticalAlignment.CENTER));
+        builder.checkbox(checkbox);
+    }
+
+    private void addAnimationPage(UiDocument.Builder builder) {
+        builder.add(new BlockNode(Material.BLACKSTONE.createBlockData(),
+                -82, -28, 0.001f, 52, 38, 2));
+        builder.add(new BlockNode(Material.PURPLE_CONCRETE.createBlockData(),
+                -24, -20, 0.002f, 46, 30, 2));
+        builder.add(new BlockNode(Material.BLUE_CONCRETE.createBlockData(),
+                30, -12, 0.003f, 52, 22, 2));
+        builder.add(new UiIconNode(new ItemStack(Material.AMETHYST_SHARD),
+                -70, -18, 18, 18, 16, 16));
+        builder.add(new UiIconNode(new ItemStack(Material.CLOCK),
+                -8, -12, 18, 18, 16, 16));
+        builder.add(new UiIconNode(new ItemStack(Material.NETHER_STAR),
+                48, -7, 18, 18, 16, 16));
+        builder.add(new AlignedTextNode(Component.text("SHAPE", NamedTextColor.YELLOW,
+                        TextDecoration.BOLD), -82, 17, 52, 12, UiTextAlignment.CENTER)
+                .fontSize(5));
+        builder.add(new AlignedTextNode(Component.text("ICON", NamedTextColor.AQUA,
+                        TextDecoration.BOLD), -24, 17, 46, 12, UiTextAlignment.CENTER)
+                .fontSize(5));
+        builder.add(new AlignedTextNode(Component.text("TEXT", NamedTextColor.LIGHT_PURPLE,
+                        TextDecoration.BOLD), 30, 17, 52, 12, UiTextAlignment.CENTER)
+                .fontSize(5));
+        builder.add(new AlignedTextNode(Component.text(
+                        "Every node gets a random easing, delay, scale, or slide.",
+                        NamedTextColor.GRAY), -86, 31, 172, 10, UiTextAlignment.CENTER)
+                .fontSize(4));
+    }
+
+    private void playRandomNodeAnimations(DemoSession session) {
+        if (session.page != 6 || !session.handle.isValid()) return;
+        UiDocument document = buildPage(session);
+        session.handle.update(document);
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        List<UiAnimation> animations = new ArrayList<>(document.nodes().size());
+        UiAnimation.Direction[] directions = UiAnimation.Direction.values();
+        UiEasing[] easings = {
+                UiEasing.EASE_OUT, UiEasing.QUAD_OUT, UiEasing.CUBIC_OUT,
+                UiEasing.BACK_OUT, UiEasing.ELASTIC_OUT
+        };
+        for (int i = 0; i < document.nodes().size(); i++) {
+            UiAnimation.Builder animation = UiAnimation.builder()
+                    .durationTicks(random.nextInt(16, 31))
+                    .delayTicks(random.nextInt(0, 11))
+                    .easing(easings[random.nextInt(easings.length)])
+                    .opacity(random.nextBoolean() ? 0.35f : 1.0f, 1.0f)
+                    .scale(random.nextBoolean() ? 0.72f : 1.0f, 1.0f);
+            if (random.nextBoolean()) {
+                animation.offset(directions[random.nextInt(directions.length)],
+                        random.nextFloat(4.0f, 22.0f));
+            }
+            animations.add(animation.build());
+        }
+        session.handle.animateNodes(animations);
+    }
+
     private void addFooter(UiDocument.Builder builder, int page) {
         addFooterButton(builder, "previous_page", -86, "<", "Previous demo page");
         addFooterButton(builder, "next_page", 62, ">", "Next demo page");
@@ -399,6 +530,8 @@ final class DisplayUiCommand implements CommandExecutor {
             if (session.page == 0) {
                 session.gradientFrame++;
                 session.handle.update(buildPage(session));
+            } else if (session.page == 6 && !session.handle.isAnimating()) {
+                playRandomNodeAnimations(session);
             }
         }
     }
@@ -426,6 +559,8 @@ final class DisplayUiCommand implements CommandExecutor {
         private UiHandle handle;
         private int page;
         private int gradientFrame;
+        private double volume = 0.5;
+        private boolean enabled = true;
         private UiCameraTransform cameraTransform = UiCameraTransform.fixed();
 
         private DemoSession(UUID playerId) {

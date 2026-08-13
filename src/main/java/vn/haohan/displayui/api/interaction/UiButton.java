@@ -35,7 +35,7 @@ public record UiButton(
         Component description,
         UiButtonAction action,
         float hitSlop
-) {
+) implements UiControl {
     public UiButton {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(description, "description");

@@ -24,6 +24,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.event.server.PluginDisableEvent;
 
@@ -37,9 +38,19 @@ public final class UiInteractionListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
+        if (event.getAction() == Action.LEFT_CLICK_AIR
+                || event.getAction() == Action.LEFT_CLICK_BLOCK) {
+            service.stopDragging(event.getPlayer());
+            return;
+        }
         if (event.getAction() != Action.RIGHT_CLICK_AIR
                 && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (service.handleRightClick(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onQuit(PlayerQuitEvent event) {
+        service.stopDragging(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
