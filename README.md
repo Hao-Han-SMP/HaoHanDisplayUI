@@ -242,6 +242,59 @@ handle.hide(player);
 handle.remove();
 ```
 
+### Pager và điều hướng nhiều trang
+
+`UiPager` là page adapter nhỏ lấy cảm hứng từ mô hình pager/router của các
+engine UI khác. Pager giữ các `UiDocument` immutable, còn `UiHandle` vẫn chịu
+trách nhiệm diff và render scene:
+
+```java
+UiPager pager = new UiPager(List.of(homePage, settingsPage, helpPage))
+    .onPageChange(page -> player.sendActionBar(
+        Component.text("Trang " + (page + 1))));
+
+UiHandle handle = ui.create("plugin:menu", origin, pager.current());
+
+// Gắn vào UiButton callback của consumer:
+pager.next();
+pager.show(handle);
+// Hoặc: pager.previous(), pager.goTo(0), pager.show(handle)
+```
+
+Mặc định pager quay vòng từ trang cuối về trang đầu. Dùng
+`new UiPager(pages, false)` nếu cần chặn ở hai biên. Pager không tạo scene mới,
+không giữ player state và không thay thế lifecycle của `UiHandle`, nên có thể
+dùng cùng audience, animation, camera transform và cleanup hiện có.
+
+### Scroll list
+
+`UiScrollList` cung cấp vùng nhận con lăn cho danh sách. Engine không tự đoán
+layout row; consumer dùng `offset()` để render các item đang nhìn thấy rồi cập
+nhật document khi offset đổi:
+
+```java
+UiScrollList scroll = new UiScrollList(
+    "items", -80, -40, 160, 80,
+    Math.max(0, items.size() - visibleRows), 0,
+    Component.text("Cuộn danh sách"));
+
+UiDocument page = UiDocument.builder()
+    .addAll(renderRows(items, scroll.offset(), visibleRows))
+    .scrollList(scroll)
+    .build();
+
+handle.onControlChange(change -> {
+    if (change.control().id().equals("items")) {
+        handle.update(buildItemsPage(items, (int) change.value()));
+    }
+});
+```
+
+Con lăn được nhận diện qua thay đổi hotbar của Bukkit và chỉ bị hủy khi người
+chơi đang nhìn đúng vùng scroll. `step(n)` cho phép cuộn nhiều row mỗi nấc.
+Để tránh mất trạng thái khi rebuild document, engine tự giữ offset hiện tại nếu
+ID và geometry của control vẫn giữ nguyên.
+
 Mặc định, button/slider/checkbox sẽ phát sound `minecraft:ui.button.click`
 sau khi interaction không bị cancel. Có thể đổi sound (kể cả sound custom từ
 resource pack) hoặc tắt hoàn toàn:
@@ -347,6 +400,21 @@ Moving gradient text trong demo được update mỗi server tick (tối đa 20 
 server không thể mượt hoàn toàn độc lập với game tick. Muốn animation không
 phụ thuộc tick cần dùng resource pack với animated model/texture cho
 `ItemDisplay`, hoặc client-side shader/mod.
+
+### Preset effects
+
+Consumer có thể dùng `UiEffects` thay vì tự ghép easing và tham số cho từng node:
+
+```java
+handle.animate(UiEffects.popIn());
+handle.animate(UiEffects.slideInFromLeft());
+handle.animateNodes(UiEffects.gallery());
+```
+
+Preset gồm `fadeIn`, slide từ bốn hướng, `popIn`, `scaleIn`, `scaleOut`,
+`bounceIn`, `dropIn` và `softRise`. Easing được truyền riêng bằng
+Các hiệu ứng loop như `breathing`, `spin`, `shake` và `pulse` cần runtime
+`UiLoopEffect` riêng vì chúng chạy liên tục thay vì chỉ có điểm đầu/cuối.
 
 Khi chuyển page, engine diff theo từng node: entity không đổi được giữ lại,
 node cùng loại chỉ cập nhật metadata/transformation, còn node mới hoặc khác

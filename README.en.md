@@ -243,6 +243,58 @@ handle.hide(player);
 handle.remove();
 ```
 
+### Pager and multi-page navigation
+
+`UiPager` is a small page adapter inspired by the pager/router pattern used by
+other UI engines. It stores immutable `UiDocument` pages, while `UiHandle`
+continues to own scene diffing and rendering:
+
+```java
+UiPager pager = new UiPager(List.of(homePage, settingsPage, helpPage))
+    .onPageChange(page -> player.sendActionBar(
+        Component.text("Page " + (page + 1))));
+
+UiHandle handle = ui.create("plugin:menu", origin, pager.current());
+
+pager.next();
+pager.show(handle);
+// Or: pager.previous(), pager.goTo(0), pager.show(handle)
+```
+
+The default pager wraps from the last page to the first. Use
+`new UiPager(pages, false)` to stop at both ends. It does not create scenes or
+own player state, so it works with the existing audience, animation, camera,
+and cleanup lifecycle.
+
+### Scroll lists
+
+`UiScrollList` provides a scroll-wheel viewport for a list. The engine does not
+assume a row layout; consumers use `offset()` to render visible items and
+rebuild the document when the offset changes:
+
+```java
+UiScrollList scroll = new UiScrollList(
+    "items", -80, -40, 160, 80,
+    Math.max(0, items.size() - visibleRows), 0,
+    Component.text("Scroll list"));
+
+UiDocument page = UiDocument.builder()
+    .addAll(renderRows(items, scroll.offset(), visibleRows))
+    .scrollList(scroll)
+    .build();
+
+handle.onControlChange(change -> {
+    if (change.control().id().equals("items")) {
+        handle.update(buildItemsPage(items, (int) change.value()));
+    }
+});
+```
+
+Scrolling is detected through Bukkit hotbar changes and is cancelled only while
+the player is looking at the scroll area. Use `step(n)` to move several rows per
+wheel notch. When a document is rebuilt, the engine preserves the current offset
+if the control ID and geometry remain unchanged.
+
 Buttons, sliders, and checkboxes play `minecraft:ui.button.click` by default
 after a non-cancelled interaction. You can customize it, including a resource
 pack sound, or disable it:
@@ -360,6 +412,23 @@ The demo moving gradient updates every server tick (up to 20 FPS). Minecraft
 does not interpolate `TextDisplay` text content, so server-driven text cannot be
 fully independent of game ticks. For truly client-timed animation, use an
 animated resource-pack model/texture on an `ItemDisplay`, or a client shader/mod.
+
+### Preset effects
+
+Consumers can use `UiEffects` instead of assembling easing and parameters for
+every node:
+
+```java
+handle.animate(UiEffects.popIn());
+handle.animate(UiEffects.slideInFromLeft());
+handle.animateNodes(UiEffects.gallery());
+```
+
+Available presets include `fadeIn`, four-direction slides, `popIn`, `scaleIn`,
+`scaleOut`, `bounceIn`, `dropIn`, and `softRise`. Looping effects such as
+`breathing`, `spin`, `shake`, and `pulse` need a
+separate `UiLoopEffect` runtime because they run continuously rather than
+having one start/end transition like `UiAnimation`.
 
 Page updates are incremental: unchanged entities are retained, same-type nodes
 only update metadata/transformation, and only new or incompatible nodes are

@@ -23,6 +23,7 @@ import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.animation.UiAnimation;
+import vn.haohan.displayui.api.animation.UiEasing;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
@@ -32,6 +33,7 @@ import vn.haohan.displayui.api.interaction.UiControl;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.interaction.UiControlChangeHandler;
 import vn.haohan.displayui.api.interaction.UiSlider;
+import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.interaction.event.UiButtonClickEvent;
 import vn.haohan.displayui.api.interaction.event.UiControlChangeEvent;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
@@ -40,6 +42,7 @@ import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.ItemNode;
 import vn.haohan.displayui.api.node.TextNode;
 import vn.haohan.displayui.api.node.UiIconNode;
+import vn.haohan.displayui.api.node.UiBackgroundNode;
 import vn.haohan.displayui.api.node.UiNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.view.UiAudience;
@@ -77,6 +80,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 final class UiScene implements UiHandle {
+    /** Client-side interpolation window used for every transform update. */
+    private static final int INTERPOLATION_TICKS = 4;
+    /** Short window for per-tick animation targets; avoids chasing old frames. */
+    private static final int ANIMATION_INTERPOLATION_TICKS = 2;
+    /** Normalizes TextDisplay's native placeholder bounds to UI pixel bounds. */
+    private static final float BACKGROUND_NATIVE_WIDTH_SCALE = 4.25f;
+    private static final float BACKGROUND_NATIVE_HEIGHT_SCALE = 4.10f;
+    /** Keeps the translucent background behind text, icons, and row blocks. */
+    private static final float BACKGROUND_DEPTH_OFFSET = -0.02f;
     private final HaoHanDisplayUIPlugin plugin;
     private final UUID id;
     private final String ownerKey;
@@ -173,6 +185,7 @@ final class UiScene implements UiHandle {
         nodeAnimationAges = new int[0];
         this.animation = Objects.requireNonNull(animation, "animation");
         this.animationAge = -animation.delayTicks();
+        configureAnimationInterpolation();
         applyAnimation(animationProgress());
     }
 
@@ -189,6 +202,7 @@ final class UiScene implements UiHandle {
             nodeAnimationAges[i] = -animations.get(i).delayTicks();
         }
         animation = null;
+        configureAnimationInterpolation();
         applyNodeAnimations();
     }
 
@@ -304,6 +318,24 @@ final class UiScene implements UiHandle {
                 .orElse(null);
     }
 
+    /** Finds a scroll viewport even when a button row is layered above it. */
+    UiHit scrollHit(Player player) {
+        if (removed || !shouldShow(player)) return null;
+        PlaneBasis basis = planeBasis(player);
+        UiRaycaster.Projection projection = UiRaycaster.project(
+                player.getEyeLocation().toVector(), player.getEyeLocation().getDirection(),
+                origin.toVector(), basis.normal(), basis.right(), basis.up(),
+                options.pixelsPerBlock(), options.maxDistance());
+        if (projection == null) return null;
+        return controlStates.values().stream()
+                .filter(control -> control instanceof UiScrollList)
+                .filter(control -> control.contains(projection.localX(), projection.localY()))
+                .findFirst()
+                .map(control -> new UiHit(this, null, control, player,
+                        projection.localX(), projection.localY(), projection.distance()))
+                .orElse(null);
+    }
+
     void activate(UiHit hit) {
         if (hit.control() != null) {
             activateControl(hit);
@@ -329,6 +361,51 @@ final class UiScene implements UiHandle {
         }
     }
 
+    boolean scroll(UiHit hit, int nextOffset) {
+        if (!(hit.control() instanceof UiScrollList list)) return false;
+        int previousOffset = list.offset();
+        boolean changed = changeControl(hit, nextOffset, true);
+        if (changed) {
+            UiScrollList updated = (UiScrollList) controlStates.get(list.id());
+            int direction = Integer.compare(updated.offset(), previousOffset);
+            animateScrollViewport(updated, direction);
+        }
+        return changed;
+    }
+
+    /**
+     * Mirrors Apps' scroll behavior: row display entities stay alive and each
+     * visible object interpolates from one row outside its target position.
+     * The document update performed by the control callback has already
+     * changed the row content, so this produces a smooth incoming row motion
+     * without rebuilding the scene.
+     */
+    private void animateScrollViewport(UiScrollList list, int direction) {
+        if (direction == 0 || document.nodes().isEmpty()) return;
+        float rowDistance = list.height() / 4.0f;
+        UiAnimation.Direction movement = direction > 0
+                ? UiAnimation.Direction.BOTTOM : UiAnimation.Direction.TOP;
+        List<UiAnimation> animations = new ArrayList<>(document.nodes().size());
+        for (UiNode node : document.nodes()) {
+            UiAnimation animation = UiAnimation.builder().durationTicks(7)
+                    .easing(UiEasing.CUBIC_OUT).build();
+            if (nodeInScrollViewport(node, list)) {
+                animation = UiAnimation.builder().durationTicks(7)
+                        .easing(UiEasing.CUBIC_OUT)
+                        .offset(movement, rowDistance).build();
+            }
+            animations.add(animation);
+        }
+        animateNodes(animations);
+    }
+
+    private boolean nodeInScrollViewport(UiNode node, UiScrollList list) {
+        return node.x() < list.x() + list.width()
+                && node.x() >= list.x() - 8.0f
+                && node.y() >= list.y() - 8.0f
+                && node.y() <= list.y() + list.height() + 8.0f;
+    }
+
     /** Updates a slider while its owning player keeps the drag gesture active. */
     boolean dragSlider(Player player, String controlId) {
         if (removed) return false;
@@ -350,6 +427,7 @@ final class UiScene implements UiHandle {
 
     private void activateControl(UiHit hit) {
         UiControl control = hit.control();
+        if (control instanceof UiScrollList) return;
         double nextValue = control instanceof UiSlider slider
                 ? slider.valueAt(hit.localX())
                 : ((UiCheckbox) control).checked() ? 0.0 : 1.0;
@@ -368,7 +446,9 @@ final class UiScene implements UiHandle {
 
         UiControl nextControl = control instanceof UiSlider slider
                 ? slider.withValue(nextValue)
-                : ((UiCheckbox) control).checked(nextValue >= 0.5);
+                : control instanceof UiCheckbox checkbox
+                ? checkbox.checked(nextValue >= 0.5)
+                : ((UiScrollList) control).withOffset((int) Math.round(nextValue));
         controlStates.put(control.id(), nextControl);
         if (playSound) playClickSound(hit.player());
         UiControlChange change = new UiControlChange(this, nextControl, hit.player(),
@@ -387,6 +467,7 @@ final class UiScene implements UiHandle {
     private double controlValue(UiControl control) {
         if (control instanceof UiSlider slider) return slider.value();
         if (control instanceof UiCheckbox checkbox) return checkbox.checked() ? 1.0 : 0.0;
+        if (control instanceof UiScrollList list) return list.offset();
         throw new IllegalArgumentException("Unsupported UI control: " + control.getClass().getName());
     }
 
@@ -484,6 +565,9 @@ final class UiScene implements UiHandle {
             } else if (old instanceof UiCheckbox oldCheckbox && control instanceof UiCheckbox checkbox
                     && sameControlLayout(oldCheckbox, checkbox)) {
                 controlStates.put(control.id(), checkbox.checked(oldCheckbox.checked()));
+            } else if (old instanceof UiScrollList oldList && control instanceof UiScrollList list
+                    && sameControlLayout(oldList, list)) {
+                controlStates.put(control.id(), list.withOffset(oldList.offset()));
             } else {
                 controlStates.put(control.id(), control);
             }
@@ -491,12 +575,31 @@ final class UiScene implements UiHandle {
     }
 
     private Display spawnNode(UiNode node) {
+        if (node instanceof UiBackgroundNode background) return spawnBackground(background);
         if (node instanceof TextNode text) return spawnText(text);
         if (node instanceof AlignedTextNode text) return spawnAlignedText(text);
         if (node instanceof ItemNode item) return spawnItem(item);
         if (node instanceof UiIconNode icon) return spawnIcon(icon);
         if (node instanceof BlockNode block) return spawnBlock(block);
         throw new IllegalArgumentException("Unsupported UI node: " + node.getClass().getName());
+    }
+
+    private TextDisplay spawnBackground(UiBackgroundNode node) {
+        return origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+            configure(display, node);
+            // Apps uses a short invisible placeholder and lets the display
+            // transformation define the container bounds. Expanding this
+            // text into rows/blocks makes Minecraft scale the background by
+            // the text layout and creates a giant distorted plane.
+            display.text(Component.text("....."));
+            // Keep the layout anchor used by Apps, but make the placeholder
+            // completely invisible. The background is rendered by the
+            // TextDisplay background metadata, not by the glyphs.
+            display.setTextOpacity((byte) 0);
+            display.setAlignment(TextDisplay.TextAlignment.LEFT);
+            display.setBackgroundColor(node.background());
+            display.setTransformation(backgroundTransform(node, 1.0f));
+        });
     }
 
     private TextDisplay spawnText(TextNode node) {
@@ -623,7 +726,7 @@ final class UiScene implements UiHandle {
         display.setViewRange(options.viewRange());
         display.setShadowRadius(0.0f);
         display.setInterpolationDelay(0);
-        display.setInterpolationDuration(2);
+        display.setInterpolationDuration(INTERPOLATION_TICKS);
         display.addScoreboardTag(options.scoreboardTag());
         display.addScoreboardTag("hhdui_scene");
         display.getPersistentDataContainer().set(sceneKey, PersistentDataType.STRING, id.toString());
@@ -676,9 +779,11 @@ final class UiScene implements UiHandle {
             for (int i = 0; i < nodeAnimations.size(); i++) {
                 UiAnimation current = nodeAnimations.get(i);
                 nodeAnimationAges[i]++;
-                applyAnimationToNode(i, current, nodeAnimationProgress(i));
+                if (!isStaticAnimation(current)) {
+                    applyAnimationToNode(i, current, nodeAnimationProgress(i));
+                }
                 if (nodeAnimationAges[i] < current.durationTicks()) running = true;
-                else applyAnimationToNode(i, current, 1.0);
+                else if (!isStaticAnimation(current)) applyAnimationToNode(i, current, 1.0);
             }
             if (!running) {
                 nodeAnimations = List.of();
@@ -702,7 +807,10 @@ final class UiScene implements UiHandle {
     private void applyNodeAnimations() {
         if (nodeAnimations.isEmpty()) return;
         for (int i = 0; i < nodeAnimations.size(); i++) {
-            applyAnimationToNode(i, nodeAnimations.get(i), nodeAnimationProgress(i));
+            UiAnimation current = nodeAnimations.get(i);
+            if (!isStaticAnimation(current)) {
+                applyAnimationToNode(i, current, nodeAnimationProgress(i));
+            }
         }
     }
 
@@ -745,10 +853,67 @@ final class UiScene implements UiHandle {
                     icon.height() / pixels * scale,
                     Math.min(icon.width(), icon.height()) / pixels * scale,
                     offsetX, offsetY, offsetZ));
+        } else if (node instanceof UiBackgroundNode background) {
+            display.setTransformation(backgroundTransform(background, scale,
+                    offsetX, offsetY, offsetZ));
         }
         if (display instanceof TextDisplay textDisplay) {
-            textDisplay.setTextOpacity((byte) Math.round(opacity * 255.0f));
+            if (node instanceof UiBackgroundNode background) {
+                // Never animate the layout placeholder itself. Animate only
+                // the native background color so no dots can flash on screen.
+                textDisplay.setTextOpacity((byte) 0);
+                textDisplay.setBackgroundColor(withAlpha(background.background(), opacity));
+            } else {
+                textDisplay.setTextOpacity((byte) Math.round(opacity * 255.0f));
+            }
         }
+    }
+
+    private void configureAnimationInterpolation() {
+        for (int i = 0; i < nodeEntities.size() && i < nodeAnimations.size(); i++) {
+            if (isStaticAnimation(nodeAnimations.get(i))) continue;
+            Display display = nodeEntities.get(i);
+            if (display == null || !display.isValid()) continue;
+            display.setInterpolationDelay(0);
+            display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+        }
+    }
+
+    private boolean isStaticAnimation(UiAnimation animation) {
+        return animation.offsetX() == 0.0f && animation.offsetY() == 0.0f
+                && animation.offsetZ() == 0.0f
+                && animation.fromScale() == 1.0f && animation.toScale() == 1.0f
+                && animation.fromOpacity() == 1.0f && animation.toOpacity() == 1.0f;
+    }
+
+    private Color withAlpha(Color color, float opacity) {
+        int alpha = Math.round(color.getAlpha()
+                * Math.max(0.0f, Math.min(1.0f, opacity)));
+        return Color.fromARGB(alpha, color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    private Transformation backgroundTransform(UiBackgroundNode node, float scale) {
+        return backgroundTransform(node, scale, 0.0f, 0.0f, 0.0f);
+    }
+
+    private Transformation backgroundTransform(UiBackgroundNode node, float scale,
+                                                float offsetX, float offsetY,
+                                                float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        // TextDisplay's native background is centered around its transform
+        // anchor, unlike BlockDisplay's top-left logical anchor.
+        return transform(node,
+                node.width() / pixels * BACKGROUND_NATIVE_WIDTH_SCALE * scale,
+                node.height() / pixels * BACKGROUND_NATIVE_HEIGHT_SCALE * scale,
+                // Apps uses a zero Z scale for container backgrounds. A
+                // non-zero depth makes the native TextDisplay plane overlap
+                // nearby rows and produces z-fighting on list pages.
+                0.0f, offsetX + node.width() * 0.5f,
+                // TextDisplay's vertical glyph/background origin sits above
+                // the logical panel anchor; compensate one extra panel
+                // height so the native background starts at PANEL_Y.
+                offsetY + node.height() * 1.0f,
+                offsetZ + BACKGROUND_DEPTH_OFFSET);
     }
 
     private float interpolate(float from, float to, double progress) {
@@ -854,7 +1019,15 @@ final class UiScene implements UiHandle {
     }
 
     private void updateNode(Display display, UiNode node) {
-        if (node instanceof TextNode text) {
+        if (display != null && display.isValid()) {
+            display.setInterpolationDelay(0);
+            display.setInterpolationDuration(INTERPOLATION_TICKS);
+        }
+        if (node instanceof UiBackgroundNode background) {
+                TextDisplay textDisplay = (TextDisplay) display;
+                textDisplay.setBackgroundColor(background.background());
+                textDisplay.setTransformation(backgroundTransform(background, 1.0f));
+            } else if (node instanceof TextNode text) {
                 TextDisplay textDisplay = (TextDisplay) display;
                 textDisplay.text(text.text());
                 textDisplay.setAlignment(screenAlignment(text.alignment()));

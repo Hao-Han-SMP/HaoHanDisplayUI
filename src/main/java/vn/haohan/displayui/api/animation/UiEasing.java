@@ -29,7 +29,9 @@ public enum UiEasing {
     /** Slightly overshoots the target for a soft pop. */
     BACK_OUT,
     /** A spring-like overshoot. */
-    ELASTIC_OUT;
+    ELASTIC_OUT,
+    /** A falling object that settles with visible bounces. */
+    BOUNCE_OUT;
 
     /**
      * Maps a normalized linear progress value to this curve.
@@ -59,6 +61,21 @@ public enum UiEasing {
                 if (t == 0.0 || t == 1.0) yield t;
                 yield Math.pow(2.0, -10.0 * t)
                         * Math.sin((t * 10.0 - 0.75) * (2.0 * Math.PI / 3.0)) + 1.0;
+            }
+            case BOUNCE_OUT -> {
+                double n1 = 7.5625;
+                double d1 = 2.75;
+                if (t < 1.0 / d1) yield n1 * t * t;
+                if (t < 2.0 / d1) {
+                    double u = t - 1.5 / d1;
+                    yield n1 * u * u + 0.75;
+                }
+                if (t < 2.5 / d1) {
+                    double u = t - 2.25 / d1;
+                    yield n1 * u * u + 0.9375;
+                }
+                double u = t - 2.625 / d1;
+                yield n1 * u * u + 0.984375;
             }
         };
     }

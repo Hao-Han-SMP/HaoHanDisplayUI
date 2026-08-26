@@ -23,11 +23,13 @@ import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiControl;
 import vn.haohan.displayui.api.interaction.UiSlider;
+import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
@@ -66,6 +68,11 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons,
             return this;
         }
 
+        public Builder addAll(Collection<? extends UiNode> nodes) {
+            Objects.requireNonNull(nodes, "nodes").forEach(this::add);
+            return this;
+        }
+
         public Builder button(UiButton button) {
             buttons.add(Objects.requireNonNull(button, "button"));
             return this;
@@ -82,6 +89,10 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons,
 
         public Builder checkbox(UiCheckbox checkbox) {
             return control(checkbox);
+        }
+
+        public Builder scrollList(UiScrollList scrollList) {
+            return control(scrollList);
         }
 
         public Builder interactiveText(String id, AlignedTextNode text,

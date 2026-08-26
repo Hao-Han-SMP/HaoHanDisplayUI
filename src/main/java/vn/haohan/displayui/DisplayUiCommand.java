@@ -23,16 +23,19 @@ import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.animation.UiEasing;
+import vn.haohan.displayui.api.animation.UiEffects;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.interaction.UiSlider;
+import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.layout.UiRect;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.UiIconNode;
+import vn.haohan.displayui.api.node.UiBackgroundNode;
 import vn.haohan.displayui.api.text.UiText;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.text.UiTextOpticalPreset;
@@ -54,6 +57,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.Iterator;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -62,7 +66,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 final class DisplayUiCommand implements CommandExecutor {
     private static final String LEGACY_DEMO_OWNER = "haohandisplayui:demo";
-    private static final int PAGE_COUNT = 7;
+    private static final int PAGE_COUNT = 8;
     private static final float PANEL_X = -96;
     private static final float PANEL_Y = -64;
     private static final float PANEL_WIDTH = 192;
@@ -155,6 +159,20 @@ final class DisplayUiCommand implements CommandExecutor {
             case "camera_z45" -> setCamera(session,
                     UiCameraTransform.fixed().angles(0, 0, 45));
             case "open_url", "player_command", "console_command", "execute_command" -> { }
+            case "app_0", "app_1", "app_2", "app_3", "app_4", "app_5", "app_6", "app_7" -> {
+                session.selectedApp = Integer.parseInt(buttonId.substring(4));
+                session.handle.update(buildPage(session));
+                player.sendMessage("§dSelected app: §f"
+                        + session.appEntries.get(session.selectedApp).name());
+            }
+            case "app_up" -> {
+                session.appOffset = Math.max(0, session.appOffset - 1);
+                session.handle.update(buildPage(session));
+            }
+            case "app_down" -> {
+                session.appOffset = Math.min(appMaxOffset(session), session.appOffset + 1);
+                session.handle.update(buildPage(session));
+            }
             default -> player.sendMessage("§dDisplay UI click: §f" + buttonId);
         }
     }
@@ -163,6 +181,7 @@ final class DisplayUiCommand implements CommandExecutor {
         switch (change.control().id()) {
             case "demo_volume" -> session.volume = change.value();
             case "demo_enabled" -> session.enabled = change.checked();
+            case "demo_apps" -> session.appOffset = (int) change.value();
             default -> { return; }
         }
         session.handle.update(buildPage(session));
@@ -170,7 +189,10 @@ final class DisplayUiCommand implements CommandExecutor {
 
     private void showPage(DemoSession session) {
         session.handle.update(buildPage(session));
-        if (session.page == 6) playRandomNodeAnimations(session);
+        if (session.page == 6) playPresetNodeAnimations(session);
+        else session.handle.animate(UiAnimation.builder().durationTicks(10)
+                .easing(UiEasing.CUBIC_OUT).opacity(0.0f, 1.0f)
+                .offset(UiAnimation.Direction.RIGHT, 10.0f).build());
     }
 
     private void setCamera(DemoSession session, UiCameraTransform transform) {
@@ -180,8 +202,9 @@ final class DisplayUiCommand implements CommandExecutor {
 
     private UiDocument buildPage(DemoSession session) {
         UiDocument.Builder builder = UiDocument.builder()
-                .add(new BlockNode(Material.BLACK_CONCRETE.createBlockData(),
-                        PANEL_X, PANEL_Y, 0.0f, PANEL_WIDTH, PANEL_HEIGHT, 2));
+                .add(new UiBackgroundNode(PANEL_X, PANEL_Y, 0.0f,
+                        PANEL_WIDTH, PANEL_HEIGHT,
+                        org.bukkit.Color.fromARGB(0xB0000000)));
         addHeader(builder, session.page);
         switch (session.page) {
             case 0 -> addTextPage(builder, session.gradientFrame);
@@ -191,6 +214,7 @@ final class DisplayUiCommand implements CommandExecutor {
             case 4 -> addActionPage(builder);
             case 5 -> addControlPage(builder, session);
             case 6 -> addAnimationPage(builder);
+            case 7 -> addChooseAppPage(builder, session);
             default -> throw new IllegalStateException("Unknown demo page " + session.page);
         }
         addFooter(builder, session.page);
@@ -214,7 +238,8 @@ final class DisplayUiCommand implements CommandExecutor {
                     case 3 -> "CAMERA + AXIS LOCK";
                     case 4 -> "LINK + COMMAND ACTIONS";
                     case 5 -> "LIVE CONTROLS";
-                    default -> "RANDOM NODE ANIMATIONS";
+                    case 6 -> "PRESET EFFECT GALLERY";
+                    default -> "CHOOSE APP · SCROLL LIST";
                 }, NamedTextColor.DARK_GRAY),
                 -86, -43, 172, 9, UiTextAlignment.RIGHT)
                 .fontSize(5).verticalOffset(-1));
@@ -357,12 +382,17 @@ final class DisplayUiCommand implements CommandExecutor {
 
     private void addControlButton(UiDocument.Builder builder, String id, float x,
                                   float y, String label, String description) {
+        addControlButton(builder, id, x, y, 78, label, description);
+    }
+
+    private void addControlButton(UiDocument.Builder builder, String id, float x,
+                                  float y, float width, String label, String description) {
         builder.add(new BlockNode(Material.GRAY_CONCRETE.createBlockData(),
-                        x, y, 0.001f, 78, 16, 1))
+                        x, y, 0.001f, width, 16, 1))
                 .add(new AlignedTextNode(Component.text(label, NamedTextColor.AQUA),
-                        x, y, 78, 16, UiTextAlignment.CENTER)
+                        x, y, width, 16, UiTextAlignment.CENTER)
                         .fontSize(5).verticalOffset(0).atDepth(0.004f).shadowed(true))
-                .button(new UiButton(id, x, y, 78, 16,
+                .button(new UiButton(id, x, y, width, 16,
                         Component.text(description, NamedTextColor.YELLOW)));
     }
 
@@ -466,36 +496,124 @@ final class DisplayUiCommand implements CommandExecutor {
                         TextDecoration.BOLD), 30, 17, 52, 12, UiTextAlignment.CENTER)
                 .fontSize(5));
         builder.add(new AlignedTextNode(Component.text(
-                        "Every node gets a random easing, delay, scale, or slide.",
+                        "Named presets: fade · slide · pop · elastic · drop · rise.",
                         NamedTextColor.GRAY), -86, 31, 172, 10, UiTextAlignment.CENTER)
                 .fontSize(4));
     }
 
-    private void playRandomNodeAnimations(DemoSession session) {
+    private void playPresetNodeAnimations(DemoSession session) {
         if (session.page != 6 || !session.handle.isValid()) return;
         UiDocument document = buildPage(session);
         session.handle.update(document);
-        ThreadLocalRandom random = ThreadLocalRandom.current();
         List<UiAnimation> animations = new ArrayList<>(document.nodes().size());
-        UiAnimation.Direction[] directions = UiAnimation.Direction.values();
-        UiEasing[] easings = {
-                UiEasing.EASE_OUT, UiEasing.QUAD_OUT, UiEasing.CUBIC_OUT,
-                UiEasing.BACK_OUT, UiEasing.ELASTIC_OUT
-        };
+        // Keep the gallery on monotonic curves. Bounce/elastic presets are
+        // useful for isolated demos, but restarting them on a rotating grid
+        // makes adjacent rows look like they are stuttering.
+        List<UiAnimation> presets = List.of(
+                UiEffects.fadeIn(14),
+                UiAnimation.slideIn(14, UiAnimation.Direction.LEFT, 18,
+                        UiEasing.CUBIC_OUT),
+                UiAnimation.slideIn(14, UiAnimation.Direction.RIGHT, 18,
+                        UiEasing.CUBIC_OUT),
+                UiEffects.scaleIn(0.82f, UiEasing.QUAD_OUT),
+                UiEffects.softRise());
         for (int i = 0; i < document.nodes().size(); i++) {
-            UiAnimation.Builder animation = UiAnimation.builder()
-                    .durationTicks(random.nextInt(16, 31))
-                    .delayTicks(random.nextInt(0, 11))
-                    .easing(easings[random.nextInt(easings.length)])
-                    .opacity(random.nextBoolean() ? 0.35f : 1.0f, 1.0f)
-                    .scale(random.nextBoolean() ? 0.72f : 1.0f, 1.0f);
-            if (random.nextBoolean()) {
-                animation.offset(directions[random.nextInt(directions.length)],
-                        random.nextFloat(4.0f, 22.0f));
-            }
-            animations.add(animation.build());
+            UiAnimation preset = presets.get(i % presets.size());
+            animations.add(UiEffects.delayed(preset, (i % 5) * 2));
         }
         session.handle.animateNodes(animations);
+    }
+
+    private static final AppEntry[] APP_ENTRIES = {
+            new AppEntry("Spawn", "Change spawn behavior", Material.COMPASS),
+            new AppEntry("Recipes", "Look up crafting recipes", Material.CRAFTING_TABLE),
+            new AppEntry("Kits", "Collect custom server kits", Material.CHEST),
+            new AppEntry("Homes", "Save and teleport to homes", Material.RED_BED),
+            new AppEntry("Warps", "Browse public server warps", Material.ENDER_PEARL),
+            new AppEntry("Market", "Buy and sell server items", Material.EMERALD),
+            new AppEntry("Teleport", "Send teleport requests", Material.ENDER_EYE),
+            new AppEntry("Preferences", "Configure UI preferences", Material.REPEATER)
+    };
+
+    private int appMaxOffset() {
+        return Math.max(0, APP_ENTRIES.length - 4);
+    }
+
+    private int appMaxOffset(DemoSession session) {
+        return Math.max(0, session.appEntries.size() - 4);
+    }
+
+    private void addChooseAppPage(UiDocument.Builder builder, DemoSession session) {
+        final float left = -78;
+        final float top = -34;
+        final float width = 156;
+        final float rowHeight = 18;
+        final int visibleRows = 4;
+
+        builder.add(new AlignedTextNode(Component.text(
+                        "Scroll over the list · right-click an app row",
+                        NamedTextColor.GRAY), left, -42, width, 8, UiTextAlignment.LEFT)
+                .fontSize(5));
+        builder.add(new UiBackgroundNode(left, top - 2, 0.001f, width, 78,
+                org.bukkit.Color.fromARGB(0x40000001)));
+
+        for (int row = 0; row < visibleRows; row++) {
+            int index = session.appOffset + row;
+            if (index >= session.appEntries.size()) {
+                addEmptyAppRow(builder, top + row * rowHeight, row);
+            } else {
+                AppEntry app = session.appEntries.get(index);
+                addAppRow(builder, app, top + row * rowHeight,
+                        "app_" + index, index == session.selectedApp);
+            }
+        }
+
+        builder.scrollList(new UiScrollList("demo_apps", left, top, width,
+                visibleRows * rowHeight, appMaxOffset(session), session.appOffset,
+                Component.text("Scroll applications")));
+        builder.add(new AlignedTextNode(Component.text(
+                        (session.appOffset + 1) + "–" + Math.min(session.appEntries.size(),
+                                session.appOffset + visibleRows) + " / " + session.appEntries.size(),
+                        NamedTextColor.DARK_GRAY), left, 40, width, 8,
+                UiTextAlignment.CENTER).fontSize(4));
+        addControlButton(builder, "app_up", 76, -29, 18, "▲", "Scroll up");
+        addControlButton(builder, "app_down", 76, 19, 18, "▼", "Scroll down");
+    }
+
+    private void addAppRow(UiDocument.Builder builder, AppEntry app, float y,
+                           String id, boolean selected) {
+        Material background = selected ? Material.LIGHT_BLUE_STAINED_GLASS
+                : Material.LIGHT_GRAY_STAINED_GLASS;
+        builder.add(new BlockNode(background.createBlockData(), -74, y,
+                0.004f, 148, 16, 1));
+        builder.add(new UiIconNode(new ItemStack(app.icon()), -70, y + 2,
+                12, 12, 16, 16));
+        builder.add(new AlignedTextNode(Component.text(selected ? "☑" : "☐",
+                        selected ? NamedTextColor.AQUA : NamedTextColor.WHITE),
+                -56, y + 1, 10, 14, UiTextAlignment.CENTER).fontSize(7));
+        builder.add(new AlignedTextNode(Component.text(app.name(),
+                        NamedTextColor.WHITE, TextDecoration.BOLD), -43, y + 1,
+                74, 8, UiTextAlignment.LEFT).fontSize(5));
+        builder.add(new AlignedTextNode(Component.text(app.description(),
+                        NamedTextColor.GRAY), -43, y + 8, 112, 6,
+                UiTextAlignment.LEFT).fontSize(3.5f));
+        builder.button(new UiButton(id, -74, y, 148, 16,
+                Component.text("Open " + app.name(), NamedTextColor.YELLOW)));
+    }
+
+    private void addEmptyAppRow(UiDocument.Builder builder, float y, int row) {
+        builder.add(new BlockNode(Material.GRAY_STAINED_GLASS.createBlockData(),
+                -74, y, 0.004f, 148, 16, 1));
+        builder.add(new UiIconNode(new ItemStack(Material.AIR), -70, y + 2,
+                12, 12, 16, 16));
+        builder.add(new AlignedTextNode(Component.empty(), -56, y + 1,
+                10, 14, UiTextAlignment.CENTER).fontSize(7));
+        builder.add(new AlignedTextNode(Component.empty(), -43, y + 1,
+                74, 8, UiTextAlignment.LEFT).fontSize(5));
+        builder.add(new AlignedTextNode(Component.empty(), -43, y + 8,
+                112, 6, UiTextAlignment.LEFT).fontSize(3.5f));
+        builder.button(new UiButton("empty_app_" + row, -74, y, 148, 16,
+                Component.empty()));
     }
 
     private void addFooter(UiDocument.Builder builder, int page) {
@@ -531,7 +649,7 @@ final class DisplayUiCommand implements CommandExecutor {
                 session.gradientFrame++;
                 session.handle.update(buildPage(session));
             } else if (session.page == 6 && !session.handle.isAnimating()) {
-                playRandomNodeAnimations(session);
+                playPresetNodeAnimations(session);
             }
         }
     }
@@ -561,10 +679,17 @@ final class DisplayUiCommand implements CommandExecutor {
         private int gradientFrame;
         private double volume = 0.5;
         private boolean enabled = true;
+        private int appOffset;
+        private int selectedApp = -1;
+        private final List<AppEntry> appEntries = new ArrayList<>();
         private UiCameraTransform cameraTransform = UiCameraTransform.fixed();
 
         private DemoSession(UUID playerId) {
             this.playerId = playerId;
+            appEntries.addAll(List.of(APP_ENTRIES));
+            Collections.shuffle(appEntries);
         }
     }
+
+    private record AppEntry(String name, String description, Material icon) { }
 }

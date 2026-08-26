@@ -24,11 +24,11 @@ import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.interaction.UiControl;
+import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.icon.UiIconRegistry;
 import vn.haohan.displayui.api.view.UiAudience;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.Location;
 
@@ -113,6 +113,17 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
             dragging.remove(player.getUniqueId());
         }
         return true;
+    }
+
+    public boolean handleScroll(Player player, int direction) {
+        if (direction == 0) return false;
+        UiHit nearest = scenes.values().stream()
+                .map(scene -> scene.scrollHit(player))
+                .filter(Objects::nonNull)
+                .min(java.util.Comparator.comparingDouble(UiHit::distance))
+                .orElse(null);
+        if (nearest == null || !(nearest.control() instanceof UiScrollList scroll)) return false;
+        return nearest.scene().scroll(nearest, scroll.offset() + direction * scroll.step());
     }
 
     public void stopDragging(Player player) {

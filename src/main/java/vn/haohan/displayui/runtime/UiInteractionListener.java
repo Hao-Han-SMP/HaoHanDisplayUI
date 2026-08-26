@@ -25,6 +25,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.event.server.PluginDisableEvent;
 
@@ -51,6 +52,13 @@ public final class UiInteractionListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     public void onQuit(PlayerQuitEvent event) {
         service.stopDragging(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onHotbarScroll(PlayerItemHeldEvent event) {
+        if (event.getNewSlot() == event.getPreviousSlot()) return;
+        int direction = event.getNewSlot() > event.getPreviousSlot() ? 1 : -1;
+        if (service.handleScroll(event.getPlayer(), direction)) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.NORMAL)

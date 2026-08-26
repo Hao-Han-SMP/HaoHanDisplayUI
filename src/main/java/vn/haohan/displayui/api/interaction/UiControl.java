@@ -13,7 +13,7 @@ package vn.haohan.displayui.api.interaction;
 import net.kyori.adventure.text.Component;
 
 /** A value-changing interactive region in logical-pixel screen space. */
-public sealed interface UiControl permits UiButton, UiSlider, UiCheckbox {
+public sealed interface UiControl permits UiButton, UiSlider, UiCheckbox, UiScrollList {
     String id();
     float x();
     float y();
