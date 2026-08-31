@@ -1,0 +1,74 @@
+package vn.haohan.displayui.demo;
+
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import vn.haohan.displayui.api.UiHandle;
+import vn.haohan.displayui.api.layout.UiCameraTransform;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
+
+public final class DemoContext {
+    private final UUID playerId;
+    private UiHandle handle;
+    private int page;
+    private int gradientFrame;
+    private double volume = 0.65;
+    private boolean enabled = true;
+    private int appOffset;
+    private int selectedApp;
+    private final List<AppEntry> appEntries = new ArrayList<>(AppEntry.defaultApps());
+    private UiCameraTransform cameraTransform = UiCameraTransform.fixed();
+    private Consumer<DemoContext> pageUpdater;
+
+    public DemoContext(UUID playerId) {
+        this.playerId = playerId;
+    }
+
+    public UUID playerId() { return playerId; }
+
+    public Player player() { return Bukkit.getPlayer(playerId); }
+
+    public UiHandle handle() { return handle; }
+    public void handle(UiHandle handle) { this.handle = handle; }
+
+    public int page() { return page; }
+    public void page(int page) { this.page = page; }
+
+    public int gradientFrame() { return gradientFrame; }
+    public void advanceGradientFrame() { this.gradientFrame++; }
+
+    public double volume() { return volume; }
+    public void volume(double volume) { this.volume = volume; }
+
+    public boolean enabled() { return enabled; }
+    public void enabled(boolean enabled) { this.enabled = enabled; }
+
+    public int appOffset() { return appOffset; }
+    public void appOffset(int appOffset) { this.appOffset = appOffset; }
+
+    public int selectedApp() { return selectedApp; }
+    public void selectedApp(int selectedApp) { this.selectedApp = selectedApp; }
+
+    public List<AppEntry> appEntries() { return appEntries; }
+
+    public UiCameraTransform cameraTransform() { return cameraTransform; }
+    public void cameraTransform(UiCameraTransform cameraTransform) {
+        this.cameraTransform = cameraTransform;
+        if (handle != null && handle.isValid()) {
+            handle.cameraTransform(cameraTransform);
+        }
+    }
+
+    public void setPageUpdater(Consumer<DemoContext> updater) {
+        this.pageUpdater = updater;
+    }
+
+    public void updateView() {
+        if (pageUpdater != null && handle != null && handle.isValid()) {
+            pageUpdater.accept(this);
+        }
+    }
+}

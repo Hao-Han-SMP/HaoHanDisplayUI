@@ -19,7 +19,7 @@
 package vn.haohan.displayui.api.node;
 
 /** One renderable node in a UI document. Coordinates are logical pixels. */
-public sealed interface UiNode permits TextNode, AlignedTextNode, ItemNode, UiIconNode, BlockNode, UiBackgroundNode {
+public sealed interface UiNode permits TextNode, AlignedTextNode, ItemNode, UiIconNode, BlockNode, UiBackgroundNode, EntityModelNode, MobEntityNode {
     float x();
     float y();
     float depth();

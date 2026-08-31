@@ -28,6 +28,7 @@ import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.icon.UiIconRegistry;
 import vn.haohan.displayui.api.view.UiAudience;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.Location;
@@ -46,7 +47,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
     private final UiIconRegistryImpl icons = new UiIconRegistryImpl();
     private final Map<UUID, UiScene> scenes = new LinkedHashMap<>();
     private final Map<UUID, HoverTarget> hovered = new LinkedHashMap<>();
-    private final Map<UUID, DragTarget> dragging = new LinkedHashMap<>();
+    private final Map<UUID, DragSession> dragging = new LinkedHashMap<>();
 
     public DisplayUiServiceImpl(HaoHanDisplayUIPlugin plugin) {
         this.plugin = plugin;
@@ -84,7 +85,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
 
     @Override
     public Collection<UiHandle> active() {
-        return ListView.copyOf(scenes.values());
+        return List.copyOf(scenes.values());
     }
 
     @Override
@@ -103,14 +104,41 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
         tickHoverDescriptions();
     }
 
+    public boolean handleLeftClick(Player player) {
+        DragSession active = dragging.get(player.getUniqueId());
+        if (active != null) {
+            active.stop(player);
+            dragging.remove(player.getUniqueId());
+            player.sendActionBar(Component.empty());
+            return true;
+        }
+
+        for (UiScene scene : scenes.values()) {
+            if (!scene.isValid()) continue;
+            var proj = scene.projectCursor(player);
+            if (proj == null) continue;
+            int modelIndex = scene.findModelNodeAt(proj.localX(), proj.localY());
+            if (modelIndex >= 0) {
+                dragging.put(player.getUniqueId(), new ModelDragSession(scene, modelIndex, proj.localX(), proj.localY()));
+                player.sendActionBar(Component.text("✥ 3D Drag Mode · Move cursor to spin · Left-click to release", NamedTextColor.GOLD));
+                return true;
+            }
+        }
+        return false;
+    }
+
     public boolean handleRightClick(Player player) {
+        DragSession active = dragging.get(player.getUniqueId());
+        if (active != null) {
+            active.stop(player);
+            dragging.remove(player.getUniqueId());
+        }
+
         UiHit nearest = nearestHit(player);
         if (nearest == null) return false;
         nearest.scene().activate(nearest);
         if (nearest.control() instanceof vn.haohan.displayui.api.interaction.UiSlider slider) {
-            dragging.put(player.getUniqueId(), new DragTarget(nearest.scene(), slider.id()));
-        } else {
-            dragging.remove(player.getUniqueId());
+            dragging.put(player.getUniqueId(), new SliderDragSession(nearest.scene(), slider.id()));
         }
         return true;
     }
@@ -127,7 +155,8 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
     }
 
     public void stopDragging(Player player) {
-        dragging.remove(player.getUniqueId());
+        DragSession active = dragging.remove(player.getUniqueId());
+        if (active != null) active.stop(player);
     }
 
     public void shutdown() {
@@ -146,7 +175,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
     }
 
     private void validateOwner(String ownerKey) {
-        if (ownerKey == null || !ownerKey.matches("[a-z0-9_.-]+:[a-z0-9/._-]+")) {
+        if (ownerKey == null || !ownerKey.matches("[a-z0-9_.-]+:[a-z0-9/._:-]+")) {
             throw new IllegalArgumentException(
                     "ownerKey must be namespaced, for example haohanmetallurgy:forge_guide");
         }
@@ -154,6 +183,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
 
     private void tickHoverDescriptions() {
         for (Player player : Bukkit.getOnlinePlayers()) {
+            if (dragging.containsKey(player.getUniqueId())) continue;
             UiHit hit = nearestHit(player);
             HoverTarget previous = hovered.get(player.getUniqueId());
             if (hit == null || interactionDescription(hit).equals(Component.empty())) {
@@ -165,7 +195,6 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
             }
 
             HoverTarget current = new HoverTarget(hit.scene().id(), interactionId(hit));
-            // Refresh every UI tick so the action bar remains visible while hovered.
             player.sendActionBar(interactionDescription(hit));
             hovered.put(player.getUniqueId(), current);
         }
@@ -176,13 +205,12 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
         dragging.entrySet().removeIf(entry -> {
             UUID playerId = entry.getKey();
             Player player = Bukkit.getPlayer(playerId);
-            DragTarget target = entry.getValue();
-            if (player == null || !target.scene().isValid()) return true;
-            // Keep the drag state alive, but skip raycast/control work while
-            // the player's eye position and view direction are unchanged.
-            if (!target.viewChanged(player)) return false;
-            target.rememberView(player);
-            return !target.scene().dragSlider(player, target.controlId());
+            DragSession session = entry.getValue();
+            if (player == null || !session.isValid()) {
+                if (session != null && player != null) session.stop(player);
+                return true;
+            }
+            return !session.update(player);
         });
     }
 
@@ -203,22 +231,42 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
     }
 
     private record HoverTarget(UUID sceneId, String buttonId) {}
-    private static final class DragTarget {
+
+    private interface DragSession {
+        boolean isValid();
+        boolean update(Player player);
+        void stop(Player player);
+    }
+
+    private static final class SliderDragSession implements DragSession {
         private static final double POSITION_EPSILON = 0.0001;
         private static final float ANGLE_EPSILON = 0.01f;
 
         private final UiScene scene;
         private final String controlId;
-        private double lastX;
-        private double lastY;
-        private double lastZ;
-        private float lastYaw;
-        private float lastPitch;
+        private double lastX, lastY, lastZ;
+        private float lastYaw, lastPitch;
         private boolean hasView;
 
-        private DragTarget(UiScene scene, String controlId) {
+        private SliderDragSession(UiScene scene, String controlId) {
             this.scene = scene;
             this.controlId = controlId;
+        }
+
+        @Override
+        public boolean isValid() {
+            return scene.isValid();
+        }
+
+        @Override
+        public boolean update(Player player) {
+            if (!viewChanged(player)) return true;
+            rememberView(player);
+            return scene.dragSlider(player, controlId);
+        }
+
+        @Override
+        public void stop(Player player) {
         }
 
         private boolean viewChanged(Player player) {
@@ -246,15 +294,40 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
             delta = Math.min(delta, 360.0f - delta);
             return delta > ANGLE_EPSILON;
         }
-
-        private UiScene scene() { return scene; }
-        private String controlId() { return controlId; }
     }
 
-    /** Avoid exposing the mutable backing collection through the service API. */
-    private static final class ListView {
-        static Collection<UiHandle> copyOf(Collection<? extends UiHandle> handles) {
-            return List.copyOf(handles);
+    private static final class ModelDragSession implements DragSession {
+        private final UiScene scene;
+        private final int nodeIndex;
+        private float lastLocalX;
+        private float lastLocalY;
+
+        private ModelDragSession(UiScene scene, int nodeIndex, float startX, float startY) {
+            this.scene = scene;
+            this.nodeIndex = nodeIndex;
+            this.lastLocalX = startX;
+            this.lastLocalY = startY;
+        }
+
+        @Override
+        public boolean isValid() {
+            return scene.isValid();
+        }
+
+        @Override
+        public boolean update(Player player) {
+            var proj = scene.projectCursor(player);
+            if (proj == null) return true;
+            float deltaX = proj.localX() - lastLocalX;
+            float deltaY = proj.localY() - lastLocalY;
+            lastLocalX = proj.localX();
+            lastLocalY = proj.localY();
+            return scene.dragModel(nodeIndex, deltaX, deltaY);
+        }
+
+        @Override
+        public void stop(Player player) {
+            scene.releaseModelDrag(nodeIndex);
         }
     }
 }

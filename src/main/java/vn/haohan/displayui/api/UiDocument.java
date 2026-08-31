@@ -25,6 +25,8 @@ import vn.haohan.displayui.api.interaction.UiControl;
 import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.node.AlignedTextNode;
+import vn.haohan.displayui.api.node.EntityModelNode;
+import vn.haohan.displayui.api.node.MobEntityNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
 
@@ -95,6 +97,14 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons,
             return control(scrollList);
         }
 
+        public Builder entityModel(EntityModelNode model) {
+            return add(model);
+        }
+
+        public Builder mob(MobEntityNode mob) {
+            return add(mob);
+        }
+
         public Builder interactiveText(String id, AlignedTextNode text,
                                        net.kyori.adventure.text.Component description,
                                        UiButtonAction action) {
@@ -110,6 +120,26 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons,
                                        UiButtonAction action) {
             add(icon);
             button(UiButton.forIcon(id, icon)
+                    .describedBy(description)
+                    .withAction(action));
+            return this;
+        }
+
+        public Builder interactiveModel(String id, EntityModelNode model,
+                                        net.kyori.adventure.text.Component description,
+                                        UiButtonAction action) {
+            add(model);
+            button(UiButton.forModel(id, model)
+                    .describedBy(description)
+                    .withAction(action));
+            return this;
+        }
+
+        public Builder interactiveMob(String id, MobEntityNode mob,
+                                      net.kyori.adventure.text.Component description,
+                                      UiButtonAction action) {
+            add(mob);
+            button(UiButton.forMob(id, mob)
                     .describedBy(description)
                     .withAction(action));
             return this;

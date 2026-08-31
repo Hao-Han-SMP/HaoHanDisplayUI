@@ -4,7 +4,7 @@
 
 A standalone engine plugin for building interactive in-world Minecraft UIs with Display Entities.
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.11-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
 [![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)
 [![Purpur](https://img.shields.io/badge/Purpur-Compatible-8A4FFF?style=for-the-badge)](https://purpurmc.org/)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
@@ -20,12 +20,12 @@ Language: [Tiếng Việt](README.md) | English
 
 HaoHan Display UI is a Paper/Purpur engine plugin that lets other plugins describe
 3D interfaces as immutable documents. The engine manages spawning, updating,
-visibility, and cleanup for `TextDisplay`, `ItemDisplay`, `BlockDisplay`, and
-interactive hit zones.
+visibility, and cleanup for `TextDisplay`, `ItemDisplay`, `BlockDisplay`, mob entities, and
+interactive pixel-precise raycast hit zones.
 
 The plugin does not impose a specific menu or gameplay system. Consumers can use
 it for machine panels, guide boards, paginated menus, item lists, command buttons,
-documentation links, or per-player camera-facing interfaces.
+documentation links, 3D custom entity/item models, live Vanilla mobs, or per-player camera-facing interfaces.
 
 ## Demo Video
 
@@ -34,7 +34,7 @@ documentation links, or per-player camera-facing interfaces.
 The GIF above is compatible with GitHub README rendering. [Watch or download the
 high-quality MP4 with audio](media/Demo.mp4).
 
-The video demonstrates `/hhdui demo` and its six test pages:
+The video demonstrates `/hhdui demo` and its test pages:
 
 1. Plain, bold, italic, animated gradient, obfuscated, and mixed RGB text.
 2. Text lists, icon lists, and icons paired with text.
@@ -43,12 +43,19 @@ The video demonstrates `/hhdui demo` and its six test pages:
 5. URL, player command, console command, and permission-tested command actions.
 6. Slider, checkbox, and control callbacks.
 7. Shapes, icons, and text with independent random animations.
+8. Application navigation scroll list (Choose App).
+9. **Mixed 3D Mobs & Items Grid (8 Slots)**: Compact cute living mobs (Baby Cow, Baby Pig, Allay, Baby Zombie) mixed with 3D items (Diamond Sword, Trident, Helmet, Totem) in framed slot boxes with hover spin, auto spin, 3D tilt, and angle snapping.
+10. **3D Entity Showcase & Inspector**: Full-size living mob inspector (Living Cow, Dragon Head 360°, Diamond Knight Zombie).
 
 ## Features
 
 | Area | Capabilities |
 | --- | --- |
 | Rendering | `TextDisplay`, `ItemDisplay`, `BlockDisplay`, and layered panels. |
+| 3D Custom Models | 3D custom item and mob model rendering (`EntityModelNode`) with 3-axis scale, transforms (HEAD/FIXED/GUI), and Euler rotation angles (Yaw, Pitch, Roll). |
+| Vanilla Living Mobs | Native Minecraft living mob rendering (`MobEntityNode`) like Cows, Zombies, Allays... with `NoAI`, `Silent`, `Invulnerable`, custom scale (`GENERIC_SCALE`), and customizer consumers without needing resource packs. |
+| Model Rotation | Interactive cursor tracking on hover, continuous auto-spinning, and hover-triggered spinning. |
+| Angle Constraints | Per-axis locking (`lockYaw`, `lockPitch`, `lockRoll`), angle clamping ranges (`min..max`), step angle snapping, and sensitivity. |
 | Text | Adventure Components, RGB, multi-stop gradients, bold, italic, underline, strikethrough, and obfuscated `§k`. |
 | Layout | Left/center/right box alignment, top/center/bottom placement, offsets, optical presets, and icon + text rows. |
 | Interaction | Logical-pixel raycasting, hover descriptions, hit slop, callbacks, and Bukkit events. |
@@ -71,7 +78,7 @@ The video demonstrates `/hhdui demo` and its six test pages:
 
 ## Requirements
 
-- A Paper or Purpur `1.21.11` Minecraft server.
+- A Paper or Purpur `1.21.1+` (or `1.21.11`) Minecraft server.
 - Java 21 or newer.
 - Gradle 8.x when building the current source tree directly.
 - Consumer plugins must declare a dependency on `HaoHanDisplayUI`.
@@ -80,7 +87,7 @@ The video demonstrates `/hhdui demo` and its six test pages:
 
 ## Installation
 
-1. Build or download `HaoHanDisplayUI-1.0.0.jar`.
+1. Build or download `HaoHanDisplayUI-1.0.1.jar`.
 2. Copy the JAR into the server's `plugins/` directory.
 3. Add the dependency to the consumer plugin's `plugin.yml`:
 
@@ -90,32 +97,32 @@ depend: [HaoHanDisplayUI]
 
 4. Restart the server.
 5. Run `/hhdui info` to confirm that the engine is active.
-6. Run `/hhdui demo` in game to open the built-in demonstration.
+6. Run `/hhdui demo` in game to open the built-in 10-page demonstration.
 
 ## Build From Source
 
-Run this command in the project root:
+Run in the project's root directory:
 
 ```powershell
-gradle clean build
+./gradlew clean build
 ```
 
-The built JAR is generated at:
+The output JAR:
 
 ```text
-build/libs/HaoHanDisplayUI-1.0.0.jar
+build/libs/HaoHanDisplayUI-1.0.1.jar
 ```
 
-For a faster build without tests:
+Fast assemble without tests:
 
 ```powershell
-gradle clean assemble
+./gradlew clean assemble
 ```
 
-Publish the API to Maven Local for consumer development:
+Publish the API to Maven Local for consumer plugin builds:
 
 ```powershell
-gradle publishToMavenLocal
+./gradlew publishToMavenLocal
 ```
 
 Consumer Gradle dependency:
@@ -126,57 +133,61 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.0'
+    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.1'
 }
 ```
 
 ## Commands
 
-Administrative commands require `haohansmp.displayui.admin`. Server operators
-receive this permission by default.
+Administrative commands require the `haohansmp.displayui.admin` permission.
+Server operators receive this permission by default.
 
 | Command | Description |
 | --- | --- |
-| `/hhdui info` | Shows the active scene count and API service name. |
-| `/hhdui demo` | Creates a private five-page demo for the command sender. |
-| `/hhdui clear` | Removes all managed demo scenes. |
+| `/hhdui info` | Displays active scene count and the service registration name. |
+| `/hhdui demo` | Creates a private 10-page demonstration UI for the sender. |
+| `/hhdui clear` | Removes all active demonstration scenes. |
 
 ## Permissions
 
 | Permission | Default | Description |
 | --- | --- | --- |
-| `haohansmp.displayui.admin` | OP | Allows `/hhdui info`, `demo`, and `clear`. |
+| `haohansmp.displayui.admin` | OP | Grants access to `/hhdui info`, `demo`, and `clear`. |
 
 ## Basic API
 
-The public API is grouped by responsibility instead of placing every type in one
-flat package:
+The public API is organized by responsibility:
 
-| Package | Responsibility |
+| Package | Purpose |
 | --- | --- |
-| `api` | Service, document, handle, and scene options. |
+| `api` | Service, documents, handles, and scene options. |
 | `api.layout` | Rectangles, anchors, and camera transforms. |
-| `api.node` | Renderable text, item, icon, and block nodes. |
-| `api.text` | Rich-text builders and text alignment helpers. |
+| `api.node` | Text, item, icon, block, 3D entity model, and vanilla mob entity nodes. |
+| `api.text` | Rich text builders and alignment helpers. |
 | `api.interaction` | Buttons, actions, and click callbacks. |
-| `api.interaction.event` | Bukkit interaction events. |
-| `api.icon` | Reusable icon registration. |
-| `api.view` | Audience/viewer policies. |
+| `api.interaction.event` | Interaction Bukkit events. |
+| `api.icon` | Reusable icon registries. |
+| `api.view` | Audience and viewer policies. |
 
-For example, a typical consumer starts with these focused imports:
+Example consumer entry imports:
 
 ```java
 import vn.haohan.displayui.api.DisplayUiService;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
+import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.interaction.UiButton;
+import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.layout.UiRect;
 import vn.haohan.displayui.api.node.AlignedTextNode;
+import vn.haohan.displayui.api.node.BlockNode;
+import vn.haohan.displayui.api.node.EntityModelNode;
+import vn.haohan.displayui.api.node.MobEntityNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 ```
 
-Load the service from Bukkit's `ServicesManager`:
+Load the service from Bukkit:
 
 ```java
 DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
@@ -185,7 +196,7 @@ if (ui == null) {
 }
 ```
 
-Create a document and scene:
+Build a document and scene:
 
 ```java
 AlignedTextNode title = new AlignedTextNode(
@@ -231,7 +242,7 @@ handle.onClick(click -> {
 });
 ```
 
-Basic lifecycle operations:
+Basic handle lifecycle:
 
 ```java
 handle.update(nextPageDocument);
@@ -243,11 +254,11 @@ handle.hide(player);
 handle.remove();
 ```
 
-### Pager and multi-page navigation
+### Pager and Multi-Page Navigation
 
-`UiPager` is a small page adapter inspired by the pager/router pattern used by
-other UI engines. It stores immutable `UiDocument` pages, while `UiHandle`
-continues to own scene diffing and rendering:
+`UiPager` is a lightweight page adapter inspired by pager and router patterns
+in other UI engines. The pager holds immutable `UiDocument` instances, while the
+`UiHandle` continues to handle scene diffing and rendering:
 
 ```java
 UiPager pager = new UiPager(List.of(homePage, settingsPage, helpPage))
@@ -256,21 +267,21 @@ UiPager pager = new UiPager(List.of(homePage, settingsPage, helpPage))
 
 UiHandle handle = ui.create("plugin:menu", origin, pager.current());
 
+// In a UiButton click callback:
 pager.next();
 pager.show(handle);
 // Or: pager.previous(), pager.goTo(0), pager.show(handle)
 ```
 
-The default pager wraps from the last page to the first. Use
-`new UiPager(pages, false)` to stop at both ends. It does not create scenes or
-own player state, so it works with the existing audience, animation, camera,
-and cleanup lifecycle.
+By default the pager loops around when crossing bounds. Use
+`new UiPager(pages, false)` to clamp at ends. The pager does not spawn new
+scenes, does not store player state, and does not replace handle lifecycle.
 
 ### Scroll lists
 
-`UiScrollList` provides a scroll-wheel viewport for a list. The engine does not
-assume a row layout; consumers use `offset()` to render visible items and
-rebuild the document when the offset changes:
+`UiScrollList` provides a scroll hitbox for lists. The engine does not guess
+row layouts; the consumer uses `offset()` to render visible items and updates the
+document when the offset changes:
 
 ```java
 UiScrollList scroll = new UiScrollList(
@@ -290,40 +301,149 @@ handle.onControlChange(change -> {
 });
 ```
 
-Scrolling is detected through Bukkit hotbar changes and is cancelled only while
-the player is looking at the scroll area. Use `step(n)` to move several rows per
-wheel notch. When a document is rebuilt, the engine preserves the current offset
-if the control ID and geometry remain unchanged.
+Hotbar scrolling is intercepted via Bukkit inventory slot changes and only
+cancelled when the player looks directly at the scroll hitbox. `step(n)` allows
+multiple rows per tick step.
 
-Buttons, sliders, and checkboxes play `minecraft:ui.button.click` by default
-after a non-cancelled interaction. You can customize it, including a resource
-pack sound, or disable it:
+### Audio and Scene Options (`UiOptions`)
+
+By default, button/slider/checkbox interactions trigger the `minecraft:ui.button.click` sound
+when not cancelled. You can customize the sound (including custom resource pack sounds) or disable it completely:
 
 ```java
 UiOptions options = UiOptions.defaults()
     .withClickSound("my_pack:menu.tick", 0.7f, 1.1f);
 
 UiHandle handle = ui.create("plugin:menu", location, document, options, audience);
-// Use options.withoutClickSound() to disable it.
+// options.withoutClickSound() to disable click sounds.
 ```
 
-Backface culling for `ItemDisplay`/`UiIconNode` is enabled by default, is
-implemented per player, and applies to fixed scenes:
+Backface culling for `ItemDisplay`/`UiIconNode` is enabled by default as a software
+culling check per player on fixed scenes:
 
 ```java
 UiOptions options = UiOptions.defaults()
-    .withItemBackfaceCulling(false); // disable if the UI must show from behind
+    .withItemBackfaceCulling(false); // disable if UI needs to be seen from the back
 ```
 
-Consumers should retain their `UiHandle` and call `remove()` when the associated
-machine or menu is removed. Use `removeOwnedBy(ownerKey)` to clean up every UI
-owned by a module.
+---
+
+## 3D Mob & Entity Model Display (2 Approaches)
+
+HaoHan Display UI supports **two flexible approaches** for displaying 3D mobs and models:
+1. **Vanilla Living Mobs (`MobEntityNode`)**: For native Minecraft mobs (`Cow`, `Zombie`, `Allay`, etc.) with zero resource packs required.
+2. **Custom 3D Item/Mob Models (`EntityModelNode`)**: For custom models created in Blockbench, ModelEngine, or Resource Packs with 1.21+ `item_model` definitions.
+
+---
+
+### Approach 1: Native Vanilla Living Mobs (`MobEntityNode`)
+
+`MobEntityNode` spawns a live Bukkit `LivingEntity` on the UI scene. The engine automatically manages:
+- `setAI(false)`, `setSilent(true)`, `setInvulnerable(true)`, `setGravity(false)`, `setCollidable(false)`, and `setVisibleByDefault(false)` (packets only sent to authorized viewers).
+- Smooth entity scaling via `Attribute.GENERIC_SCALE`.
+- Customization callback via `.withCustomizer(Consumer<LivingEntity>)` (set baby state, armor/weapon equipment, sheep wool colors, villager professions, etc.).
+- Rotation modes: static Euler angles (Yaw, Pitch), continuous spinning (`autoSpin`), hover-triggered spinning (`hoverSpin`), or interactive cursor tracking (`yawRange`, `pitchRange`).
+
+#### Code Example:
+
+```java
+// 1. Baby Cow that spins on cursor hover
+MobEntityNode babyCow = new MobEntityNode(EntityType.COW, -60, 0, 36, 36, 0.75f)
+    .withCustomizer(mob -> {
+        if (mob instanceof Cow cow) {
+            cow.setBaby();
+        }
+    })
+    .hoverSpin(3.0f);
+
+// 2. Geared Zombie with 15° snapped cursor tracking
+MobEntityNode gearedZombie = new MobEntityNode(EntityType.ZOMBIE, 60, 0, 36, 36, 0.65f)
+    .withCustomizer(mob -> {
+        if (mob instanceof Zombie z) {
+            var eq = z.getEquipment();
+            if (eq != null) {
+                eq.setHelmet(new ItemStack(Material.DIAMOND_HELMET));
+                eq.setChestplate(new ItemStack(Material.DIAMOND_CHESTPLATE));
+                eq.setItemInMainHand(new ItemStack(Material.DIAMOND_SWORD));
+            }
+        }
+    })
+    .yawRange(-60, 60)
+    .lockPitch(true)
+    .step(15);
+
+UiDocument document = UiDocument.builder()
+    .mob(babyCow)
+    .interactiveMob("inspect_cow", babyCow,
+        Component.text("Inspect Baby Cow", NamedTextColor.GREEN),
+        UiButtonAction.playerCommand("say What a cute baby cow!"))
+    .mob(gearedZombie)
+    .build();
+```
+
+---
+
+### Approach 2: Custom 3D Item / Mob Models (`EntityModelNode`)
+
+`EntityModelNode` enables rendering 3D item/entity models (weapons, armor, mob heads, custom item models from Blockbench or ModelEngine) on the UI with full JOML transformation matrices and Euler angles (Yaw, Pitch, Roll):
+
+- **Interactive cursor tracking on hover (`CURSOR_TRACKING`)**: When players move their cursor across the model hitbox, the model tilts and rotates smoothly to follow the aim, decaying back to neutral on cursor exit.
+- **Continuous auto-spinning (`AUTO_SPIN`)** or hover-triggered spinning (`HOVER_SPIN`).
+- **Per-axis rotation locks (`lockYaw`, `lockPitch`, `lockRoll`)**: Lock any rotation axis so the model rotates strictly along desired axes.
+- **Angle clamping ranges (`yawRange`, `pitchRange`, `rollRange`)**: Bound minimum and maximum rotation angles (e.g. `-45° .. +45°`).
+- **Angle quantizing (`step`)**: Snap rotation angles to discrete steps (e.g. 15° or 45°).
+- **Sensitivity and display transforms** (`HEAD`, `FIXED`, `GUI`, `GROUND`, etc.).
+
+#### Code Example:
+
+```java
+EntityModelNode sword = new EntityModelNode(
+    new ItemStack(Material.DIAMOND_SWORD),
+    -40, 0, // center (x, y)
+    48, 48, // hover hitbox bounds (width, height)
+    1.5f    // 3-axis scale
+)
+    .withTransform(ItemDisplay.ItemDisplayTransform.FIXED)
+    .withRotation(0, 0, -45) // initial Euler angles (yaw, pitch, roll)
+    .yawRange(-60, 60)       // clamp hover yaw range
+    .lockPitch(true)         // lock pitch axis
+    .step(15)                // snap to 15° angle steps
+    .sensitivity(1.2f);
+
+EntityModelNode showcaseHelmet = new EntityModelNode(
+    new ItemStack(Material.NETHERITE_HELMET),
+    40, 0, 1.2f
+)
+    .autoSpin(2.5f); // auto-spin 2.5° per tick
+
+UiDocument document = UiDocument.builder()
+    .entityModel(sword)
+    .interactiveModel("inspect_sword", sword,
+        Component.text("Inspect Sword", NamedTextColor.AQUA),
+        UiButtonAction.executeCommand("inspect sword"))
+    .entityModel(showcaseHelmet)
+    .build();
+```
+
+### Rotation Modes and Presets (`UiModelRotation`)
+
+| Mode | Description |
+| --- | --- |
+| `CURSOR_TRACKING` | Model rotates smoothly toward the player's aim point on the hitbox and decays back on cursor exit. |
+| `HOVER_SPIN` | Model continuously spins around its axis only while hovered by the player. |
+| `AUTO_SPIN` | Model continuously spins at all times without requiring hover. |
+
+Factory presets:
+- `UiModelRotation.defaults()`: Free cursor tracking.
+- `UiModelRotation.locked()`: Locks all rotation axes.
+- `UiModelRotation.yawOnly()`: Allows rotation around the Y axis (yaw) only.
+- `UiModelRotation.pitchOnly()`: Allows rotation around the X axis (pitch) only.
+- `UiModelRotation.autoSpin(speed)`: Continuously spins at `speed` degrees/tick.
+- `UiModelRotation.hoverSpin(speed)`: Spins on hover at `speed` degrees/tick.
 
 ## Animations and easing
 
-Animations are configured on the handle and run on every node in the scene.
-The engine advances them every tick and uses Display Entity interpolation for
-smooth client-side motion:
+Animations are configured on the handle and run on every node in the scene:
 
 ```java
 import vn.haohan.displayui.api.animation.UiAnimation;
@@ -332,7 +452,6 @@ import vn.haohan.displayui.api.animation.UiEasing;
 handle.animate(UiAnimation.slideIn(
     10, UiAnimation.Direction.BOTTOM, 18, UiEasing.EASE_OUT));
 
-// Combine fade, scale, movement, delay, and any easing curve in one builder.
 handle.animate(UiAnimation.builder()
     .durationTicks(14)
     .delayTicks(2)
@@ -345,16 +464,10 @@ handle.animate(UiAnimation.builder()
 handle.stopAnimation();
 ```
 
-Convenience presets include `fadeIn`, `fadeOut`, `slideIn`, and `scaleIn`.
-Available curves include linear, quadratic, cubic, ease-in/out, back, and
-elastic variants. Opacity is supported by `TextDisplay`; scale and movement
-work for text, item, icon, and block nodes.
+Built-in presets: `fadeIn`, `fadeOut`, `slideIn`, `scaleIn`. Supported easings:
+`LINEAR`, quadratic, cubic, ease-in/out, `BACK_OUT`, and `ELASTIC_OUT`.
 
 ## Slider and checkbox controls
-
-Controls are immutable and can be added directly to a document. A slider uses
-the click position to calculate its value; a checkbox toggles on click. Both
-share one callback and one cancellable Bukkit event:
 
 ```java
 UiSlider volume = new UiSlider("volume", -70, 24, 140, 14,
@@ -375,15 +488,7 @@ handle.onControlChange(change -> {
 });
 ```
 
-The same `UiControl` extension point is used for future controls such as
-radio buttons, dropdowns, switches, and text inputs.
-
-Slider updates are optimized in place: changing only the value keeps the same
-node geometry and interaction hitbox, so the scene does not respawn or flicker.
-Display and item transformations are also updated in place, so a custom thumb,
-fill, indicator, or icon can change position and size dynamically.
-
-Style helpers make custom visuals small and predictable:
+Helper methods for customized control styling:
 
 ```java
 UiRect track = slider.trackRect();
@@ -391,48 +496,6 @@ UiRect fill = slider.fillRect(2);
 UiRect thumb = slider.thumbRect(10, 18);
 UiRect indicator = checkbox.indicatorRect();
 ```
-
-Sliders support continuous drag: right-click the slider and move your aim to
-update the value every tick. Left-clicking, leaving the slider, changing page,
-or quitting ends the drag.
-While the drag is held but the player's position/view does not change, raycasts
-are skipped; the drag state remains active and resumes on the next movement.
-
-For per-node motion, pass one animation per document node:
-
-```java
-handle.animateNodes(List.of(
-    UiAnimation.scaleIn(18),
-    UiAnimation.slideIn(22, UiAnimation.Direction.LEFT, 16),
-    UiAnimation.fadeIn(14)
-));
-```
-
-The demo moving gradient updates every server tick (up to 20 FPS). Minecraft
-does not interpolate `TextDisplay` text content, so server-driven text cannot be
-fully independent of game ticks. For truly client-timed animation, use an
-animated resource-pack model/texture on an `ItemDisplay`, or a client shader/mod.
-
-### Preset effects
-
-Consumers can use `UiEffects` instead of assembling easing and parameters for
-every node:
-
-```java
-handle.animate(UiEffects.popIn());
-handle.animate(UiEffects.slideInFromLeft());
-handle.animateNodes(UiEffects.gallery());
-```
-
-Available presets include `fadeIn`, four-direction slides, `popIn`, `scaleIn`,
-`scaleOut`, `bounceIn`, `dropIn`, and `softRise`. Looping effects such as
-`breathing`, `spin`, `shake`, and `pulse` need a
-separate `UiLoopEffect` runtime because they run continuously rather than
-having one start/end transition like `UiAnimation`.
-
-Page updates are incremental: unchanged entities are retained, same-type nodes
-only update metadata/transformation, and only new or incompatible nodes are
-replaced. This prevents the whole page from flashing during navigation.
 
 ## Coordinate System and Layers
 
@@ -445,26 +508,19 @@ replaced. This prevents the whole page from flashing during navigation.
 - `BlockNode.thickness` extends the panel backward.
 - The default scale is `40` logical pixels per block.
 
-A `180 × 116 px` panel at `pixelsPerBlock = 40` is approximately
-`4.5 × 2.9 blocks`.
-
 ## Node Types
 
 | Node | Purpose |
 | --- | --- |
+| `MobEntityNode` | Native living mob (`LivingEntity`) with NoAI, scale, customizer, yaw/pitch, and hover-spin. |
+| `EntityModelNode` | 3D custom entity/item model with hover-spin, cursor tracking, Euler rotation, and angle locks. |
 | `AlignedTextNode` | Rectangle-based text with layout and optical correction. |
 | `TextNode` | Low-level text with direct anchor, line width, and scale control. |
 | `UiIconNode` | Box-based item icon with intrinsic texture dimensions. |
 | `ItemNode` | Low-level ItemDisplay with its own scale and transform. |
 | `BlockNode` | Background, panel, or block-model layer. |
 
-`UiDocument` is an immutable snapshot. Nodes render in ascending `depth` order.
-
 ## Rectangles, anchors, and panel-relative layout
-
-`UiRect` describes bounds in logical pixels, with `x/y` at the visual top-left.
-A panel can act as the layout root so child nodes derive their positions from
-its edges or anchors instead of unrelated scene coordinates:
 
 ```java
 UiRect panel = UiRect.centered(0, 0, 180, 116);
@@ -481,145 +537,7 @@ AlignedTextNode title = new AlignedTextNode(
 );
 ```
 
-`place(parentAnchor, childAnchor, ...)` joins the child's anchor to the panel
-anchor and then applies an offset. Because the server cannot measure custom
-resource-pack glyph bounds exactly, consumers declare the background's logical
-size once.
-
-## Third-party custom icon registry
-
-`DisplayUiService.icons()` exposes a shared registry for `ItemStack`-backed
-icons. The owning plugin registers a key once; the engine clones items when
-building nodes and automatically removes registrations when that plugin is
-disabled:
-
-```java
-DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
-NamespacedKey iconKey = new NamespacedKey(plugin, "icon/embersteel_ingot");
-
-ItemStack customIcon = new ItemStack(Material.IRON_INGOT);
-ItemMeta meta = customIcon.getItemMeta();
-meta.setItemModel(new NamespacedKey(plugin, "embersteel_ingot"));
-customIcon.setItemMeta(meta);
-
-ui.icons().register(plugin, iconKey, customIcon);
-UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
-```
-
-The texture/model still belongs in the resource pack, for example
-`assets/<namespace>/items/embersteel_ingot.json`. The `UiRect` width/height are
-the real layout bounds, so text can start at `icon.right() + gap` regardless of
-transparent texture margins. The registry does not use a bitmap-font atlas.
-
-## Text Layout
-
-`AlignedTextNode` accepts an `x, y, width, height` rectangle and calculates its
-anchor automatically:
-
-- Left: `x + leftOffset + contentWidth / 2`.
-- Right: `x + width - rightOffset - contentWidth / 2`.
-- Center: `x + width / 2`.
-- Top: `y + fontSize / 2 + verticalOffset`.
-- Center Y: `y + height / 2 + verticalOffset`.
-- Bottom: `y + height - fontSize / 2 + verticalOffset`.
-
-Example:
-
-```java
-AlignedTextNode label = new AlignedTextNode(
-    Component.text("Smelt"),
-    8, 8,
-    176, 18,
-    UiTextAlignment.LEFT
-)
-    .offsets(4, 4)
-    .verticalAlignment(UiVerticalAlignment.CENTER)
-    .verticalOffset(-1)
-    .fontSize(8)
-    .shadowed(true);
-```
-
-### Optical Alignment
-
-Minecraft font glyphs have different visible side bearings for plain, italic,
-bold, and gradient components. The engine provides shared manual presets:
-
-| Preset | X correction |
-| --- | ---: |
-| `ITALIC` | `-1 px` |
-| `PLAIN` | `0 px` |
-| `GRADIENT` | `+1 px` |
-| `BOLD` | `+2 px` |
-| `BOLD_GRADIENT` | `+3 px` |
-
-```java
-text.opticalPreset(UiTextOpticalPreset.BOLD_GRADIENT);
-text.nudgeX(-0.5f); // Additional custom correction when needed
-```
-
-The server cannot inspect a client's custom font metrics. Resource-pack fonts can
-be corrected with `.contentWidth(px)` and `.nudgeX(px)`.
-
-## Rich Text and Gradients
-
-```java
-Component title = UiText.builder()
-    .text("[", NamedTextColor.DARK_GRAY)
-    .gradient("HaoHan", new TextColor[] {
-        UiText.hex("#FFD700"),
-        UiText.hex("#FF7A00"),
-        UiText.hex("#C02CFF"),
-        UiText.hex("#36E6FF")
-    }, 1.0, TextDecoration.BOLD)
-    .text("] ", NamedTextColor.DARK_GRAY)
-    .text("RANDOM", NamedTextColor.AQUA, TextDecoration.OBFUSCATED)
-    .build();
-```
-
-All Adventure text decorations are supported:
-
-- `BOLD`.
-- `ITALIC`.
-- `UNDERLINED`.
-- `STRIKETHROUGH`.
-- `OBFUSCATED`, equivalent to legacy `§k`.
-
-## Icons, Lists, and Icon + Text
-
-```java
-UiIconNode icon = new UiIconNode(
-    new ItemStack(Material.DIAMOND),
-    8, 40,
-    24, 24,
-    16, 16
-);
-
-AlignedTextNode label = new AlignedTextNode(
-    Component.text("Diamond"),
-    8, 40,
-    176, 24,
-    UiTextAlignment.LEFT
-)
-    .after(icon, 4, UiVerticalAlignment.CENTER)
-    .fontSize(7);
-```
-
-`after(icon, gap, alignment)` uses the icon's vertical bounds and places text at
-`TOP`, `CENTER`, or `BOTTOM`.
-
-## Interaction and Hover
-
-`UiButton` is an invisible hit zone in the document's logical-pixel space. On a
-click, the engine:
-
-1. Gets a ray from the player's camera.
-2. Projects it onto the billboarded and rotated UI plane.
-3. Converts the hit point into `(localX, localY)`.
-4. Selects the nearest button containing that point.
-5. Fires `UiButtonClickEvent`.
-6. Runs the built-in action and scene callbacks if the event was not cancelled.
-
-Hover description:
+## Interaction, Raycast and Hover
 
 ```java
 UiButton next = new UiButton("next_page", 58, 42, 28, 16)
@@ -627,28 +545,40 @@ UiButton next = new UiButton("next_page", 58, 42, 28, 16)
     .hitSlop(3);
 ```
 
-`hitSlop(3)` expands the clickable area by three pixels on every side without
-changing its rendered size. This is useful for small buttons or camera-facing UIs.
+`hitSlop(3)` expands the hitbox by 3 px on each side without altering the visual render.
 
-Text and icons can generate hit zones from their own bounds:
+Text, Icon, 3D Model, and Mob nodes can register interactive hitboxes directly via the builder:
 
 ```java
-builder.interactiveText(
-    "documentation",
-    docsText,
-    Component.text("Open documentation"),
-    UiButtonAction.openUrl("https://web.haohansmp.io.vn/en")
-);
-
-builder.interactiveIcon(
-    "give_item",
-    itemIcon,
-    Component.text("Receive an item"),
-    UiButtonAction.executeCommand("kit starter")
-);
+UiDocument document = UiDocument.builder()
+    .interactiveText(
+        "documentation",
+        docsText,
+        Component.text("Open Documentation"),
+        UiButtonAction.openUrl("https://web.haohansmp.io.vn/en")
+    )
+    .interactiveIcon(
+        "give_item",
+        itemIcon,
+        Component.text("Claim Item"),
+        UiButtonAction.executeCommand("kit starter")
+    )
+    .interactiveModel(
+        "sword_inspect",
+        swordModel,
+        Component.text("Inspect Sword"),
+        UiButtonAction.playerCommand("inspect")
+    )
+    .interactiveMob(
+        "pet_cow",
+        babyCowMob,
+        Component.text("Pet Baby Cow"),
+        UiButtonAction.playerCommand("pet")
+    )
+    .build();
 ```
 
-Consumers may also use `UiButton.forText(...)` or `UiButton.forIcon(...)`.
+Consumers can also use `UiButton.forText(...)`, `UiButton.forIcon(...)`, `UiButton.forModel(...)`, or `UiButton.forMob(...)`.
 
 ## Button Actions
 
@@ -664,20 +594,15 @@ button.withAction(UiButtonAction.suggestCommand("msg {player} hello"));
 
 | Action | Behavior |
 | --- | --- |
-| `openUrl` | Sends a clickable chat link for client confirmation. |
-| `executeCommand` | Runs immediately as the clicking player with Bukkit permissions. |
-| `playerCommand` | Alias with the same behavior as `executeCommand`. |
-| `consoleCommand` | Runs as console and supports the `{player}` placeholder. |
-| `suggestCommand` | Fills the chat input without executing. |
-
-Minecraft does not allow servers to force clients to open URLs. `openUrl` always
-sends a clickable link and leaves confirmation to the player. Console actions must
-only be created from trusted code or configuration; never insert raw player input
-into a console command.
+| `openUrl` | Sends a clickable chat link prompt for the client to confirm opening. |
+| `executeCommand` | Executes immediately as the clicking player with Bukkit permissions. |
+| `playerCommand` | Alias for `executeCommand`. |
+| `consoleCommand` | Executes through the console; supports the `{player}` placeholder. |
+| `suggestCommand` | Inserts the command into the player's chat input without executing. |
 
 ## Bukkit Events and Callbacks
 
-Scene callback:
+Scene-level callbacks:
 
 ```java
 handle.onClick(click -> {
@@ -686,39 +611,51 @@ handle.onClick(click -> {
         case "next_page" -> showNextPage(click.player());
     }
 });
+
+handle.onControlChange(change -> {
+    if (change.control().id().equals("volume")) {
+        setVolume(change.player(), change.value());
+    }
+});
 ```
 
-Centralized event handling:
+Centralized Bukkit event handling:
 
 ```java
 @EventHandler
 public void onUiButton(UiButtonClickEvent event) {
-    if (!event.getHandle().ownerKey()
-            .equals("haohanmetallurgy:forge_panel")) return;
+    if (!event.getHandle().ownerKey().equals("haohanmetallurgy:forge_panel")) return;
 
     if (!event.getPlayer().hasPermission("haohansmp.metallurgy.use")) {
         event.setCancelled(true);
     }
 }
+
+@EventHandler
+public void onUiControlChange(UiControlChangeEvent event) {
+    if (event.getControl().id().equals("master_volume")) {
+        // Handle control change centrally
+    }
+}
 ```
 
-Cancelling the event prevents both the built-in action and scene callbacks.
+Cancelling the event halts both the built-in action and scene callbacks.
 
-## Camera Transforms and Axis Locks
+## Camera Transforms and Axis Locking
 
-Scenes are fixed in world space by default:
+Fixed in world:
 
 ```java
 UiCameraTransform.fixed();
 ```
 
-Follow the full camera orientation:
+Camera-facing billboard:
 
 ```java
 UiCameraTransform.cameraFacing();
 ```
 
-Custom transform:
+Custom billboard angles and axis locks:
 
 ```java
 UiCameraTransform transform = UiCameraTransform.cameraFacing()
@@ -732,22 +669,14 @@ UiCameraTransform transform = UiCameraTransform.cameraFacing()
 handle.cameraTransform(transform);
 ```
 
-Axis locks map to client billboard modes:
+Billboard mapping:
 
 | Locks | Billboard | Behavior |
 | --- | --- | --- |
-| X and Y | `FIXED` | Does not rotate with the camera. |
-| X only | `VERTICAL` | Follows yaw while pitch remains locked. |
-| Y only | `HORIZONTAL` | Follows pitch while yaw remains locked. |
+| X and Y | `FIXED` | Does not rotate with camera. |
+| X only | `VERTICAL` | Follows yaw, locks pitch. |
+| Y only | `HORIZONTAL` | Follows pitch, locks yaw. |
 | Neither X nor Y | `CENTER` | Follows both yaw and pitch. |
-
-Minecraft cameras do not expose dynamic roll, but `lockZ` and `angleZ` are still
-available for local roll control. Use `.angles(x, y, z)`, `.angleX(...)`,
-`.angleY(...)`, `.angleZ(...)`, `.angle(...)` (a Y alias), or
-`.locks(x, y, z)`.
-
-Rotation is applied consistently to translation, rendering, and raycasting, so
-buttons remain aligned with tilted or camera-facing UI content.
 
 ## Audience and Visibility
 
@@ -764,114 +693,84 @@ UiHandle handle = ui.create(
 );
 ```
 
-- `show(player)` forces visibility while world and distance constraints still apply.
-- `hide(player)` forces the scene to be hidden.
-- `audience(...)` replaces the predicate at runtime.
-- `maxDistance` limits both rendering and interaction.
-- `requireFront` requires the player to remain in front of the panel.
+- `show(player)`: Force displays the UI if the player meets world/distance checks.
+- `hide(player)`: Force hides the UI.
+- `audience(...)`: Updates the runtime audience predicate.
+- `maxDistance`: Restricts rendering and interaction distance.
+- `requireFront`: Requires the player to be in front of the panel.
 
-## Updates, Animation, and Performance
+## Third-Party Custom Icon Registry
 
-`handle.update(document)` inspects the next layout:
+```java
+DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
+NamespacedKey iconKey = new NamespacedKey(plugin, "icon/embersteel_ingot");
 
-- If only Adventure Components changed, the relevant `TextDisplay` entities are
-  updated in place.
-- Same-type nodes are updated in place; only new or incompatible nodes are
-  replaced.
-- Text animation does not respawn the panel or icons and does not flicker.
-- Visibility is cached; `showEntity/hideEntity` packets are only sent on changes.
+ItemStack customIcon = new ItemStack(Material.IRON_INGOT);
+ItemMeta meta = customIcon.getItemMeta();
+meta.setItemModel(new NamespacedKey(plugin, "embersteel_ingot"));
+customIcon.setItemMeta(meta);
 
-Display Entities are lighter than mobs because they have no AI or pathfinding, but
-they are still tracked server entities. A scene containing roughly 10–30 displays
-is normally lightweight. Avoid thousands of persistent displays or unnecessarily
-high-frequency metadata animations.
+ui.icons().register(plugin, iconKey, customIcon);
+UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
+```
 
-Recommendations:
+## Performance & In-Place Updates
 
+`handle.update(document)` checks the diff:
+
+- If only Adventure Components changed, only the affected `TextDisplay` updates.
+- If only control values or display transformations changed, updates happen in-place without respawning.
+- If geometry, node types, or buttons changed, the scene respawns cleanly.
+- Visibility is cached; entity packets are only dispatched on actual state transitions.
+
+Best practices:
 - Only create scenes when needed.
-- Use appropriate audiences and `maxDistance` values.
-- Call `remove()` when the corresponding machine or menu is removed.
-- Prefer text-only updates for animations.
-- Do not rebuild a document every tick when its content did not change.
-- Use one row-wide button for icon + text instead of overlapping hit zones.
-
-## Built-In Demo
-
-Run:
-
-```text
-/hhdui demo
-```
-
-Controls:
-
-- Aim at a button to show its action-bar hover description.
-- Right-click to interact.
-- Use `<` and `>` to change pages.
-- Footer buttons use `hitSlop(3)` for reliable camera-facing interaction.
-
-Pages:
-
-| Page | Content |
-| ---: | --- |
-| 1 | Text styles, animated gradient, `§k`, and mixed RGB. |
-| 2 | Text lists, icon lists, and icon + text rows. |
-| 3 | Hover/click rows sharing one hit zone. |
-| 4 | Fixed, yaw, pitch, camera-facing, and X/Y/Z 45-degree presets. |
-| 5 | URL and command action types. |
-| 6 | Slider, checkbox, and control callbacks. |
-| 7 | Shapes, icons, and text with independent random easing/animation. |
-
-## Tests
-
-Run all tests:
-
-```powershell
-gradle test
-```
-
-Current coverage includes:
-
-- Document, node, button, and action validation.
-- Text anchors, optical presets, and vertical alignment.
-- Camera lock and billboard mapping.
-- Fixed and tilted-plane raycasting.
-- URL and command normalization.
+- Use audiences and reasonable `maxDistance` limits.
+- Call `remove()` when menus or machines are destroyed.
+- Combine icons and text into single button hitboxes rather than layering overlapping hitboxes.
 
 ## Project Structure
 
 ```text
 HaoHanDisplayUI/
-├─ src/main/java/dev/haohansmp/displayui/
-│  ├─ api/          Public consumer API
-│  ├─ api/event/    Bukkit events
-│  └─ runtime/      Scene, raycasting, and interaction runtime
+├─ src/main/java/vn/haohan/displayui/
+│  ├─ api/                  Public API for consumer plugins (Document, Handle, Service, Options, Pager)
+│  │  ├─ animation/         UiAnimation, UiEasing, UiEffects
+│  │  ├─ icon/              UiIconRegistry
+│  │  ├─ interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
+│  │  │  └─ event/          UiButtonClickEvent, UiControlChangeEvent
+│  │  ├─ layout/            UiRect, UiAnchor, UiCameraTransform
+│  │  ├─ node/              MobEntityNode, EntityModelNode, AlignedTextNode, TextNode, UiIconNode, ItemNode, BlockNode
+│  │  ├─ text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
+│  │  └─ view/              UiAudience
+│  ├─ runtime/              Scene, raycaster, packet visibility, model rotation & interaction runtime
+│  ├─ DisplayUiCommand.java Administrative commands (/hhdui demo, info, clear)
+│  └─ HaoHanDisplayUIPlugin.java Plugin entry point
 ├─ src/main/resources/
 │  └─ plugin.yml
-├─ src/test/java/
+├─ src/test/java/           JUnit 5 test suite (Model, Pager, Raycast, MobEntity, etc.)
 ├─ media/
-│  ├─ Demo.gif      GitHub-compatible inline demo
-│  └─ Demo.mp4      High-quality demo with audio
+│  ├─ Demo.gif              Demo animation for GitHub README
+│  └─ Demo.mp4              High-quality video with sound
 ├─ build.gradle
 └─ settings.gradle
 ```
 
 ## Operational Notes
 
-- Avoid `/reload` in production when consumers retain complex `UiHandle` state;
-  prefer a clean restart.
-- The engine removes orphaned displays carrying its persistent scene key on enable.
-- `ownerKey` must be namespaced, for example
-  `haohanmetallurgy:forge_panel`.
-- Player command actions use normal Bukkit permissions and fail normally when the
-  player lacks access.
-- Console commands have full server authority and must only come from trusted data.
-- URLs only accept the `http` and `https` schemes.
-- Custom fonts may require manual `contentWidth` and optical-offset corrections.
+- Avoid `/reload` on production servers when consumer plugins retain `UiHandle` instances across reload boundaries; prefer a clean restart.
+- The engine cleans up orphaned display entities bearing persistent scene keys on startup.
+- `ownerKey` strings should follow standard namespace conventions, e.g. `haohanmetallurgy:forge_panel`.
+- Player commands execute under the player's own Bukkit permissions.
+- URLs must use standard `http` or `https` schemes.
 
 ## License
 
-Copyright (C) 2026 HaoHanSMP.
+HaoHan Display UI is licensed under the GNU General Public License v3.0 (GPLv3).
+See [LICENSE](LICENSE) for details.
 
-HaoHanDisplayUI is licensed under the GNU General Public License version 3 or
-later (`GPL-3.0-or-later`). See [LICENSE](LICENSE) for the full license text.
+---
+
+<div align="center">
+Developed with ❤️ by the <b>HaoHan SMP</b> team.
+</div>

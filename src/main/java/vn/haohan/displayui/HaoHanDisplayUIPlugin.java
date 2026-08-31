@@ -38,12 +38,13 @@ public final class HaoHanDisplayUIPlugin extends JavaPlugin {
                 DisplayUiService.class, service, this, ServicePriority.Normal);
 
         DisplayUiCommand command = new DisplayUiCommand(this, service);
-        if (getCommand("hhdui") != null) getCommand("hhdui").setExecutor(command);
+        if (getCommand("hhdui") != null) {
+            getCommand("hhdui").setExecutor(command);
+            getCommand("hhdui").setTabCompleter(command);
+        }
         Bukkit.getPluginManager().registerEvents(new UiInteractionListener(service), this);
 
         Bukkit.getScheduler().runTask(this, this::removeOrphanedDisplays);
-        // Animation frames are advanced every tick; Display interpolation
-        // smooths the metadata updates on the client.
         Bukkit.getScheduler().runTaskTimer(this, service::tick, 1L, 1L);
         getLogger().info("HaoHan Display UI engine is ready. API service: "
                 + DisplayUiService.class.getName());
@@ -58,14 +59,16 @@ public final class HaoHanDisplayUIPlugin extends JavaPlugin {
     private void removeOrphanedDisplays() {
         NamespacedKey sceneKey = new NamespacedKey(this, "scene_id");
         int removed = 0;
-        for (var world : Bukkit.getWorlds()) {
-            for (var entity : world.getEntities()) {
+        for (org.bukkit.World world : Bukkit.getWorlds()) {
+            for (org.bukkit.entity.Entity entity : world.getEntitiesByClass(Display.class)) {
                 if (entity.getPersistentDataContainer().has(sceneKey, PersistentDataType.STRING)) {
                     entity.remove();
                     removed++;
                 }
             }
         }
-        if (removed > 0) getLogger().info("Removed " + removed + " orphaned UI displays");
+        if (removed > 0) {
+            getLogger().info("Cleaned up " + removed + " orphaned Display UI entities from previous server run.");
+        }
     }
 }

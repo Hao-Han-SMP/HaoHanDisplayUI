@@ -18,10 +18,15 @@
  */
 package vn.haohan.displayui.runtime;
 
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityCombustEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -41,12 +46,25 @@ public final class UiInteractionListener implements Listener {
         if (event.getHand() != EquipmentSlot.HAND) return;
         if (event.getAction() == Action.LEFT_CLICK_AIR
                 || event.getAction() == Action.LEFT_CLICK_BLOCK) {
-            service.stopDragging(event.getPlayer());
+            if (service.handleLeftClick(event.getPlayer())) {
+                event.setCancelled(true);
+            }
             return;
         }
         if (event.getAction() != Action.RIGHT_CLICK_AIR
                 && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (service.handleRightClick(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        boolean isUiEntity = event.getEntity().getScoreboardTags().contains("hhdui_interaction")
+                || event.getEntity().getScoreboardTags().contains("hhdui_scene");
+        if (!isUiEntity) return;
+        event.setCancelled(true);
+        if (event.getDamager() instanceof Player player) {
+            service.handleLeftClick(player);
+        }
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
@@ -64,8 +82,31 @@ public final class UiInteractionListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
-        if (!event.getRightClicked().getScoreboardTags().contains("hhdui_interaction")) return;
+        boolean isUiEntity = event.getRightClicked().getScoreboardTags().contains("hhdui_interaction")
+                || event.getRightClicked().getScoreboardTags().contains("hhdui_scene");
+        if (!isUiEntity) return;
         if (service.handleRightClick(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onEntityCombust(EntityCombustEvent event) {
+        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onEntityDamage(EntityDamageEvent event) {
+        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onEntityTarget(EntityTargetEvent event) {
+        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

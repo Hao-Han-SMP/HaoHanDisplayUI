@@ -4,7 +4,7 @@
 
 Plugin engine độc lập để dựng UI tương tác trong thế giới Minecraft bằng Display Entity.
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.11-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
 [![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)
 [![Purpur](https://img.shields.io/badge/Purpur-Compatible-8A4FFF?style=for-the-badge)](https://purpurmc.org/)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
@@ -19,19 +19,19 @@ Ngôn ngữ: Tiếng Việt | [English](README.en.md)
 ## Tổng quan
 
 HaoHan Display UI là plugin engine dành cho Paper/Purpur, cho phép plugin khác mô
-tả giao diện 3D bằng static document. Engine quản lý việc spawn, cập nhật,
-ẩn/hiện và cleanup `TextDisplay`, `ItemDisplay`, `BlockDisplay` cùng hitbox tương
-tác.
+tả giao diện 3D bằng static immutable document. Engine quản lý việc spawn, cập nhật,
+ẩn/hiện và cleanup `TextDisplay`, `ItemDisplay`, `BlockDisplay`, mob entity cùng hitbox tương
+tác raycast chính xác theo pixel.
 
 Plugin không áp đặt menu hoặc gameplay cụ thể. Consumer có thể dùng engine để dựng
 machine panel, bảng hướng dẫn, menu nhiều trang, danh sách vật phẩm, nút command,
-link tài liệu hoặc UI theo camera của từng người chơi.
+link tài liệu, 3D custom entity/item model, Vanilla living mob tương tác, hoặc UI theo camera của từng người chơi.
 
 ## Video demo
 
 ![HaoHan Display UI demo](media/Demo.gif)
 
-[Demo.MP4](media/Demo.mp4).
+[Tải/xem video chất lượng cao Demo.MP4](media/Demo.mp4).
 
 Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 
@@ -42,12 +42,19 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 5. URL, player command, console command và command permission test.
 6. Slider, checkbox và control callback.
 7. Shape, icon và text chạy random animation theo từng node.
+8. Scroll list điều hướng danh sách ứng dụng (Choose App).
+9. **Lưới 3D Mobs & Items thu nhỏ (8 ô)**: Trộn lẫn các mob nhỏ xinh (Bò con, Heo con, Allay, Zombie bé) cùng các item 3D (Kiếm, Nón, Đinh ba, Totem) trong các ô slot kính viền xám, hỗ trợ hover spin, auto spin, 3D tilt và snap góc.
+10. **3D Entity Showcase & Inspector**: Trình diễn các model lớn (Bò lớn, Đầu rồng Ender 360°, Zombie Hiệp sĩ full giáp).
 
 ## Tính năng
 
 | Nhóm | Khả năng |
 | --- | --- |
 | Render | `TextDisplay`, `ItemDisplay`, `BlockDisplay` và panel nhiều layer. |
+| 3D Custom Models | Hiển thị 3D item/mob model (`EntityModelNode`) với scale 3 trục, transform (HEAD/FIXED/GUI) và góc Euler (Yaw, Pitch, Roll). |
+| Vanilla Living Mobs | Hiển thị Mob thực tế (`MobEntityNode`) như Bò, Zombie, Allay... với `NoAI`, `Silent`, `Invulnerable`, custom scale (`GENERIC_SCALE`), customizer consumer (baby, trang bị, hiệu ứng) mà không cần resource pack. |
+| Model Rotation | Xoay 3D tương tác khi hover (cursor tracking), tự xoay liên tục (auto-spin), xoay khi hover (hover-spin). |
+| Angle Constraints | Khóa trục xoay (`lockYaw`, `lockPitch`, `lockRoll`), chặn giới hạn góc (`min..max`), bước xoay (`step`), và độ nhạy (`sensitivity`). |
 | Text | Adventure Component, RGB, multi-stop gradient, bold, italic, underline, strikethrough và obfuscated `§k`. |
 | Layout | Box alignment trái/giữa/phải, top/center/bottom, offset, optical preset và icon + text. |
 | Interaction | Raycast chính xác theo logical pixel, hover description, hit slop và click callback/event. |
@@ -70,16 +77,15 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 
 ## Yêu cầu
 
-- Minecraft server chạy Paper hoặc Purpur `1.21.11`.
+- Minecraft server chạy Paper hoặc Purpur `1.21.1+` (hoặc `1.21.11`).
 - Java 21 trở lên.
-- Gradle 8.x nếu build trực tiếp từ source hiện tại.
+- Gradle 8.x nếu build trực tiếp từ source.
 - Plugin consumer phải khai báo phụ thuộc vào `HaoHanDisplayUI`.
-- Không bắt buộc resource pack; custom font/model có thể cần resource pack riêng
-  của consumer.
+- Không bắt buộc resource pack; custom font/model có thể cần resource pack riêng của consumer.
 
 ## Cài đặt
 
-1. Build hoặc tải `HaoHanDisplayUI-1.0.0.jar`.
+1. Build hoặc tải `HaoHanDisplayUI-1.0.1.jar`.
 2. Copy file JAR vào thư mục `plugins/` của server.
 3. Trong `plugin.yml` của plugin consumer, thêm dependency:
 
@@ -89,32 +95,32 @@ depend: [HaoHanDisplayUI]
 
 4. Khởi động lại server.
 5. Chạy `/hhdui info` để xác nhận engine hoạt động.
-6. Chạy `/hhdui demo` trong game để mở UI thử nghiệm.
+6. Chạy `/hhdui demo` trong game để mở UI thử nghiệm (10 trang demo).
 
 ## Build từ mã nguồn
 
 Chạy tại thư mục gốc của dự án:
 
 ```powershell
-gradle clean build
+./gradlew clean build
 ```
 
 JAR đầu ra:
 
 ```text
-build/libs/HaoHanDisplayUI-1.0.0.jar
+build/libs/HaoHanDisplayUI-1.0.1.jar
 ```
 
 Build nhanh không chạy test:
 
 ```powershell
-gradle clean assemble
+./gradlew clean assemble
 ```
 
 Publish API vào Maven Local để plugin consumer sử dụng:
 
 ```powershell
-gradle publishToMavenLocal
+./gradlew publishToMavenLocal
 ```
 
 Dependency Gradle phía consumer:
@@ -125,7 +131,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.0'
+    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.1'
 }
 ```
 
@@ -137,7 +143,7 @@ permission này theo mặc định.
 | Lệnh | Mô tả |
 | --- | --- |
 | `/hhdui info` | Hiển thị số scene đang hoạt động và tên API service. |
-| `/hhdui demo` | Tạo UI demo bảy trang riêng cho người chạy lệnh. |
+| `/hhdui demo` | Tạo UI demo 10 trang riêng cho người chạy lệnh. |
 | `/hhdui clear` | Xóa toàn bộ scene demo đang được quản lý. |
 
 ## Permission
@@ -155,7 +161,7 @@ phẳng:
 | --- | --- |
 | `api` | Service, document, handle và tùy chọn của scene. |
 | `api.layout` | Rectangle, anchor và camera transform. |
-| `api.node` | Các node text, item, icon và block có thể render. |
+| `api.node` | Các node text, item, icon, block, 3D entity model và vanilla mob entity. |
 | `api.text` | Builder rich text và helper căn chỉnh text. |
 | `api.interaction` | Button, action và click callback. |
 | `api.interaction.event` | Bukkit event của interaction. |
@@ -168,9 +174,14 @@ Ví dụ, consumer thông thường bắt đầu với các import tập trung s
 import vn.haohan.displayui.api.DisplayUiService;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
+import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.interaction.UiButton;
+import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.layout.UiRect;
 import vn.haohan.displayui.api.node.AlignedTextNode;
+import vn.haohan.displayui.api.node.BlockNode;
+import vn.haohan.displayui.api.node.EntityModelNode;
+import vn.haohan.displayui.api.node.MobEntityNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 ```
@@ -295,6 +306,8 @@ chơi đang nhìn đúng vùng scroll. `step(n)` cho phép cuộn nhiều row m�
 Để tránh mất trạng thái khi rebuild document, engine tự giữ offset hiện tại nếu
 ID và geometry của control vẫn giữ nguyên.
 
+### Âm thanh và Tùy chọn Scene (`UiOptions`)
+
 Mặc định, button/slider/checkbox sẽ phát sound `minecraft:ui.button.click`
 sau khi interaction không bị cancel. Có thể đổi sound (kể cả sound custom từ
 resource pack) hoặc tắt hoàn toàn:
@@ -304,7 +317,7 @@ UiOptions options = UiOptions.defaults()
     .withClickSound("my_pack:menu.tick", 0.7f, 1.1f);
 
 UiHandle handle = ui.create("plugin:menu", location, document, options, audience);
-// options.withoutClickSound() để tắt.
+// options.withoutClickSound() để tắt click sound.
 ```
 
 Backface culling cho `ItemDisplay`/`UiIconNode` mặc định được bật, là software
@@ -314,6 +327,121 @@ culling theo từng player và áp dụng cho scene fixed:
 UiOptions options = UiOptions.defaults()
     .withItemBackfaceCulling(false); // tắt nếu UI cần hiển thị từ mặt sau
 ```
+
+---
+
+## Hiển thị 3D Mob & Entity Models (2 Phương pháp)
+
+HaoHan Display UI hỗ trợ cả **2 giải pháp** hiển thị mob/model 3D linh hoạt:
+1. **Vanilla Living Mobs (`MobEntityNode`)**: Dành cho mob gốc Minecraft (`Cow`, `Zombie`, `Allay`, v.v.) mà không cần bất kỳ resource pack nào.
+2. **Custom 3D Item/Mob Models (`EntityModelNode`)**: Dành cho model custom tạo từ Blockbench, ModelEngine, hoặc Resource Pack sử dụng tính năng `item_model` 1.21+.
+
+---
+
+### Phương pháp 1: Hiển thị Vanilla Living Mob (`MobEntityNode`)
+
+`MobEntityNode` spawn một thực thể sống (`LivingEntity`) thực tế trên panel UI. Engine tự động thiết lập:
+- `setAI(false)`, `setSilent(true)`, `setInvulnerable(true)`, `setGravity(false)`, `setCollidable(false)`, và `setVisibleByDefault(false)` (chỉ gửi gói tin cho viewer hợp lệ).
+- Hỗ trợ thay đổi tỉ lệ kích thước scale mượt mà qua thuộc tính `Attribute.GENERIC_SCALE`.
+- Tùy biến thực thể qua `.withCustomizer(Consumer<LivingEntity>)` (ví dụ: biến thành baby, trang bị vũ khí/giáp, đổi màu lông, nghề nghiệp villager, v.v.).
+- Hỗ trợ xoay góc Euler (Yaw, Pitch), tự xoay (`autoSpin`), xoay khi rê chuột (`hoverSpin`), hoặc nghiêng theo con trỏ chuột (`yawRange`, `pitchRange`).
+
+#### Ví dụ tạo Vanilla Living Mobs:
+
+```java
+// 1. Baby Cow tự xoay khi hover chuột
+MobEntityNode babyCow = new MobEntityNode(EntityType.COW, -60, 0, 36, 36, 0.75f)
+    .withCustomizer(mob -> {
+        if (mob instanceof Cow cow) {
+            cow.setBaby();
+        }
+    })
+    .hoverSpin(3.0f);
+
+// 2. Zombie full giáp kim cương + xoay theo chuột có nấc 15°
+MobEntityNode gearedZombie = new MobEntityNode(EntityType.ZOMBIE, 60, 0, 36, 36, 0.65f)
+    .withCustomizer(mob -> {
+        if (mob instanceof Zombie z) {
+            var eq = z.getEquipment();
+            if (eq != null) {
+                eq.setHelmet(new ItemStack(Material.DIAMOND_HELMET));
+                eq.setChestplate(new ItemStack(Material.DIAMOND_CHESTPLATE));
+                eq.setItemInMainHand(new ItemStack(Material.DIAMOND_SWORD));
+            }
+        }
+    })
+    .yawRange(-60, 60)
+    .lockPitch(true)
+    .step(15);
+
+UiDocument document = UiDocument.builder()
+    .mob(babyCow)
+    .interactiveMob("inspect_cow", babyCow,
+        Component.text("Bò con tương tác", NamedTextColor.GREEN),
+        UiButtonAction.playerCommand("say Nhìn thấy bò con đáng yêu!"))
+    .mob(gearedZombie)
+    .build();
+```
+
+---
+
+### Phương pháp 2: Hiển thị Custom 3D Models (`EntityModelNode`)
+
+`EntityModelNode` hiển thị 3D item/model dựa trên `ItemDisplay` (vũ khí, giáp, đầu mob, custom item model từ Blockbench/ModelEngine) với đầy đủ ma trận 3D JOML và góc Euler (Yaw, Pitch, Roll):
+
+- **Tương tác xoay theo con trỏ chuột khi hover (`CURSOR_TRACKING`)**: Khi người chơi lia tầm ngắm qua model, model sẽ nghiêng/quay theo góc nhìn một cách mượt mà và tự hồi vị khi lia ra ngoài.
+- **Tự động xoay liên tục (`AUTO_SPIN`)** hoặc chỉ xoay khi hover vào (`HOVER_SPIN`).
+- **Khóa trục xoay (`lockYaw`, `lockPitch`, `lockRoll`)**: Khóa bất kỳ trục nào để model chỉ quay theo trục mong muốn (ví dụ: chỉ quay vòng quanh trục Y).
+- **Giới hạn góc xoay (`yawRange`, `pitchRange`, `rollRange`)**: Khống chế biên độ góc quay cực tiểu và cực đại (ví dụ `-45° .. +45°`).
+- **Lượng tử hóa góc xoay (`step`)**: Nhảy theo từng nấc góc (ví dụ: mỗi bước 15° hoặc 45°).
+- **Độ nhạy (`sensitivity`)** và transform (`ItemDisplayTransform.HEAD`, `FIXED`, `GUI`, v.v.).
+
+#### Ví dụ tạo 3D Custom Models:
+
+```java
+EntityModelNode sword = new EntityModelNode(
+    new ItemStack(Material.DIAMOND_SWORD),
+    -40, 0, // tâm (x, y)
+    48, 48, // kích thước hitbox hover (width, height)
+    1.5f    // tỉ lệ scale
+)
+    .withTransform(ItemDisplay.ItemDisplayTransform.FIXED)
+    .withRotation(0, 0, -45) // góc Euler ban đầu (yaw, pitch, roll)
+    .yawRange(-60, 60)       // giới hạn góc yaw khi hover
+    .lockPitch(true)         // khóa trục pitch
+    .step(15)                // nhảy theo nấc 15°
+    .sensitivity(1.2f);
+
+EntityModelNode showcaseHelmet = new EntityModelNode(
+    new ItemStack(Material.NETHERITE_HELMET),
+    40, 0, 1.2f
+)
+    .autoSpin(2.5f); // tự động xoay 2.5° mỗi tick
+
+UiDocument document = UiDocument.builder()
+    .entityModel(sword)
+    .interactiveModel("inspect_sword", sword,
+        Component.text("Inspect Sword", NamedTextColor.AQUA),
+        UiButtonAction.executeCommand("inspect sword"))
+    .entityModel(showcaseHelmet)
+    .build();
+```
+
+### Chế độ xoay và Preset (`UiModelRotation`)
+
+| Chế độ | Mô tả |
+| --- | --- |
+| `CURSOR_TRACKING` | Model xoay theo vị trí trỏ chuột của người chơi trên hitbox. Hồi vị mượt mà khi rời chuột. |
+| `HOVER_SPIN` | Model tự động quay liên tục xung quanh trục chỉ khi người chơi đang hover vào hitbox. |
+| `AUTO_SPIN` | Model quay liên tục mọi lúc mà không cần hover. |
+
+Các preset tạo nhanh:
+- `UiModelRotation.defaults()`: Hover tracking tự do.
+- `UiModelRotation.locked()`: Khóa toàn bộ các trục (không xoay).
+- `UiModelRotation.yawOnly()`: Chỉ cho phép xoay quanh trục Y (yaw).
+- `UiModelRotation.pitchOnly()`: Chỉ cho phép xoay quanh trục X (pitch).
+- `UiModelRotation.autoSpin(speed)`: Tự quay liên tục với tốc độ `speed` độ/tick.
+- `UiModelRotation.hoverSpin(speed)`: Tự quay khi hover với tốc độ `speed` độ/tick.
 
 ## Animation và easing
 
@@ -386,53 +514,16 @@ UiRect thumb = slider.thumbRect(10, 18);
 UiRect indicator = checkbox.indicatorRect();
 ```
 
-Slider hỗ trợ drag liên tục: right-click vào slider rồi di chuyển tâm ngắm,
-giá trị cập nhật theo từng tick. Left-click, rời khỏi slider, đổi trang hoặc
-thoát game sẽ kết thúc drag.
-Trong lúc giữ drag nhưng player không đổi vị trí/hướng nhìn, engine tạm bỏ qua
-raycast; state drag vẫn được giữ và tự tiếp tục ngay khi player di chuyển tiếp.
-
-Có thể chạy animation độc lập cho từng node bằng `animateNodes(...)`, theo
-đúng thứ tự node trong document.
-
-Moving gradient text trong demo được update mỗi server tick (tối đa 20 FPS).
-`TextDisplay` không interpolation nội dung text, nên animation text thuần
-server không thể mượt hoàn toàn độc lập với game tick. Muốn animation không
-phụ thuộc tick cần dùng resource pack với animated model/texture cho
-`ItemDisplay`, hoặc client-side shader/mod.
-
-### Preset effects
-
-Consumer có thể dùng `UiEffects` thay vì tự ghép easing và tham số cho từng node:
-
-```java
-handle.animate(UiEffects.popIn());
-handle.animate(UiEffects.slideInFromLeft());
-handle.animateNodes(UiEffects.gallery());
-```
-
-Preset gồm `fadeIn`, slide từ bốn hướng, `popIn`, `scaleIn`, `scaleOut`,
-`bounceIn`, `dropIn` và `softRise`. Easing được truyền riêng bằng
-Các hiệu ứng loop như `breathing`, `spin`, `shake` và `pulse` cần runtime
-`UiLoopEffect` riêng vì chúng chạy liên tục thay vì chỉ có điểm đầu/cuối.
-
-Khi chuyển page, engine diff theo từng node: entity không đổi được giữ lại,
-node cùng loại chỉ cập nhật metadata/transformation, còn node mới hoặc khác
-loại mới bị thay thế. Vì vậy page không còn nhấp nháy toàn bộ.
-
-Consumer nên giữ `UiHandle` và gọi `remove()` khi machine/menu tương ứng bị xóa.
-Có thể dùng `removeOwnedBy(ownerKey)` để cleanup toàn bộ UI của một module.
-
 ## Hệ tọa độ và layer
 
-- `(0, 0)` là origin của scene.
-- `x` tăng sang phải trên màn hình.
-- `y` tăng xuống dưới trên màn hình.
+- `(0, 0)` là tâm scene.
+- `x` tăng dần sang phải màn hình.
+- `y` tăng dần xuống dưới.
 - Đơn vị layout là logical pixel.
-- `pixelsPerBlock` chuyển logical pixel sang tọa độ world.
-- `depth` lớn hơn nằm gần người xem hơn.
-- `BlockNode.thickness` kéo nền về phía sau mặt panel.
-- Mặc định engine dùng `40` logical pixel mỗi block.
+- `pixelsPerBlock` quy đổi logical pixel sang block trong thế giới.
+- `depth` càng lớn thì càng nổi lên trước mắt người chơi.
+- `BlockNode.thickness` đẩy panel dày lùi về phía sau.
+- Tỉ lệ mặc định: `40` logical pixel = 1 block.
 
 Ví dụ panel `180 × 116 px` với `pixelsPerBlock = 40` có kích thước khoảng
 `4.5 × 2.9 block`.
@@ -441,6 +532,8 @@ Ví dụ panel `180 × 116 px` với `pixelsPerBlock = 40` có kích thước kh
 
 | Node | Mục đích |
 | --- | --- |
+| `MobEntityNode` | Vanilla living mob (`LivingEntity`) với NoAI, scale, customizer, yaw/pitch và hover-spin. |
+| `EntityModelNode` | 3D custom entity/item model với hover-spin, cursor tracking, Euler rotation và khóa góc xoay. |
 | `AlignedTextNode` | Text theo rectangle, hỗ trợ layout và optical correction. |
 | `TextNode` | API text cấp thấp với anchor, line width và scale trực tiếp. |
 | `UiIconNode` | Item icon theo box và kích thước texture nội tại. |
@@ -474,138 +567,7 @@ AlignedTextNode title = new AlignedTextNode(
 panel rồi áp dụng offset. Vì bounds của glyph/resource-pack không thể đo chính
 xác ở server, consumer cần khai báo kích thước logic của background một lần.
 
-## Registry custom icon cho plugin bên thứ ba
-
-`DisplayUiService.icons()` cung cấp registry dùng chung cho icon dựa trên
-`ItemStack`. Plugin sở hữu đăng ký một key một lần; engine clone item khi tạo
-node và tự gỡ toàn bộ registration khi plugin đó bị disable:
-
-```java
-DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
-NamespacedKey iconKey = new NamespacedKey(plugin, "icon/embersteel_ingot");
-
-ItemStack customIcon = new ItemStack(Material.IRON_INGOT);
-ItemMeta meta = customIcon.getItemMeta();
-meta.setItemModel(new NamespacedKey(plugin, "embersteel_ingot"));
-customIcon.setItemMeta(meta);
-
-ui.icons().register(plugin, iconKey, customIcon);
-UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
-```
-
-Texture/model vẫn phải nằm trong resource pack, ví dụ item model
-`assets/<namespace>/items/embersteel_ingot.json`. `width/height` của `UiRect`
-là kích thước layout thật; text có thể đặt bằng `icon.right() + gap` và không
-phụ thuộc vùng alpha bên trong texture. Registry không dùng bitmap-font atlas.
-
-## Text layout
-
-`AlignedTextNode` nhận rectangle `x, y, width, height` và tự tính anchor:
-
-- Left: `x + leftOffset + contentWidth / 2`.
-- Right: `x + width - rightOffset - contentWidth / 2`.
-- Center: `x + width / 2`.
-- Top: `y + fontSize / 2 + verticalOffset`.
-- Center Y: `y + height / 2 + verticalOffset`.
-- Bottom: `y + height - fontSize / 2 + verticalOffset`.
-
-Ví dụ:
-
-```java
-AlignedTextNode label = new AlignedTextNode(
-    Component.text("Smelt"),
-    8, 8,
-    176, 18,
-    UiTextAlignment.LEFT
-)
-    .offsets(4, 4)
-    .verticalAlignment(UiVerticalAlignment.CENTER)
-    .verticalOffset(-1)
-    .fontSize(8)
-    .shadowed(true);
-```
-
-### Optical alignment
-
-Minecraft font có side-bearing khác nhau giữa plain, italic, bold và component
-gradient. Engine cung cấp preset chỉnh tay:
-
-| Preset | X correction |
-| --- | ---: |
-| `ITALIC` | `-1 px` |
-| `PLAIN` | `0 px` |
-| `GRADIENT` | `+1 px` |
-| `BOLD` | `+2 px` |
-| `BOLD_GRADIENT` | `+3 px` |
-
-```java
-text.opticalPreset(UiTextOpticalPreset.BOLD_GRADIENT);
-text.nudgeX(-0.5f); // custom correction nếu cần
-```
-
-Server không thể đọc chính xác custom font trên client. Với resource-pack font,
-consumer có thể gọi `.contentWidth(px)` và `.nudgeX(px)` để hiệu chỉnh.
-
-## Rich text và gradient
-
-```java
-Component title = UiText.builder()
-    .text("[", NamedTextColor.DARK_GRAY)
-    .gradient("HaoHan", new TextColor[] {
-        UiText.hex("#FFD700"),
-        UiText.hex("#FF7A00"),
-        UiText.hex("#C02CFF"),
-        UiText.hex("#36E6FF")
-    }, 1.0, TextDecoration.BOLD)
-    .text("] ", NamedTextColor.DARK_GRAY)
-    .text("RANDOM", NamedTextColor.AQUA, TextDecoration.OBFUSCATED)
-    .build();
-```
-
-Hỗ trợ toàn bộ Adventure decoration:
-
-- `BOLD`.
-- `ITALIC`.
-- `UNDERLINED`.
-- `STRIKETHROUGH`.
-- `OBFUSCATED` — tương đương `§k`.
-
-## Icon, list và icon + text
-
-```java
-UiIconNode icon = new UiIconNode(
-    new ItemStack(Material.DIAMOND),
-    8, 40,
-    24, 24,
-    16, 16
-);
-
-AlignedTextNode label = new AlignedTextNode(
-    Component.text("Diamond"),
-    8, 40,
-    176, 24,
-    UiTextAlignment.LEFT
-)
-    .after(icon, 4, UiVerticalAlignment.CENTER)
-    .fontSize(7);
-```
-
-`after(icon, gap, alignment)` lấy bounds dọc của icon để căn text theo `TOP`,
-`CENTER` hoặc `BOTTOM`.
-
-## Interaction và hover
-
-`UiButton` là hit-zone vô hình trong cùng logical-pixel space với document. Khi
-người chơi click, engine:
-
-1. Lấy ray từ camera.
-2. Chiếu ray lên mặt phẳng UI đã áp dụng billboard/rotation.
-3. Chuyển hit point thành `(localX, localY)`.
-4. Chọn button gần nhất chứa điểm đó.
-5. Phát `UiButtonClickEvent`.
-6. Nếu event không bị cancel, chạy built-in action và callback của scene.
-
-Hover description:
+## Tương tác, Raycast và Hover
 
 ```java
 UiButton next = new UiButton("next_page", 58, 42, 28, 16)
@@ -616,25 +578,39 @@ UiButton next = new UiButton("next_page", 58, 42, 28, 16)
 `hitSlop(3)` nới hitbox thêm 3 px ở mỗi cạnh mà không đổi kích thước render. Tính
 năng này hữu ích cho button nhỏ hoặc UI xoay theo camera.
 
-Text và icon có thể tạo hitbox trực tiếp từ bounds:
+Text, Icon, 3D Model và Mob có thể tạo hitbox trực tiếp từ bounds qua builder:
 
 ```java
-builder.interactiveText(
-    "documentation",
-    docsText,
-    Component.text("Mở tài liệu"),
-    UiButtonAction.openUrl("https://web.haohansmp.io.vn/en")
-);
-
-builder.interactiveIcon(
-    "give_item",
-    itemIcon,
-    Component.text("Nhận vật phẩm"),
-    UiButtonAction.executeCommand("kit starter")
-);
+UiDocument document = UiDocument.builder()
+    .interactiveText(
+        "documentation",
+        docsText,
+        Component.text("Mở tài liệu"),
+        UiButtonAction.openUrl("https://web.haohansmp.io.vn/en")
+    )
+    .interactiveIcon(
+        "give_item",
+        itemIcon,
+        Component.text("Nhận vật phẩm"),
+        UiButtonAction.executeCommand("kit starter")
+    )
+    .interactiveModel(
+        "sword_inspect",
+        swordModel,
+        Component.text("Kiểm tra kiếm"),
+        UiButtonAction.playerCommand("inspect")
+    )
+    .interactiveMob(
+        "pet_cow",
+        babyCowMob,
+        Component.text("Cưng nựng bò con"),
+        UiButtonAction.playerCommand("pet")
+    )
+    .build();
 ```
 
-Consumer cũng có thể dùng `UiButton.forText(...)` hoặc `UiButton.forIcon(...)`.
+Consumer cũng có thể dùng `UiButton.forText(...)`, `UiButton.forIcon(...)`,
+`UiButton.forModel(...)` hoặc `UiButton.forMob(...)`.
 
 ## Button action
 
@@ -650,11 +626,11 @@ button.withAction(UiButtonAction.suggestCommand("msg {player} hello"));
 
 | Action | Hành vi |
 | --- | --- |
-| `openUrl` | Gửi chat component có link để client xác nhận mở. |
+| `openUrl` | Gửi chat component có link an toàn để client xác nhận mở. |
 | `executeCommand` | Chạy ngay bằng người click và giữ permission Bukkit. |
 | `playerCommand` | Alias/hành vi tương đương `executeCommand`. |
 | `consoleCommand` | Chạy bằng console; hỗ trợ placeholder `{player}`. |
-| `suggestCommand` | Điền command vào chat, chưa thực thi. |
+| `suggestCommand` | Điền command vào ô chat của người chơi, chưa thực thi. |
 
 Minecraft không cho server ép client tự mở URL. `openUrl` luôn gửi link có thể bấm
 và để người chơi xác nhận. Console action chỉ nên được tạo từ code/config đáng tin
@@ -671,6 +647,12 @@ handle.onClick(click -> {
         case "next_page" -> showNextPage(click.player());
     }
 });
+
+handle.onControlChange(change -> {
+    if (change.control().id().equals("volume")) {
+        setVolume(change.player(), change.value());
+    }
+});
 ```
 
 Event xử lý tập trung:
@@ -678,11 +660,17 @@ Event xử lý tập trung:
 ```java
 @EventHandler
 public void onUiButton(UiButtonClickEvent event) {
-    if (!event.getHandle().ownerKey()
-            .equals("haohanmetallurgy:forge_panel")) return;
+    if (!event.getHandle().ownerKey().equals("haohanmetallurgy:forge_panel")) return;
 
     if (!event.getPlayer().hasPermission("haohansmp.metallurgy.use")) {
         event.setCancelled(true);
+    }
+}
+
+@EventHandler
+public void onUiControlChange(UiControlChangeEvent event) {
+    if (event.getControl().id().equals("master_volume")) {
+        // Handle control change centrally
     }
 }
 ```
@@ -697,13 +685,13 @@ Mặc định scene đứng yên trong world:
 UiCameraTransform.fixed();
 ```
 
-Theo toàn bộ camera:
+Theo toàn bộ camera (billboard đầy đủ):
 
 ```java
 UiCameraTransform.cameraFacing();
 ```
 
-Tùy chỉnh:
+Tùy chỉnh billboard và góc xoay:
 
 ```java
 UiCameraTransform transform = UiCameraTransform.cameraFacing()
@@ -728,8 +716,7 @@ Mapping lock sang billboard:
 
 Camera Minecraft không cung cấp roll động, nhưng `lockZ` và `angleZ` vẫn có trong
 API để điều khiển roll cục bộ. Có thể dùng `.angles(x, y, z)`, `.angleX(...)`,
-`.angleY(...)`, `.angleZ(...)`, `.angle(...)` (alias cho Y) hoặc
-`.locks(x, y, z)`.
+`.angleY(...)`, `.angleZ(...)`, `.angle(...)` (alias cho Y) hoặc `.locks(x, y, z)`.
 
 Rotation được áp dụng đồng bộ cho translation, model và raycast. UI nghiêng hoặc
 theo camera vẫn giữ button tại đúng vị trí nhìn thấy.
@@ -752,19 +739,39 @@ UiHandle handle = ui.create(
 - `show(player)` ép hiện nếu người chơi vẫn thỏa world/distance.
 - `hide(player)` ép ẩn.
 - `audience(...)` thay predicate runtime.
-- `maxDistance` giới hạn render và interaction.
-- `requireFront` yêu cầu người chơi ở phía trước panel.
+- `maxDistance` giới hạn khoảng cách render và interaction.
+- `requireFront` yêu cầu người chơi ở phía trước panel (tránh click xuyên từ lưng).
 
-## Update, animation và hiệu năng
+## Registry custom icon cho plugin bên thứ ba
+
+`DisplayUiService.icons()` cung cấp registry dùng chung cho icon dựa trên
+`ItemStack`. Plugin sở hữu đăng ký một key một lần; engine clone item khi tạo
+node và tự gỡ toàn bộ registration khi plugin đó bị disable:
+
+```java
+DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
+NamespacedKey iconKey = new NamespacedKey(plugin, "icon/embersteel_ingot");
+
+ItemStack customIcon = new ItemStack(Material.IRON_INGOT);
+ItemMeta meta = customIcon.getItemMeta();
+meta.setItemModel(new NamespacedKey(plugin, "embersteel_ingot"));
+customIcon.setItemMeta(meta);
+
+ui.icons().register(plugin, iconKey, customIcon);
+UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
+```
+
+## Tối ưu hiệu năng & Cập nhật
 
 `handle.update(document)` tự kiểm tra layout:
 
 - Nếu chỉ Adventure Component đổi, engine cập nhật đúng `TextDisplay` liên quan.
+- Nếu chỉ slider value hoặc transformation đổi, engine cập nhật tại chỗ không respawn.
 - Nếu geometry, node type hoặc button đổi, engine respawn scene.
 - Animation text không respawn panel/icon và không gây nhấp nháy toàn UI.
-- Visibility được cache; `showEntity/hideEntity` chỉ gửi khi trạng thái đổi.
+- Visibility được cache; `showEntity/hideEntity` chỉ gửi gói tin khi trạng thái đổi.
 
-Display Entity nhẹ hơn mob vì không có AI/pathfinding, nhưng vẫn là entity được
+Display Entity nhẹ hơn mob thông thường vì không có AI/pathfinding, nhưng vẫn là entity được
 server quản lý và client track. Một scene khoảng 10–30 display thường nhẹ. Nên tránh
 hàng nghìn display cùng tồn tại hoặc animation metadata tần suất quá cao.
 
@@ -777,63 +784,29 @@ Khuyến nghị:
 - Không rebuild document mỗi tick nếu nội dung không đổi.
 - Gom icon + text vào một button row thay vì tạo nhiều hitbox chồng nhau.
 
-## Demo tích hợp
-
-Chạy:
-
-```text
-/hhdui demo
-```
-
-Điều khiển:
-
-- Nhìn vào button để xem hover description ở action bar.
-- Click chuột phải để tương tác.
-- Dùng `<` và `>` để đổi trang.
-- Button footer có `hitSlop(3)` để dễ click khi UI theo camera.
-
-Các trang:
-
-| Trang | Nội dung |
-| ---: | --- |
-| 1 | Text styles, moving gradient, `§k` và mixed RGB. |
-| 2 | Text list, icon list và icon + text. |
-| 3 | Hover/click rows với hitbox dùng chung. |
-| 4 | Fixed, yaw, pitch, camera-facing và X/Y/Z 45°. |
-| 5 | URL và các loại command action. |
-| 6 | Slider, checkbox, control callback và animation. |
-| 7 | Shape, icon và text với random easing/animation độc lập. |
-
-## Test
-
-Chạy toàn bộ test:
-
-```powershell
-gradle test
-```
-
-Test hiện bao phủ:
-
-- Validation của document, node, button và action.
-- Text anchor, optical preset và vertical alignment.
-- Camera lock/billboard mapping.
-- Raycast fixed và tilted plane basis.
-- URL/command normalization.
-
 ## Cấu trúc dự án
 
 ```text
 HaoHanDisplayUI/
-├─ src/main/java/dev/haohansmp/displayui/
-│  ├─ api/          Public API cho plugin consumer
-│  ├─ api/event/    Bukkit events
-│  └─ runtime/      Scene, raycast và interaction runtime
+├─ src/main/java/vn/haohan/displayui/
+│  ├─ api/                  Public API cho plugin consumer (Document, Handle, Service, Options, Pager)
+│  │  ├─ animation/         UiAnimation, UiEasing, UiEffects
+│  │  ├─ icon/              UiIconRegistry
+│  │  ├─ interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
+│  │  │  └─ event/          UiButtonClickEvent, UiControlChangeEvent
+│  │  ├─ layout/            UiRect, UiAnchor, UiCameraTransform
+│  │  ├─ node/              MobEntityNode, EntityModelNode, AlignedTextNode, TextNode, UiIconNode, ItemNode, BlockNode
+│  │  ├─ text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
+│  │  └─ view/              UiAudience
+│  ├─ runtime/              Scene, raycast, packet visibility, model rotation & interaction runtime
+│  ├─ DisplayUiCommand.java Lệnh quản trị (/hhdui demo, info, clear)
+│  └─ HaoHanDisplayUIPlugin.java Entry point plugin
 ├─ src/main/resources/
 │  └─ plugin.yml
-├─ src/test/java/
+├─ src/test/java/           Bộ test JUnit 5 (Model, Pager, Raycast, MobEntity, v.v.)
 ├─ media/
-│  ├─ Demo.gif      Demo hiển thị trực tiếp trên GitHub
-│  └─ Demo.mp4      Video chất lượng cao có âm thanh
+│  ├─ Demo.gif              Demo hiển thị trực tiếp trên GitHub
+│  └─ Demo.mp4              Video chất lượng cao có âm thanh
 ├─ build.gradle
 └─ settings.gradle
 ```
@@ -851,9 +824,13 @@ HaoHanDisplayUI/
 - Custom font cần tự hiệu chỉnh `contentWidth`/optical offset nếu metric khác font
   Minecraft mặc định.
 
-## Giấy phép
+## License
 
-Copyright (C) 2026 HaoHanSMP.
+HaoHan Display UI được phát hành theo giấy phép GNU General Public License v3.0 (GPLv3).
+Xem chi tiết tại [LICENSE](LICENSE).
 
-HaoHanDisplayUI được phát hành theo GNU General Public License phiên bản 3 hoặc
-mới hơn (`GPL-3.0-or-later`). Xem [LICENSE](LICENSE) để biết toàn bộ điều khoản.
+---
+
+<div align="center">
+Phát triển bởi đội ngũ <b>HaoHan SMP</b>.
+</div>

@@ -66,7 +66,7 @@ public record AlignedTextNode(
                            UiTextAlignment alignment) {
         this(text, x, y, width, height, 0.002f, alignment,
                 0.0f, 0.0f, 10.0f, UiText.estimateWidth(text, 10.0f),
-                UiVerticalAlignment.CENTER, -2.0f, false, false);
+                UiVerticalAlignment.CENTER, 0.0f, false, false);
     }
 
     public AlignedTextNode(Component text, UiRect bounds, UiTextAlignment alignment) {
@@ -100,7 +100,10 @@ public record AlignedTextNode(
             case CENTER -> boxY + height * 0.5f;
             case BOTTOM -> boxY + height - fontSize * 0.5f;
         };
-        return contentCenter + verticalOffset;
+        // In Minecraft TextDisplay, character glyphs sit above the local baseline origin.
+        // Offsetting by ~0.60 * fontSize aligns the visual optical center of the
+        // text glyphs with the geometric midpoint of adjacent icons and bounding boxes.
+        return contentCenter + (fontSize * 0.60f) + verticalOffset;
     }
 
     public AlignedTextNode offsets(float left, float right) {
@@ -126,40 +129,8 @@ public record AlignedTextNode(
     public AlignedTextNode fontSize(float size) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, size,
-                contentWidth * size / fontSize, verticalAlignment, verticalOffset,
+                UiText.estimateWidth(text, size), verticalAlignment, verticalOffset,
                 shadow, seeThrough);
-    }
-
-    public AlignedTextNode contentWidth(float measuredWidth) {
-        return new AlignedTextNode(text, boxX, boxY, width, height, depth,
-                alignment, leftOffset, rightOffset, fontSize, measuredWidth,
-                verticalAlignment, verticalOffset, shadow, seeThrough);
-    }
-
-    public AlignedTextNode after(UiIconNode icon, float gap) {
-        float newX = icon.right() + gap;
-        float oldRight = boxX + width;
-        return new AlignedTextNode(text, newX, boxY, Math.max(1.0f, oldRight - newX),
-                height, depth, alignment, leftOffset, rightOffset, fontSize,
-                contentWidth, verticalAlignment, verticalOffset, shadow, seeThrough);
-    }
-
-    public AlignedTextNode after(UiIconNode icon, float gap,
-                                 UiVerticalAlignment verticalAlignment) {
-        Objects.requireNonNull(icon, "icon");
-        Objects.requireNonNull(verticalAlignment, "verticalAlignment");
-        float newX = icon.right() + gap;
-        float oldRight = boxX + width;
-        return new AlignedTextNode(text, newX, icon.boxY(),
-                Math.max(1.0f, oldRight - newX), icon.height(), depth, alignment,
-                leftOffset, rightOffset, fontSize, contentWidth, verticalAlignment,
-                verticalOffset, shadow, seeThrough);
-    }
-
-    public AlignedTextNode verticalAlignment(UiVerticalAlignment value) {
-        return new AlignedTextNode(text, boxX, boxY, width, height, depth,
-                alignment, leftOffset, rightOffset, fontSize, contentWidth,
-                value, verticalOffset, shadow, seeThrough);
     }
 
     public AlignedTextNode verticalOffset(float offset) {
@@ -168,15 +139,35 @@ public record AlignedTextNode(
                 verticalAlignment, offset, shadow, seeThrough);
     }
 
-    public AlignedTextNode shadowed(boolean enabled) {
+    public AlignedTextNode shadowed(boolean shadow) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
-                alignment, leftOffset, rightOffset, fontSize, contentWidth,
-                verticalAlignment, verticalOffset, enabled, seeThrough);
-    }
-
-    public AlignedTextNode atDepth(float newDepth) {
-        return new AlignedTextNode(text, boxX, boxY, width, height, newDepth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
                 verticalAlignment, verticalOffset, shadow, seeThrough);
     }
+
+    public AlignedTextNode seeThrough(boolean seeThrough) {
+        return new AlignedTextNode(text, boxX, boxY, width, height, depth,
+                alignment, leftOffset, rightOffset, fontSize, contentWidth,
+                verticalAlignment, verticalOffset, shadow, seeThrough);
+    }
+
+    public AlignedTextNode atDepth(float depth) {
+        return new AlignedTextNode(text, boxX, boxY, width, height, depth,
+                alignment, leftOffset, rightOffset, fontSize, contentWidth,
+                verticalAlignment, verticalOffset, shadow, seeThrough);
+    }
+
+    public AlignedTextNode align(UiVerticalAlignment verticalAlignment) {
+        return new AlignedTextNode(text, boxX, boxY, width, height, depth,
+                alignment, leftOffset, rightOffset, fontSize, contentWidth,
+                Objects.requireNonNull(verticalAlignment, "verticalAlignment"),
+                verticalOffset, shadow, seeThrough);
+    }
+
+    public AlignedTextNode top() { return align(UiVerticalAlignment.TOP); }
+    public AlignedTextNode centerVertical() { return align(UiVerticalAlignment.CENTER); }
+    public AlignedTextNode bottom() { return align(UiVerticalAlignment.BOTTOM); }
+
+    public float boxWidth() { return width; }
+    public float boxHeight() { return height; }
 }

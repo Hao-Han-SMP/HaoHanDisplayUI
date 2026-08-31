@@ -45,6 +45,7 @@ public interface UiHandle {
     /** Stops the current animation and restores the scene's final state. */
     void stopAnimation();
     boolean isAnimating();
+    default int nodeCount() { return 0; }
     Optional<vn.haohan.displayui.api.interaction.UiControl> control(String id);
     void onClick(UiClickHandler handler);
     void onControlChange(UiControlChangeHandler handler);

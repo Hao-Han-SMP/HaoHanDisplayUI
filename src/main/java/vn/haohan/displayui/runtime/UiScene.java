@@ -39,10 +39,13 @@ import vn.haohan.displayui.api.interaction.event.UiControlChangeEvent;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
+import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.api.node.ItemNode;
+import vn.haohan.displayui.api.node.MobEntityNode;
 import vn.haohan.displayui.api.node.TextNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiModelRotation;
 import vn.haohan.displayui.api.node.UiNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.view.UiAudience;
@@ -83,7 +86,7 @@ final class UiScene implements UiHandle {
     /** Client-side interpolation window used for every transform update. */
     private static final int INTERPOLATION_TICKS = 4;
     /** Short window for per-tick animation targets; avoids chasing old frames. */
-    private static final int ANIMATION_INTERPOLATION_TICKS = 2;
+    private static final int ANIMATION_INTERPOLATION_TICKS = 1;
     /** Normalizes TextDisplay's native placeholder bounds to UI pixel bounds. */
     private static final float BACKGROUND_NATIVE_WIDTH_SCALE = 4.25f;
     private static final float BACKGROUND_NATIVE_HEIGHT_SCALE = 4.10f;
@@ -142,6 +145,11 @@ final class UiScene implements UiHandle {
     }
 
     @Override
+    public int nodeCount() {
+        return document != null ? document.nodes().size() : 0;
+    }
+
+    @Override
     public void update(UiDocument document) {
         ensureValid();
         UiDocument next = Objects.requireNonNull(document, "document");
@@ -149,10 +157,24 @@ final class UiScene implements UiHandle {
         nodeAnimations = List.of();
         nodeAnimationAges = new int[0];
         UiDocument previous = this.document;
+        Map<String, UiControl> oldControls = new LinkedHashMap<>(controlStates);
         updateControlStates(next);
         this.document = next;
         if (!incrementalUpdate(previous, next)) respawn();
         else syncViewers();
+
+        for (UiControl newControl : controlStates.values()) {
+            if (newControl instanceof UiScrollList newScrollList) {
+                UiControl oldControl = oldControls.get(newScrollList.id());
+                if (oldControl instanceof UiScrollList oldScrollList) {
+                    int direction = Integer.compare(newScrollList.offset(), oldScrollList.offset());
+                    if (direction != 0) {
+                        animateScrollViewport(newScrollList, direction);
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     @Override
@@ -193,13 +215,23 @@ final class UiScene implements UiHandle {
     public void animateNodes(List<UiAnimation> animations) {
         ensureValid();
         Objects.requireNonNull(animations, "animations");
-        if (animations.size() != document.nodes().size()) {
-            throw new IllegalArgumentException("animations must contain one entry per document node");
+        int nodeCount = document.nodes().size();
+        List<UiAnimation> list;
+        if (animations.size() == nodeCount) {
+            list = List.copyOf(animations);
+        } else if (animations.isEmpty()) {
+            list = List.of();
+        } else {
+            List<UiAnimation> adapted = new ArrayList<>(nodeCount);
+            for (int i = 0; i < nodeCount; i++) {
+                adapted.add(i < animations.size() ? animations.get(i) : animations.get(animations.size() - 1));
+            }
+            list = List.copyOf(adapted);
         }
-        nodeAnimations = List.copyOf(animations);
-        nodeAnimationAges = new int[animations.size()];
+        nodeAnimations = list;
+        nodeAnimationAges = new int[list.size()];
         for (int i = 0; i < nodeAnimationAges.length; i++) {
-            nodeAnimationAges[i] = -animations.get(i).delayTicks();
+            nodeAnimationAges[i] = -list.get(i).delayTicks();
         }
         animation = null;
         configureAnimationInterpolation();
@@ -212,7 +244,9 @@ final class UiScene implements UiHandle {
         if (animation != null) applyAnimation(1.0);
         if (!nodeAnimations.isEmpty()) {
             for (int i = 0; i < nodeAnimations.size(); i++) {
-                applyAnimationToNode(i, nodeAnimations.get(i), 1.0);
+                if (!isStaticAnimation(nodeAnimations.get(i))) {
+                    applyAnimationToNode(i, nodeAnimations.get(i), 1.0);
+                }
             }
         }
         animation = null;
@@ -287,6 +321,7 @@ final class UiScene implements UiHandle {
             spawnIfLoaded();
         }
         tickAnimation();
+        tickAutoSpin();
         syncViewers();
     }
 
@@ -336,6 +371,27 @@ final class UiScene implements UiHandle {
                 .orElse(null);
     }
 
+    UiRaycaster.Projection projectCursor(Player player) {
+        if (removed || !shouldShow(player)) return null;
+        PlaneBasis basis = planeBasis(player);
+        return UiRaycaster.project(
+                player.getEyeLocation().toVector(),
+                player.getEyeLocation().getDirection(),
+                origin.toVector(), basis.normal(), basis.right(), basis.up(),
+                options.pixelsPerBlock(), options.maxDistance());
+    }
+
+    int findModelNodeAt(float localX, float localY) {
+        return -1;
+    }
+
+    boolean dragModel(int nodeIndex, float deltaX, float deltaY) {
+        return false;
+    }
+
+    void releaseModelDrag(int nodeIndex) {
+    }
+
     void activate(UiHit hit) {
         if (hit.control() != null) {
             activateControl(hit);
@@ -365,7 +421,7 @@ final class UiScene implements UiHandle {
         if (!(hit.control() instanceof UiScrollList list)) return false;
         int previousOffset = list.offset();
         boolean changed = changeControl(hit, nextOffset, true);
-        if (changed) {
+        if (changed && !isAnimating()) {
             UiScrollList updated = (UiScrollList) controlStates.get(list.id());
             int direction = Integer.compare(updated.offset(), previousOffset);
             animateScrollViewport(updated, direction);
@@ -374,36 +430,66 @@ final class UiScene implements UiHandle {
     }
 
     /**
-     * Mirrors Apps' scroll behavior: row display entities stay alive and each
-     * visible object interpolates from one row outside its target position.
-     * The document update performed by the control callback has already
-     * changed the row content, so this produces a smooth incoming row motion
-     * without rebuilding the scene.
+     * Continuous flow scroll animation:
+     * - Uses exact physical row distance (18.0f) so items slide continuously from their previous screen position.
+     * - Animates only the row cards (background, icon, checkbox, text) inside the viewport.
+     * - The entering row smoothly expands from its center (scale 0.25 -> 1.0) and fades in (opacity 0.0 -> 1.0).
+     * - All existing rows glide synchronously with cubic-out momentum for a natural scroll feel.
      */
     private void animateScrollViewport(UiScrollList list, int direction) {
         if (direction == 0 || document.nodes().isEmpty()) return;
-        float rowDistance = list.height() / 4.0f;
+        float rowHeight = list.height() / 4.0f;
+        float slideDistance = 18.0f;
+        int durationTicks = 11;
+        UiEasing easing = UiEasing.CUBIC_OUT;
         UiAnimation.Direction movement = direction > 0
                 ? UiAnimation.Direction.BOTTOM : UiAnimation.Direction.TOP;
         List<UiAnimation> animations = new ArrayList<>(document.nodes().size());
         for (UiNode node : document.nodes()) {
-            UiAnimation animation = UiAnimation.builder().durationTicks(7)
-                    .easing(UiEasing.CUBIC_OUT).build();
             if (nodeInScrollViewport(node, list)) {
-                animation = UiAnimation.builder().durationTicks(7)
-                        .easing(UiEasing.CUBIC_OUT)
-                        .offset(movement, rowDistance).build();
+                int rowIndex = Math.max(0, Math.min(3, (int) Math.floor((node.y() - list.y()) / rowHeight)));
+                boolean isEntering = direction > 0 ? (rowIndex == 3) : (rowIndex == 0);
+                int delay = direction > 0 ? (rowIndex * 1) : ((3 - rowIndex) * 1);
+
+                float fromScale = isEntering ? 0.25f : 1.0f;
+                float fromOpacity = isEntering ? 0.0f : 1.0f;
+
+                UiAnimation animation = UiAnimation.builder()
+                        .durationTicks(durationTicks)
+                        .delayTicks(delay)
+                        .easing(easing)
+                        .offset(movement, slideDistance)
+                        .scale(fromScale, 1.0f)
+                        .opacity(fromOpacity, 1.0f)
+                        .build();
+                animations.add(animation);
+            } else {
+                animations.add(UiAnimation.builder()
+                        .durationTicks(durationTicks)
+                        .easing(easing)
+                        .build());
             }
-            animations.add(animation);
         }
         animateNodes(animations);
     }
 
     private boolean nodeInScrollViewport(UiNode node, UiScrollList list) {
-        return node.x() < list.x() + list.width()
-                && node.x() >= list.x() - 8.0f
-                && node.y() >= list.y() - 8.0f
-                && node.y() <= list.y() + list.height() + 8.0f;
+        if (node instanceof UiBackgroundNode) return false;
+        // Exclude full-width panel backgrounds or external frames
+        if (node instanceof BlockNode block && (block.width() > list.width() - 5.0f || block.x() >= list.x() + list.width() - 15.0f)) {
+            return false;
+        }
+        // Exclude title/subtitle texts that span header or right controls
+        if (node instanceof AlignedTextNode text && (text.width() > list.width() - 10.0f || text.boxX() >= list.x() + list.width() - 15.0f)) {
+            return false;
+        }
+        float nx = node.x();
+        float ny = node.y();
+        float rightBound = list.x() + list.width() - 15.0f;
+        return nx >= list.x() - 2.0f
+                && nx < rightBound
+                && ny >= list.y() - 0.5f
+                && ny < list.y() + list.height() - 0.5f;
     }
 
     /** Updates a slider while its owning player keeps the drag gesture active. */
@@ -567,7 +653,7 @@ final class UiScene implements UiHandle {
                 controlStates.put(control.id(), checkbox.checked(oldCheckbox.checked()));
             } else if (old instanceof UiScrollList oldList && control instanceof UiScrollList list
                     && sameControlLayout(oldList, list)) {
-                controlStates.put(control.id(), list.withOffset(oldList.offset()));
+                controlStates.put(control.id(), list);
             } else {
                 controlStates.put(control.id(), control);
             }
@@ -581,20 +667,15 @@ final class UiScene implements UiHandle {
         if (node instanceof ItemNode item) return spawnItem(item);
         if (node instanceof UiIconNode icon) return spawnIcon(icon);
         if (node instanceof BlockNode block) return spawnBlock(block);
+        if (node instanceof EntityModelNode model) return spawnEntityModel(model);
+        if (node instanceof MobEntityNode mob) return spawnMobEntity(mob);
         throw new IllegalArgumentException("Unsupported UI node: " + node.getClass().getName());
     }
 
     private TextDisplay spawnBackground(UiBackgroundNode node) {
         return origin.getWorld().spawn(origin, TextDisplay.class, display -> {
             configure(display, node);
-            // Apps uses a short invisible placeholder and lets the display
-            // transformation define the container bounds. Expanding this
-            // text into rows/blocks makes Minecraft scale the background by
-            // the text layout and creates a giant distorted plane.
             display.text(Component.text("....."));
-            // Keep the layout anchor used by Apps, but make the placeholder
-            // completely invisible. The background is rendered by the
-            // TextDisplay background metadata, not by the glyphs.
             display.setTextOpacity((byte) 0);
             display.setAlignment(TextDisplay.TextAlignment.LEFT);
             display.setBackgroundColor(node.background());
@@ -620,8 +701,6 @@ final class UiScene implements UiHandle {
         return origin.getWorld().spawn(origin, TextDisplay.class, display -> {
             configure(display, node);
             display.text(node.text());
-            // node.x() is already the measured visual center. Native LEFT/RIGHT
-            // would add another half-width shift, so always anchor at CENTER.
             display.setAlignment(TextDisplay.TextAlignment.CENTER);
             display.setLineWidth(Math.max(1,
                     Math.round(node.width() * 20.0f / node.fontSize())));
@@ -655,6 +734,24 @@ final class UiScene implements UiHandle {
                     node.height() / pixels,
                     Math.min(node.width(), node.height()) / pixels));
         });
+    }
+
+    private ItemDisplay spawnEntityModel(EntityModelNode node) {
+        return origin.getWorld().spawn(origin, ItemDisplay.class, display -> {
+            configure(display, node);
+            display.setItemStack(node.item());
+            display.setItemDisplayTransform(node.transform());
+            display.setTransformation(modelTransform(node, 1.0f, 0.0f, 0.0f, 0.0f));
+        });
+    }
+
+    private ItemDisplay spawnMobEntity(MobEntityNode node) {
+        EntityModelNode model = EntityModelNode.forMob(
+                node.entityType().name().toLowerCase(),
+                node.x(), node.y(), node.width(), node.height(), node.scale())
+                .withYaw(node.yaw())
+                .withPitch(node.pitch());
+        return spawnEntityModel(model);
     }
 
     private BlockDisplay spawnBlock(BlockNode node) {
@@ -748,13 +845,34 @@ final class UiScene implements UiHandle {
                 translation, rotation, new Vector3f(sx, sy, sz), new Quaternionf());
     }
 
+    private Transformation modelTransform(EntityModelNode node, float scale,
+                                          float offsetX, float offsetY, float offsetZ) {
+        Quaternionf baseRotation = localRotation();
+        Quaternionf modelRot = new Quaternionf()
+                .rotateY((float) Math.toRadians(node.yaw()))
+                .rotateX((float) Math.toRadians(node.pitch()))
+                .rotateZ((float) Math.toRadians(node.roll()));
+        Quaternionf totalRotation = new Quaternionf(baseRotation).mul(modelRot);
+        float pixels = options.pixelsPerBlock();
+        Vector3f translation = new Vector3f((node.x() + offsetX) / pixels,
+                -(node.y() + offsetY) / pixels, node.depth() + offsetZ);
+        baseRotation.transform(translation);
+        return new Transformation(
+                translation, totalRotation,
+                new Vector3f(node.scaleX() * scale, node.scaleY() * scale, node.scaleZ() * scale),
+                new Quaternionf());
+    }
+
     private Transformation blockTransform(BlockNode node, float scale,
                                            float offsetX, float offsetY, float offsetZ) {
         float pixels = options.pixelsPerBlock();
         Quaternionf rotation = localRotation();
+        // Scale symmetrically from the center of the block
+        float centerShiftX = (node.width() * 0.5f) * (1.0f - scale);
+        float centerShiftY = (node.height() * 0.5f) * (1.0f - scale);
         Vector3f translation = new Vector3f(
-                (node.x() + offsetX) / pixels,
-                -(node.y() + node.height() + offsetY) / pixels,
+                (node.x() + offsetX + centerShiftX) / pixels,
+                -(node.y() + node.height() + offsetY - centerShiftY) / pixels,
                 node.depth() + offsetZ - node.thickness() / pixels);
         rotation.transform(translation);
         return new Transformation(
@@ -788,6 +906,36 @@ final class UiScene implements UiHandle {
             if (!running) {
                 nodeAnimations = List.of();
                 nodeAnimationAges = new int[0];
+            }
+        }
+    }
+
+    private void tickAutoSpin() {
+        if (isAnimating() || nodeEntities.isEmpty() || document == null) return;
+        for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
+            UiNode node = document.nodes().get(i);
+            UiModelRotation rotation = null;
+            EntityModelNode model = null;
+            if (node instanceof EntityModelNode em) {
+                model = em;
+                rotation = em.rotation();
+            } else if (node instanceof MobEntityNode mob) {
+                rotation = mob.rotation();
+                model = EntityModelNode.forMob(
+                        mob.entityType().name().toLowerCase(),
+                        mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
+                        .withYaw(mob.yaw())
+                        .withPitch(mob.pitch());
+            }
+            if (model != null && rotation != null && rotation.mode() == UiModelRotation.Mode.AUTO_SPIN) {
+                Display display = nodeEntities.get(i);
+                if (display != null && display.isValid()) {
+                    display.setInterpolationDelay(0);
+                    display.setInterpolationDuration(1);
+                    float currentYaw = (float) ((System.currentTimeMillis() * 0.05 * rotation.autoSpinSpeed()) % 360.0);
+                    EntityModelNode spinning = model.withYaw(currentYaw);
+                    display.setTransformation(modelTransform(spinning, 1.0f, 0.0f, 0.0f, 0.0f));
+                }
             }
         }
     }
@@ -853,14 +1001,21 @@ final class UiScene implements UiHandle {
                     icon.height() / pixels * scale,
                     Math.min(icon.width(), icon.height()) / pixels * scale,
                     offsetX, offsetY, offsetZ));
+        } else if (node instanceof EntityModelNode model) {
+            display.setTransformation(modelTransform(model, scale, offsetX, offsetY, offsetZ));
+        } else if (node instanceof MobEntityNode mob) {
+            EntityModelNode model = EntityModelNode.forMob(
+                    mob.entityType().name().toLowerCase(),
+                    mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
+                    .withYaw(mob.yaw())
+                    .withPitch(mob.pitch());
+            display.setTransformation(modelTransform(model, scale, offsetX, offsetY, offsetZ));
         } else if (node instanceof UiBackgroundNode background) {
             display.setTransformation(backgroundTransform(background, scale,
                     offsetX, offsetY, offsetZ));
         }
         if (display instanceof TextDisplay textDisplay) {
             if (node instanceof UiBackgroundNode background) {
-                // Never animate the layout placeholder itself. Animate only
-                // the native background color so no dots can flash on screen.
                 textDisplay.setTextOpacity((byte) 0);
                 textDisplay.setBackgroundColor(withAlpha(background.background(), opacity));
             } else {
@@ -900,18 +1055,10 @@ final class UiScene implements UiHandle {
                                                 float offsetX, float offsetY,
                                                 float offsetZ) {
         float pixels = options.pixelsPerBlock();
-        // TextDisplay's native background is centered around its transform
-        // anchor, unlike BlockDisplay's top-left logical anchor.
         return transform(node,
                 node.width() / pixels * BACKGROUND_NATIVE_WIDTH_SCALE * scale,
                 node.height() / pixels * BACKGROUND_NATIVE_HEIGHT_SCALE * scale,
-                // Apps uses a zero Z scale for container backgrounds. A
-                // non-zero depth makes the native TextDisplay plane overlap
-                // nearby rows and produces z-fighting on list pages.
                 0.0f, offsetX + node.width() * 0.5f,
-                // TextDisplay's vertical glyph/background origin sits above
-                // the logical panel anchor; compensate one extra panel
-                // height so the native background starts at PANEL_Y.
                 offsetY + node.height() * 1.0f,
                 offsetZ + BACKGROUND_DEPTH_OFFSET);
     }
@@ -921,8 +1068,6 @@ final class UiScene implements UiHandle {
     }
 
     private TextDisplay.TextAlignment screenAlignment(TextDisplay.TextAlignment alignment) {
-        // A fixed display facing its audience has a mirrored local X axis. Swap
-        // the native side anchors so API LEFT/RIGHT match the player's screen.
         return switch (alignment) {
             case LEFT -> TextDisplay.TextAlignment.RIGHT;
             case RIGHT -> TextDisplay.TextAlignment.LEFT;
@@ -942,8 +1087,6 @@ final class UiScene implements UiHandle {
     private void syncViewers() {
         World world = origin.getWorld();
         if (world == null || entities.isEmpty()) return;
-        // A player who disconnected or changed world must be shown again when
-        // they later re-enter this scene's world.
         visibleViewers.removeIf(playerId -> {
             Player player = Bukkit.getPlayer(playerId);
             return player == null || player.getWorld() != world;
@@ -970,7 +1113,7 @@ final class UiScene implements UiHandle {
         boolean frontFacing = isFrontFacing(player);
         for (int i = 0; i < nodeEntities.size(); i++) {
             UiNode node = document.nodes().get(i);
-            if (!(node instanceof ItemNode) && !(node instanceof UiIconNode)) continue;
+            if (!(node instanceof ItemNode) && !(node instanceof UiIconNode) && !(node instanceof EntityModelNode) && !(node instanceof MobEntityNode)) continue;
             Display display = nodeEntities.get(i);
             if (display == null || !display.isValid()) continue;
             if (frontFacing) player.showEntity(plugin, display);
@@ -1024,42 +1167,57 @@ final class UiScene implements UiHandle {
             display.setInterpolationDuration(INTERPOLATION_TICKS);
         }
         if (node instanceof UiBackgroundNode background) {
-                TextDisplay textDisplay = (TextDisplay) display;
-                textDisplay.setBackgroundColor(background.background());
-                textDisplay.setTransformation(backgroundTransform(background, 1.0f));
-            } else if (node instanceof TextNode text) {
-                TextDisplay textDisplay = (TextDisplay) display;
-                textDisplay.text(text.text());
-                textDisplay.setAlignment(screenAlignment(text.alignment()));
-                textDisplay.setLineWidth(text.lineWidth());
-                textDisplay.setShadowed(text.shadow());
-                textDisplay.setSeeThrough(text.seeThrough());
-                textDisplay.setTransformation(transform(text, text.scale(), text.scale(), text.scale()));
-            } else if (node instanceof AlignedTextNode text) {
-                TextDisplay textDisplay = (TextDisplay) display;
-                textDisplay.text(text.text());
-                textDisplay.setLineWidth(Math.max(1,
-                        Math.round(text.width() * 20.0f / text.fontSize())));
-                textDisplay.setShadowed(text.shadow());
-                textDisplay.setSeeThrough(text.seeThrough());
-                float scale = text.fontSize() / 20.0f;
-                textDisplay.setTransformation(transform(text, scale, scale, scale));
-            } else if (node instanceof ItemNode item) {
-                ItemDisplay itemDisplay = (ItemDisplay) display;
-                itemDisplay.setItemStack(item.item());
-                itemDisplay.setItemDisplayTransform(item.transform());
-                itemDisplay.setTransformation(transform(item, item.scale(), item.scale(), item.scale()));
-            } else if (node instanceof UiIconNode icon) {
-                ItemDisplay itemDisplay = (ItemDisplay) display;
-                itemDisplay.setItemStack(icon.item());
-                itemDisplay.setItemDisplayTransform(icon.transform());
-                float pixels = options.pixelsPerBlock();
-                itemDisplay.setTransformation(transform(icon, icon.width() / pixels,
-                        icon.height() / pixels, Math.min(icon.width(), icon.height()) / pixels));
-            } else if (node instanceof BlockNode block) {
-                BlockDisplay blockDisplay = (BlockDisplay) display;
-                blockDisplay.setBlock(block.block());
-                blockDisplay.setTransformation(blockTransform(block, 1.0f, 0.0f, 0.0f, 0.0f));
+            TextDisplay textDisplay = (TextDisplay) display;
+            textDisplay.setBackgroundColor(background.background());
+            textDisplay.setTransformation(backgroundTransform(background, 1.0f));
+        } else if (node instanceof TextNode text) {
+            TextDisplay textDisplay = (TextDisplay) display;
+            textDisplay.text(text.text());
+            textDisplay.setAlignment(screenAlignment(text.alignment()));
+            textDisplay.setLineWidth(text.lineWidth());
+            textDisplay.setShadowed(text.shadow());
+            textDisplay.setSeeThrough(text.seeThrough());
+            textDisplay.setTransformation(transform(text, text.scale(), text.scale(), text.scale()));
+        } else if (node instanceof AlignedTextNode text) {
+            TextDisplay textDisplay = (TextDisplay) display;
+            textDisplay.text(text.text());
+            textDisplay.setLineWidth(Math.max(1,
+                    Math.round(text.width() * 20.0f / text.fontSize())));
+            textDisplay.setShadowed(text.shadow());
+            textDisplay.setSeeThrough(text.seeThrough());
+            float scale = text.fontSize() / 20.0f;
+            textDisplay.setTransformation(transform(text, scale, scale, scale));
+        } else if (node instanceof ItemNode item) {
+            ItemDisplay itemDisplay = (ItemDisplay) display;
+            itemDisplay.setItemStack(item.item());
+            itemDisplay.setItemDisplayTransform(item.transform());
+            itemDisplay.setTransformation(transform(item, item.scale(), item.scale(), item.scale()));
+        } else if (node instanceof UiIconNode icon) {
+            ItemDisplay itemDisplay = (ItemDisplay) display;
+            itemDisplay.setItemStack(icon.item());
+            itemDisplay.setItemDisplayTransform(icon.transform());
+            float pixels = options.pixelsPerBlock();
+            itemDisplay.setTransformation(transform(icon, icon.width() / pixels,
+                    icon.height() / pixels, Math.min(icon.width(), icon.height()) / pixels));
+        } else if (node instanceof EntityModelNode model) {
+            ItemDisplay itemDisplay = (ItemDisplay) display;
+            itemDisplay.setItemStack(model.item());
+            itemDisplay.setItemDisplayTransform(model.transform());
+            itemDisplay.setTransformation(modelTransform(model, 1.0f, 0.0f, 0.0f, 0.0f));
+        } else if (node instanceof MobEntityNode mob) {
+            EntityModelNode model = EntityModelNode.forMob(
+                    mob.entityType().name().toLowerCase(),
+                    mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
+                    .withYaw(mob.yaw())
+                    .withPitch(mob.pitch());
+            ItemDisplay itemDisplay = (ItemDisplay) display;
+            itemDisplay.setItemStack(model.item());
+            itemDisplay.setItemDisplayTransform(model.transform());
+            itemDisplay.setTransformation(modelTransform(model, 1.0f, 0.0f, 0.0f, 0.0f));
+        } else if (node instanceof BlockNode block) {
+            BlockDisplay blockDisplay = (BlockDisplay) display;
+            blockDisplay.setBlock(block.block());
+            blockDisplay.setTransformation(blockTransform(block, 1.0f, 0.0f, 0.0f, 0.0f));
         }
     }
 
@@ -1107,8 +1265,6 @@ final class UiScene implements UiHandle {
         if (baseNormal.lengthSquared() < 0.0001) baseNormal.setZ(1);
         baseNormal.normalize();
 
-        // Client billboards use the camera quaternion, not the vector from the
-        // display origin to the eye. This distinction is largest near panel edges.
         Vector cameraNormal = player.getEyeLocation().getDirection().multiply(-1);
         if (cameraNormal.lengthSquared() < 0.0001) cameraNormal = baseNormal.clone();
         cameraNormal.normalize();

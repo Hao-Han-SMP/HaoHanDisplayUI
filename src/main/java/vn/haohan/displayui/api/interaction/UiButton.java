@@ -20,6 +20,8 @@ package vn.haohan.displayui.api.interaction;
 
 import vn.haohan.displayui.api.layout.UiRect;
 import vn.haohan.displayui.api.node.AlignedTextNode;
+import vn.haohan.displayui.api.node.EntityModelNode;
+import vn.haohan.displayui.api.node.MobEntityNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import net.kyori.adventure.text.Component;
 
@@ -38,8 +40,8 @@ public record UiButton(
 ) implements UiControl {
     public UiButton {
         Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(description, "description");
-        Objects.requireNonNull(action, "action");
+        description = Objects.requireNonNullElse(description, Component.empty());
+        action = Objects.requireNonNullElse(action, UiButtonAction.none());
         if (!id.matches("[a-z0-9_.-]+")) {
             throw new IllegalArgumentException("button id must contain only [a-z0-9_.-]");
         }
@@ -72,12 +74,12 @@ public record UiButton(
 
     public UiButton describedBy(Component description) {
         return new UiButton(id, x, y, width, height,
-                Objects.requireNonNull(description, "description"), action, hitSlop);
+                description != null ? description : Component.empty(), action, hitSlop);
     }
 
     public UiButton withAction(UiButtonAction action) {
         return new UiButton(id, x, y, width, height, description,
-                Objects.requireNonNull(action, "action"), hitSlop);
+                action != null ? action : UiButtonAction.none(), hitSlop);
     }
 
     public UiButton hitSlop(float pixels) {
@@ -92,6 +94,18 @@ public record UiButton(
     public static UiButton forIcon(String id, UiIconNode icon) {
         Objects.requireNonNull(icon, "icon");
         return new UiButton(id, icon.boxX(), icon.boxY(), icon.width(), icon.height());
+    }
+
+    public static UiButton forModel(String id, EntityModelNode model) {
+        Objects.requireNonNull(model, "model");
+        return new UiButton(id, model.x() - model.width() * 0.5f,
+                model.y() - model.height() * 0.5f, model.width(), model.height());
+    }
+
+    public static UiButton forMob(String id, MobEntityNode mob) {
+        Objects.requireNonNull(mob, "mob");
+        return new UiButton(id, mob.x() - mob.width() * 0.5f,
+                mob.y() - mob.height() * 0.5f, mob.width(), mob.height());
     }
 
     public boolean contains(float localX, float localY) {
