@@ -18,8 +18,39 @@
  */
 package vn.haohan.displayui.api.text;
 
+import org.bukkit.entity.TextDisplay;
+
+/**
+ * Text alignment options for 2D UI text bounding boxes and TextDisplay entities.
+ */
 public enum UiTextAlignment {
     LEFT,
     RIGHT,
-    CENTER
+    CENTER;
+
+    /**
+     * Calculates the local X offset within a bounding box of given width for content of given width.
+     *
+     * @param boxWidth width of the container box
+     * @param contentWidth measured width of the content
+     * @return X offset relative to box origin
+     */
+    public float calculateOffset(float boxWidth, float contentWidth) {
+        return switch (this) {
+            case LEFT -> contentWidth * 0.5f;
+            case RIGHT -> boxWidth - contentWidth * 0.5f;
+            case CENTER -> boxWidth * 0.5f;
+        };
+    }
+
+    /**
+     * Converts to Bukkit's {@link TextDisplay.TextAlignment} representation.
+     */
+    public TextDisplay.TextAlignment toBukkit() {
+        return switch (this) {
+            case LEFT -> TextDisplay.TextAlignment.LEFT;
+            case RIGHT -> TextDisplay.TextAlignment.RIGHT;
+            case CENTER -> TextDisplay.TextAlignment.CENTER;
+        };
+    }
 }

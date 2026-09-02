@@ -7,6 +7,8 @@ import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import vn.haohan.displayui.api.UiDocument;
+import vn.haohan.displayui.api.animation.UiAnimation;
+import vn.haohan.displayui.api.animation.UiEasing;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.interaction.UiScrollList;
@@ -17,6 +19,9 @@ import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.demo.AppEntry;
 import vn.haohan.displayui.demo.BaseDemoPage;
 import vn.haohan.displayui.demo.DemoContext;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
     private static final float LEFT = -78;
@@ -37,15 +42,9 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
     @Override
     public void build(UiDocument.Builder builder, DemoContext context) {
         builder.add(new AlignedTextNode(Component.text(
-                        "Scroll list · Right-click row to select",
-                        NamedTextColor.GRAY), -86, -43, 96, 9, UiTextAlignment.LEFT)
+                        "Scroll list · Mouse wheel or buttons to scroll",
+                        NamedTextColor.GRAY), -86, -43, 110, 9, UiTextAlignment.LEFT)
                 .fontSize(4.5f));
-
-        for (int row = 0; row < VISIBLE_ROWS; row++) {
-            float rowY = TOP + row * ROW_HEIGHT;
-            builder.add(new BlockNode(Material.GRAY_STAINED_GLASS.createBlockData(),
-                    -74, rowY, 0.001f, 148, 16, 1));
-        }
 
         for (int row = 0; row < VISIBLE_ROWS; row++) {
             int index = context.appOffset() + row;
@@ -71,6 +70,11 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
     }
 
     @Override
+    public void onShow(DemoContext context) {
+        playScrollEntranceAnimation(context);
+    }
+
+    @Override
     public boolean onClick(DemoContext context, String buttonId, Player player) {
         if (buttonId.startsWith("app_") && !buttonId.equals("app_up") && !buttonId.equals("app_down")) {
             try {
@@ -81,12 +85,20 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
                 return true;
             } catch (NumberFormatException ignored) {}
         } else if ("app_up".equals(buttonId)) {
-            context.appOffset(Math.max(0, context.appOffset() - 1));
-            context.updateView();
+            int prev = context.appOffset();
+            int next = Math.max(0, prev - 1);
+            if (prev != next) {
+                context.appOffset(next);
+                context.updateView();
+            }
             return true;
         } else if ("app_down".equals(buttonId)) {
-            context.appOffset(Math.min(maxOffset(context), context.appOffset() + 1));
-            context.updateView();
+            int prev = context.appOffset();
+            int next = Math.min(maxOffset(context), prev + 1);
+            if (prev != next) {
+                context.appOffset(next);
+                context.updateView();
+            }
             return true;
         }
         return false;
@@ -95,37 +107,69 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
     @Override
     public void onControlChange(DemoContext context, UiControlChange change) {
         if ("demo_apps".equals(change.control().id())) {
-            context.appOffset((int) change.value());
-            context.updateView();
+            int prev = context.appOffset();
+            int next = (int) change.value();
+            if (prev != next) {
+                context.appOffset(next);
+                context.updateView();
+            }
         }
+    }
+
+    private void playScrollEntranceAnimation(DemoContext context) {
+        if (context.handle() == null || !context.handle().isValid()) return;
+        int totalNodes = context.handle().nodeCount();
+        List<UiAnimation> list = new ArrayList<>(totalNodes);
+        for (int i = 0; i < totalNodes; i++) {
+            if (i < 2) {
+                list.add(UiAnimation.builder().durationTicks(1).build());
+            } else {
+                int row = (i - 2) / 5;
+                int delay = Math.max(0, row * 2);
+                list.add(UiAnimation.slideIn(10, UiAnimation.Direction.TOP, 12.0f,
+                        UiEasing.CUBIC_OUT).delay(delay));
+            }
+        }
+        context.handle().animateNodes(list);
     }
 
     private void addAppRow(UiDocument.Builder builder, AppEntry app, float y,
                            String id, boolean selected) {
-        builder.add(new UiIconNode(new ItemStack(app.icon()), -70, y + 2,
-                12, 12, 16, 16));
+        Material background = selected ? Material.LIGHT_BLUE_STAINED_GLASS
+                : Material.LIGHT_GRAY_STAINED_GLASS;
+        builder.add(new BlockNode(background.createBlockData(), -74, y,
+                0.002f, 148, 16, 1));
+        builder.add(new UiIconNode(new ItemStack(app.icon()), -70, y + 2, 0.005f,
+                12, 12, 16, 16, org.bukkit.entity.ItemDisplay.ItemDisplayTransform.FIXED));
         builder.add(new AlignedTextNode(Component.text(selected ? "☑" : "☐",
                         selected ? NamedTextColor.AQUA : NamedTextColor.WHITE),
-                -56, y + 3.0f, 10, 10, UiTextAlignment.CENTER).fontSize(6.5f));
+                -56, y + 3.0f, 10, 10, 0.005f, UiTextAlignment.CENTER,
+                0.0f, 0.0f, 6.5f, 10.0f, 0.0f, false, false));
         builder.add(new AlignedTextNode(Component.text(app.name(),
                         selected ? NamedTextColor.AQUA : NamedTextColor.WHITE, TextDecoration.BOLD), -43, y + 2.0f,
-                74, 6, UiTextAlignment.LEFT).fontSize(5.0f).shadowed(true));
+                74, 6, 0.005f, UiTextAlignment.LEFT,
+                0.0f, 0.0f, 5.0f, 74.0f, 0.0f, true, false));
         builder.add(new AlignedTextNode(Component.text(app.description(),
-                        NamedTextColor.GRAY), -43, y + 8.5f, 112, 6,
-                UiTextAlignment.LEFT).fontSize(3.5f));
+                        NamedTextColor.GRAY), -43, y + 8.5f, 112, 6, 0.005f,
+                UiTextAlignment.LEFT, 0.0f, 0.0f, 3.5f, 112.0f, 0.0f, false, false));
         builder.button(new UiButton(id, -74, y, 148, 16,
                 Component.text("Open " + app.name(), NamedTextColor.YELLOW)));
     }
 
     private void addEmptyAppRow(UiDocument.Builder builder, float y, int row) {
-        builder.add(new UiIconNode(new ItemStack(Material.AIR), -70, y + 2,
-                12, 12, 16, 16));
+        builder.add(new BlockNode(Material.GRAY_STAINED_GLASS.createBlockData(),
+                -74, y, 0.002f, 148, 16, 1));
+        builder.add(new UiIconNode(new ItemStack(Material.AIR), -70, y + 2, 0.005f,
+                12, 12, 16, 16, org.bukkit.entity.ItemDisplay.ItemDisplayTransform.FIXED));
         builder.add(new AlignedTextNode(Component.empty(), -56, y + 3.0f,
-                10, 10, UiTextAlignment.CENTER).fontSize(6.5f));
+                10, 10, 0.005f, UiTextAlignment.CENTER,
+                0.0f, 0.0f, 6.5f, 10.0f, 0.0f, false, false));
         builder.add(new AlignedTextNode(Component.empty(), -43, y + 2.0f,
-                74, 6, UiTextAlignment.LEFT).fontSize(5.0f));
+                74, 6, 0.005f, UiTextAlignment.LEFT,
+                0.0f, 0.0f, 5.0f, 74.0f, 0.0f, false, false));
         builder.add(new AlignedTextNode(Component.empty(), -43, y + 8.5f,
-                112, 6, UiTextAlignment.LEFT).fontSize(3.5f));
+                112, 6, 0.005f, UiTextAlignment.LEFT,
+                0.0f, 0.0f, 3.5f, 112.0f, 0.0f, false, false));
         builder.button(new UiButton("empty_app_" + row, -74, y, 148, 16,
                 Component.empty()));
     }

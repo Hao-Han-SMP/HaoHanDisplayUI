@@ -39,6 +39,7 @@ import java.util.Objects;
  * @param transform Minecraft {@link ItemDisplay.ItemDisplayTransform} (FIXED, GUI, GROUND, etc.)
  * @param visible initial visibility
  * @param rotation interactive rotation configuration
+ * @param doubleSided whether to render symmetrically facing viewers from both sides
  */
 public record EntityModelNode(
         ItemStack item,
@@ -55,7 +56,8 @@ public record EntityModelNode(
         float roll,
         ItemDisplay.ItemDisplayTransform transform,
         boolean visible,
-        UiModelRotation rotation
+        UiModelRotation rotation,
+        boolean doubleSided
 ) implements UiNode {
 
     private static final List<String> MOB_NAMES;
@@ -107,16 +109,25 @@ public record EntityModelNode(
         item = item.clone();
     }
 
+    public EntityModelNode(ItemStack item, float x, float y, float depth,
+                           float scaleX, float scaleY, float scaleZ,
+                           float width, float height, float yaw, float pitch, float roll,
+                           ItemDisplay.ItemDisplayTransform transform,
+                           boolean visible, UiModelRotation rotation) {
+        this(item, x, y, depth, scaleX, scaleY, scaleZ, width, height,
+                yaw, pitch, roll, transform, visible, rotation, false);
+    }
+
     public EntityModelNode(ItemStack item, float x, float y, float scale) {
         this(item, x, y, 0.08f, scale, scale, scale, 32.0f, 32.0f,
                 0.0f, 0.0f, 0.0f, ItemDisplay.ItemDisplayTransform.FIXED,
-                true, UiModelRotation.defaults());
+                true, UiModelRotation.defaults(), false);
     }
 
     public EntityModelNode(ItemStack item, float x, float y, float width, float height, float scale) {
         this(item, x, y, 0.08f, scale, scale, scale, width, height,
                 0.0f, 0.0f, 0.0f, ItemDisplay.ItemDisplayTransform.FIXED,
-                true, UiModelRotation.defaults());
+                true, UiModelRotation.defaults(), false);
     }
 
     public static EntityModelNode forMob(String mobId, float x, float y, float scale) {
@@ -154,12 +165,12 @@ public record EntityModelNode(
 
     public EntityModelNode withPosition(float newX, float newY) {
         return new EntityModelNode(item, newX, newY, depth, scaleX, scaleY, scaleZ, width, height,
-                yaw, pitch, roll, transform, visible, rotation);
+                yaw, pitch, roll, transform, visible, rotation, doubleSided);
     }
 
     public EntityModelNode withRotation(float yawDegrees, float pitchDegrees, float rollDegrees) {
         return new EntityModelNode(item, x, y, depth, scaleX, scaleY, scaleZ, width, height,
-                yawDegrees, pitchDegrees, rollDegrees, transform, visible, rotation);
+                yawDegrees, pitchDegrees, rollDegrees, transform, visible, rotation, doubleSided);
     }
 
     public EntityModelNode withYaw(float yawDegrees) {
@@ -176,39 +187,48 @@ public record EntityModelNode(
 
     public EntityModelNode withScale(float uniformScale) {
         return new EntityModelNode(item, x, y, depth, uniformScale, uniformScale, uniformScale,
-                width, height, yaw, pitch, roll, transform, visible, rotation);
+                width, height, yaw, pitch, roll, transform, visible, rotation, doubleSided);
     }
 
     public EntityModelNode withScale(float sx, float sy, float sz) {
         return new EntityModelNode(item, x, y, depth, sx, sy, sz,
-                width, height, yaw, pitch, roll, transform, visible, rotation);
+                width, height, yaw, pitch, roll, transform, visible, rotation, doubleSided);
     }
 
     public EntityModelNode withSize(float newWidth, float newHeight) {
         return new EntityModelNode(item, x, y, depth, scaleX, scaleY, scaleZ,
-                newWidth, newHeight, yaw, pitch, roll, transform, visible, rotation);
+                newWidth, newHeight, yaw, pitch, roll, transform, visible, rotation, doubleSided);
     }
 
     public EntityModelNode withDepth(float newDepth) {
         return new EntityModelNode(item, x, y, newDepth, scaleX, scaleY, scaleZ,
-                width, height, yaw, pitch, roll, transform, visible, rotation);
+                width, height, yaw, pitch, roll, transform, visible, rotation, doubleSided);
     }
 
     public EntityModelNode withTransform(ItemDisplay.ItemDisplayTransform newTransform) {
         return new EntityModelNode(item, x, y, depth, scaleX, scaleY, scaleZ,
                 width, height, yaw, pitch, roll, Objects.requireNonNull(newTransform, "transform"),
-                visible, rotation);
+                visible, rotation, doubleSided);
     }
 
     public EntityModelNode withVisibility(boolean isVisible) {
         return new EntityModelNode(item, x, y, depth, scaleX, scaleY, scaleZ,
-                width, height, yaw, pitch, roll, transform, isVisible, rotation);
+                width, height, yaw, pitch, roll, transform, isVisible, rotation, doubleSided);
+    }
+
+    public EntityModelNode withDoubleSided(boolean doubleSided) {
+        return new EntityModelNode(item, x, y, depth, scaleX, scaleY, scaleZ,
+                width, height, yaw, pitch, roll, transform, visible, rotation, doubleSided);
+    }
+
+    public EntityModelNode doubleSided(boolean doubleSided) {
+        return withDoubleSided(doubleSided);
     }
 
     public EntityModelNode withInteractiveRotation(UiModelRotation newRotation) {
         return new EntityModelNode(item, x, y, depth, scaleX, scaleY, scaleZ,
                 width, height, yaw, pitch, roll, transform, visible,
-                Objects.requireNonNull(newRotation, "rotation"));
+                Objects.requireNonNull(newRotation, "rotation"), doubleSided);
     }
 
     public EntityModelNode autoSpin(float degreesPerTick) {

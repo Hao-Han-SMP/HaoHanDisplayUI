@@ -31,7 +31,8 @@ public record BlockNode(
         float depth,
         float width,
         float height,
-        float thickness
+        float thickness,
+        boolean doubleSided
 ) implements UiNode {
     public BlockNode {
         Objects.requireNonNull(block, "block");
@@ -41,6 +42,11 @@ public record BlockNode(
         block = block.clone();
     }
 
+    public BlockNode(BlockData block, float x, float y, float depth,
+                     float width, float height, float thickness) {
+        this(block, x, y, depth, width, height, thickness, false);
+    }
+
     @Override
     public BlockData block() {
         return block.clone();
@@ -48,6 +54,16 @@ public record BlockNode(
 
     public BlockNode(BlockData block, UiRect bounds, float depth, float thickness) {
         this(block, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(), depth,
-                bounds.width(), bounds.height(), thickness);
+                bounds.width(), bounds.height(), thickness, false);
+    }
+
+    public BlockNode(BlockData block, UiRect bounds, float depth, float thickness, boolean doubleSided) {
+        this(block, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(), depth,
+                bounds.width(), bounds.height(), thickness, doubleSided);
+    }
+
+    @Override
+    public BlockNode withDoubleSided(boolean doubleSided) {
+        return new BlockNode(block, x, y, depth, width, height, thickness, doubleSided);
     }
 }

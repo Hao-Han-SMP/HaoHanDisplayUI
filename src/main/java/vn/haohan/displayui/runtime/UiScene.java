@@ -18,6 +18,21 @@
  */
 package vn.haohan.displayui.runtime;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import org.bukkit.*;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Display;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Interaction;
+import org.bukkit.entity.ItemDisplay;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.util.Transformation;
+import org.bukkit.util.Vector;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import vn.haohan.displayui.HaoHanDisplayUIPlugin;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
@@ -25,65 +40,49 @@ import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.animation.UiEasing;
 import vn.haohan.displayui.api.interaction.UiButton;
-import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiClick;
 import vn.haohan.displayui.api.interaction.UiClickHandler;
 import vn.haohan.displayui.api.interaction.UiControl;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.interaction.UiControlChangeHandler;
-import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.interaction.UiScrollList;
-import vn.haohan.displayui.api.interaction.event.UiButtonClickEvent;
-import vn.haohan.displayui.api.interaction.event.UiControlChangeEvent;
+import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
+import vn.haohan.displayui.api.node.UiModelRotation;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.api.node.ItemNode;
+import vn.haohan.displayui.api.node.LineNode;
 import vn.haohan.displayui.api.node.MobEntityNode;
+import vn.haohan.displayui.api.node.ParallelogramNode;
+import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.TextNode;
-import vn.haohan.displayui.api.node.UiIconNode;
+import vn.haohan.displayui.api.node.TriangleNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
-import vn.haohan.displayui.api.node.UiModelRotation;
+import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
+import vn.haohan.displayui.api.shape.DisplayShapeMath;
+import vn.haohan.displayui.api.shape.TRSResult;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.view.UiAudience;
-import org.bukkit.Bukkit;
-import org.bukkit.Color;
-import org.bukkit.Location;
-import org.bukkit.NamespacedKey;
-import org.bukkit.World;
-import org.bukkit.entity.BlockDisplay;
-import org.bukkit.entity.Display;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.ItemDisplay;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.TextDisplay;
-import org.bukkit.entity.Interaction;
-import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.util.Transformation;
-import org.bukkit.util.Vector;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.format.NamedTextColor;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
+import vn.haohan.displayui.api.view.UiFollowMode;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
-final class UiScene implements UiHandle {
-    /** Client-side interpolation window used for every transform update. */
+public final class UiScene implements UiHandle {
+    /** Target length for multi-tick transition animations. */
     private static final int INTERPOLATION_TICKS = 4;
     /** Short window for per-tick animation targets; avoids chasing old frames. */
     private static final int ANIMATION_INTERPOLATION_TICKS = 1;
@@ -100,62 +99,77 @@ final class UiScene implements UiHandle {
     private final NamespacedKey sceneKey;
     private final NamespacedKey ownerDataKey;
     private final List<Display> entities = new ArrayList<>();
-    private final List<Display> nodeEntities = new ArrayList<>();
+    private final List<List<Display>> nodeEntities = new ArrayList<>();
     private final Set<UUID> forcedVisible = new HashSet<>();
     private final Set<UUID> forcedHidden = new HashSet<>();
     private final Set<UUID> visibleViewers = new HashSet<>();
     private final List<UiClickHandler> clickHandlers = new CopyOnWriteArrayList<>();
     private final List<UiControlChangeHandler> controlChangeHandlers = new CopyOnWriteArrayList<>();
     private final Map<String, UiControl> controlStates = new LinkedHashMap<>();
+    private final Map<String, Integer> renderedScrollOffsets = new LinkedHashMap<>();
 
     private Location origin;
     private UiDocument document;
     private UiAudience audience;
     private UiCameraTransform cameraTransform;
     private boolean removed;
+    private boolean mirrorSide;
     private Interaction interactionEntity;
     private UiAnimation animation;
     private int animationAge;
     private List<UiAnimation> nodeAnimations = List.of();
     private int[] nodeAnimationAges = new int[0];
 
+    // Follow-mode tracking
+    private UiFollowMode followMode = UiFollowMode.NONE;
+    private Player followTarget;
+    private double followDistance = 3.0;
+    private float followPitchOffset = 0.0f;
+
     UiScene(HaoHanDisplayUIPlugin plugin, UUID id, String ownerKey, Location origin,
             UiDocument document, UiOptions options, UiAudience audience,
             Consumer<UUID> onRemove) {
-        this.plugin = plugin;
-        this.id = id;
-        this.ownerKey = ownerKey;
-        this.origin = origin;
-        this.document = document;
-        this.options = options;
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.id = Objects.requireNonNull(id, "id");
+        this.ownerKey = Objects.requireNonNull(ownerKey, "ownerKey");
+        this.origin = Objects.requireNonNull(origin, "origin").clone();
+        this.document = Objects.requireNonNull(document, "document");
+        this.options = Objects.requireNonNull(options, "options");
         this.cameraTransform = options.cameraTransform();
-        this.audience = audience;
-        this.onRemove = onRemove;
-        document.controls().forEach(control -> controlStates.put(control.id(), control));
+        this.mirrorSide = options.mirrorSide();
+        this.audience = Objects.requireNonNull(audience, "audience");
+        this.onRemove = Objects.requireNonNull(onRemove, "onRemove");
         this.sceneKey = new NamespacedKey(plugin, "scene_id");
-        this.ownerDataKey = new NamespacedKey(plugin, "owner_key");
-    }
-
-    @Override public UUID id() { return id; }
-    @Override public String ownerKey() { return ownerKey; }
-
-    @Override
-    public boolean isValid() {
-        return !removed;
+        this.ownerDataKey = new NamespacedKey(plugin, "scene_owner");
+        updateControlStates(this.document);
+        respawn();
     }
 
     @Override
-    public int nodeCount() {
-        return document != null ? document.nodes().size() : 0;
+    public UUID id() { return id; }
+
+    @Override
+    public String ownerKey() { return ownerKey; }
+
+    public Location origin() { return origin.clone(); }
+
+    public UiDocument document() { return document; }
+
+    @Override
+    public int nodeCount() { return document.nodes().size(); }
+
+    @Override
+    public Optional<UiControl> control(String id) {
+        return Optional.ofNullable(controlStates.get(id));
     }
+
+    @Override
+    public boolean isValid() { return !removed; }
 
     @Override
     public void update(UiDocument document) {
         ensureValid();
         UiDocument next = Objects.requireNonNull(document, "document");
-        if (animation != null || !nodeAnimations.isEmpty()) stopAnimation();
-        nodeAnimations = List.of();
-        nodeAnimationAges = new int[0];
         UiDocument previous = this.document;
         Map<String, UiControl> oldControls = new LinkedHashMap<>(controlStates);
         updateControlStates(next);
@@ -165,16 +179,48 @@ final class UiScene implements UiHandle {
 
         for (UiControl newControl : controlStates.values()) {
             if (newControl instanceof UiScrollList newScrollList) {
-                UiControl oldControl = oldControls.get(newScrollList.id());
-                if (oldControl instanceof UiScrollList oldScrollList) {
-                    int direction = Integer.compare(newScrollList.offset(), oldScrollList.offset());
-                    if (direction != 0) {
-                        animateScrollViewport(newScrollList, direction);
-                        break;
+                Integer prevOffset = renderedScrollOffsets.get(newScrollList.id());
+                if (prevOffset != null && prevOffset != newScrollList.offset()) {
+                    int direction = Integer.compare(newScrollList.offset(), prevOffset);
+                    animateScrollViewport(newScrollList, direction);
+                } else {
+                    UiControl oldControl = oldControls.get(newScrollList.id());
+                    if (oldControl instanceof UiScrollList oldScrollList) {
+                        int direction = Integer.compare(newScrollList.offset(), oldScrollList.offset());
+                        if (direction != 0) {
+                            animateScrollViewport(newScrollList, direction);
+                        }
                     }
                 }
+                renderedScrollOffsets.put(newScrollList.id(), newScrollList.offset());
             }
         }
+    }
+
+    private boolean isNodeInViewport(UiNode node, UiScrollList list) {
+        float listTop = list.y() - 1.0f;
+        float listBottom = list.y() + list.height() + 1.0f;
+        float listLeft = list.x() - 1.0f;
+        float listRight = list.x() + list.width() + 1.0f;
+
+        if (node instanceof AlignedTextNode text) {
+            return text.boxY() >= listTop && text.boxY() + text.boxHeight() <= listBottom
+                    && text.boxX() >= listLeft && text.boxX() + text.boxWidth() <= listRight;
+        } else if (node instanceof UiBackgroundNode) {
+            return false;
+        } else if (node instanceof ItemNode item) {
+            return item.y() >= listTop && item.y() <= listBottom
+                    && item.x() >= listLeft && item.x() <= listRight;
+        } else if (node instanceof UiIconNode icon) {
+            return icon.boxY() >= listTop && icon.bottom() <= listBottom
+                    && icon.boxX() >= listLeft && icon.right() <= listRight;
+        } else if (node instanceof BlockNode block) {
+            return block.y() >= listTop && block.y() + block.height() <= listBottom
+                    && block.x() >= listLeft && block.x() + block.width() <= listRight;
+        } else if (node instanceof LineNode line) {
+            return line.y1() >= listTop && line.y2() <= listBottom;
+        }
+        return false;
     }
 
     @Override
@@ -183,7 +229,18 @@ final class UiScene implements UiHandle {
         Objects.requireNonNull(origin, "origin");
         if (origin.getWorld() == null) throw new IllegalArgumentException("origin must have a world");
         this.origin = origin.clone();
-        respawn();
+        for (Display display : entities) {
+            if (display.isValid()) {
+                display.teleport(this.origin);
+                display.setRotation(origin.getYaw(), origin.getPitch());
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(0);
+            }
+        }
+        updateInteractionHitbox();
+        // Follow movement changes the entity anchor only. While an animation is
+        // active, its frame is the sole owner of the display transformation.
+        if (!isAnimating()) resetTransforms(0);
     }
 
     @Override
@@ -197,18 +254,86 @@ final class UiScene implements UiHandle {
     public void cameraTransform(UiCameraTransform transform) {
         ensureValid();
         this.cameraTransform = Objects.requireNonNull(transform, "transform");
+        applyCameraTransform();
         respawn();
+    }
+
+    @Override
+    public void mirrorSide(boolean enabled) {
+        ensureValid();
+        if (mirrorSide == enabled) return;
+        mirrorSide = enabled;
+        resetTransforms();
+        syncViewers();
+    }
+
+    public UiCameraTransform cameraTransform() {
+        return cameraTransform;
+    }
+
+    @Override
+    public void follow(Player target, UiFollowMode mode) {
+        follow(target, mode, 3.0, 0.0f);
+    }
+
+    @Override
+    public void follow(Player target, UiFollowMode mode, double distance) {
+        follow(target, mode, distance, 0.0f);
+    }
+
+    @Override
+    public void follow(Player target, UiFollowMode mode, double distance, float pitchOffset) {
+        ensureValid();
+        this.followTarget = Objects.requireNonNull(target, "target");
+        this.followMode = Objects.requireNonNull(mode, "mode");
+        if (distance <= 0.0) throw new IllegalArgumentException("distance must be positive");
+        this.followDistance = distance;
+        this.followPitchOffset = pitchOffset;
+    }
+
+    @Override
+    public void stopFollow() {
+        this.followMode = UiFollowMode.NONE;
+        this.followTarget = null;
+    }
+
+    @Override
+    public UiFollowMode followMode() {
+        return followMode;
+    }
+
+    @Override
+    public Player followTarget() {
+        return followTarget;
+    }
+
+    @Override
+    public void show(Player player) {
+        ensureValid();
+        UUID playerId = Objects.requireNonNull(player, "player").getUniqueId();
+        forcedHidden.remove(playerId);
+        forcedVisible.add(playerId);
+        syncViewers();
+    }
+
+    @Override
+    public void hide(Player player) {
+        ensureValid();
+        UUID playerId = Objects.requireNonNull(player, "player").getUniqueId();
+        forcedVisible.remove(playerId);
+        forcedHidden.add(playerId);
+        syncViewers();
     }
 
     @Override
     public void animate(UiAnimation animation) {
         ensureValid();
-        nodeAnimations = List.of();
-        nodeAnimationAges = new int[0];
         this.animation = Objects.requireNonNull(animation, "animation");
-        this.animationAge = -animation.delayTicks();
+        this.nodeAnimations = List.of();
+        this.nodeAnimationAges = new int[0];
+        this.animationAge = 0;
         configureAnimationInterpolation();
-        applyAnimation(animationProgress());
+        applyAnimation(0.0);
     }
 
     @Override
@@ -230,12 +355,9 @@ final class UiScene implements UiHandle {
         }
         nodeAnimations = list;
         nodeAnimationAges = new int[list.size()];
-        for (int i = 0; i < nodeAnimationAges.length; i++) {
-            nodeAnimationAges[i] = -list.get(i).delayTicks();
-        }
         animation = null;
         configureAnimationInterpolation();
-        applyNodeAnimations();
+        applyNodeAnimationFrames();
     }
 
     @Override
@@ -260,20 +382,9 @@ final class UiScene implements UiHandle {
     }
 
     @Override
-    public Optional<UiControl> control(String id) {
-        ensureValid();
-        return Optional.ofNullable(controlStates.get(Objects.requireNonNull(id, "id")));
-    }
-
-    @Override
     public void onClick(UiClickHandler handler) {
         ensureValid();
         clickHandlers.add(Objects.requireNonNull(handler, "handler"));
-    }
-
-    @Override
-    public void clearClickHandlers() {
-        clickHandlers.clear();
     }
 
     @Override
@@ -283,24 +394,13 @@ final class UiScene implements UiHandle {
     }
 
     @Override
+    public void clearClickHandlers() {
+        clickHandlers.clear();
+    }
+
+    @Override
     public void clearControlChangeHandlers() {
         controlChangeHandlers.clear();
-    }
-
-    @Override
-    public void show(Player player) {
-        ensureValid();
-        forcedHidden.remove(player.getUniqueId());
-        forcedVisible.add(player.getUniqueId());
-        syncPlayer(player);
-    }
-
-    @Override
-    public void hide(Player player) {
-        ensureValid();
-        forcedVisible.remove(player.getUniqueId());
-        forcedHidden.add(player.getUniqueId());
-        hideEntities(player);
     }
 
     @Override
@@ -308,21 +408,156 @@ final class UiScene implements UiHandle {
         if (removed) return;
         removed = true;
         clearEntities();
+        clickHandlers.clear();
+        controlChangeHandlers.clear();
+        controlStates.clear();
+        renderedScrollOffsets.clear();
+        stopFollow();
         onRemove.accept(id);
     }
 
     void tick() {
         if (removed) return;
-        boolean missingInteraction = (!document.buttons().isEmpty() || !controlStates.isEmpty())
-                && (interactionEntity == null || !interactionEntity.isValid());
-        if (entities.isEmpty() || entities.stream().anyMatch(entity -> !entity.isValid())
-                || missingInteraction) {
-            clearEntities();
-            spawnIfLoaded();
-        }
+        tickFollow();
+        tickAudience();
         tickAnimation();
-        tickAutoSpin();
-        syncViewers();
+    }
+
+    private void tickFollow() {
+        if (followMode == UiFollowMode.NONE || followTarget == null || !followTarget.isOnline()) return;
+        if (followTarget.getWorld() != origin.getWorld()) return;
+
+        Location eye = followTarget.getEyeLocation();
+        Vector dir = eye.getDirection().normalize();
+        Location targetLocation = eye.clone().add(dir.clone().multiply(followDistance));
+        targetLocation.setPitch(eye.getPitch() + followPitchOffset);
+        targetLocation.setYaw(eye.getYaw() + 180.0f);
+
+        switch (followMode) {
+            case HARD -> move(targetLocation);
+            case SMOOTH -> {
+                double lerpPos = 0.18;
+                double lerpRot = 0.20;
+                Location current = origin.clone();
+                current.setX(current.getX() + (targetLocation.getX() - current.getX()) * lerpPos);
+                current.setY(current.getY() + (targetLocation.getY() - current.getY()) * lerpPos);
+                current.setZ(current.getZ() + (targetLocation.getZ() - current.getZ()) * lerpPos);
+                float yawDiff = targetLocation.getYaw() - current.getYaw();
+                while (yawDiff < -180.0f) yawDiff += 360.0f;
+                while (yawDiff > 180.0f) yawDiff -= 360.0f;
+                current.setYaw(current.getYaw() + yawDiff * (float) lerpRot);
+                float pitchDiff = targetLocation.getPitch() - current.getPitch();
+                current.setPitch(current.getPitch() + pitchDiff * (float) lerpRot);
+                move(current);
+            }
+            case NONE -> {}
+        }
+    }
+
+    private void tickAudience() {
+        for (Player online : plugin.getServer().getOnlinePlayers()) {
+            boolean shouldSee = shouldShow(online);
+            boolean isSeeing = visibleViewers.contains(online.getUniqueId());
+            if (shouldSee && !isSeeing) showEntities(online);
+            else if (!shouldSee && isSeeing) hideEntities(online);
+            else if (shouldSee && isSeeing) {
+                syncItemBackfaces(online);
+                syncSideVisibility(online);
+            }
+        }
+        visibleViewers.removeIf(playerId -> plugin.getServer().getPlayer(playerId) == null);
+    }
+
+    private void tickAnimation() {
+        if (animation != null) {
+            animationAge++;
+            int effectiveAge = animationAge - animation.delayTicks();
+            if (effectiveAge < 0) return;
+            if (effectiveAge >= animation.durationTicks()) {
+                applyAnimationFrame(1.0f);
+                animation = null;
+                animationAge = 0;
+            } else {
+                float progress = (float) effectiveAge / (float) animation.durationTicks();
+                applyAnimationFrame((float) animation.easing().apply(progress));
+            }
+        } else if (!nodeAnimations.isEmpty()) {
+            boolean anyRunning = false;
+            for (int i = 0; i < nodeAnimations.size(); i++) {
+                UiAnimation a = nodeAnimations.get(i);
+                if (a.durationTicks() <= 0) continue;
+                nodeAnimationAges[i]++;
+                int effectiveAge = nodeAnimationAges[i] - a.delayTicks();
+                if (effectiveAge < a.durationTicks()) anyRunning = true;
+            }
+            applyNodeAnimationFrames();
+            if (!anyRunning) {
+                nodeAnimations = List.of();
+                nodeAnimationAges = new int[0];
+            }
+        }
+    }
+
+    private void updateInteractionHitbox() {
+        if (interactionEntity == null || !interactionEntity.isValid()) return;
+        if (document.buttons().isEmpty() && controlStates.isEmpty()) return;
+
+        List<UiControl> controls = List.copyOf(controlStates.values());
+        float minX = document.buttons().stream().map(button -> button.x() - button.hitSlop())
+                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
+        minX = Math.min(minX, controls.stream().map(control -> control.x() - control.hitSlop())
+                .min(Float::compare).orElse(0.0f));
+        float maxX = document.buttons().stream()
+                .map(button -> button.x() + button.width() + button.hitSlop())
+                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
+        maxX = Math.max(maxX, controls.stream()
+                .map(control -> control.x() + control.width() + control.hitSlop())
+                .max(Float::compare).orElse(0.0f));
+        float minY = document.buttons().stream()
+                .map(button -> button.y() - button.hitSlop())
+                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
+        minY = Math.min(minY, controls.stream()
+                .map(control -> control.y() - control.hitSlop())
+                .min(Float::compare).orElse(0.0f));
+        float maxY = document.buttons().stream()
+                .map(button -> button.y() + button.height() + button.hitSlop())
+                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
+        maxY = Math.max(maxY, controls.stream()
+                .map(control -> control.y() + control.height() + control.hitSlop())
+                .max(Float::compare).orElse(0.0f));
+        float pixels = options.pixelsPerBlock();
+
+        Vector normal = origin.getDirection().setY(0.0);
+        if (normal.lengthSquared() < 0.0001) normal.setZ(1.0);
+        normal.normalize();
+        Vector right = new Vector(normal.getZ(), 0.0, -normal.getX());
+        double centerX = (minX + maxX) * 0.5 / pixels;
+        Location hitboxLocation = origin.clone()
+                .add(right.multiply(centerX))
+                .add(0.0, -maxY / pixels, 0.0);
+        final float hitboxWidth = maxX - minX;
+        final float hitboxHeight = maxY - minY;
+
+        if (interactionEntity != null && interactionEntity.isValid()) {
+            interactionEntity.teleport(hitboxLocation);
+            interactionEntity.setInteractionWidth(Math.max(0.2f, hitboxWidth / pixels));
+            interactionEntity.setInteractionHeight(Math.max(0.2f, hitboxHeight / pixels));
+            return;
+        }
+
+        interactionEntity = origin.getWorld().spawn(hitboxLocation, Interaction.class, interaction -> {
+            interaction.setInteractionWidth(Math.max(0.2f, hitboxWidth / pixels));
+            interaction.setInteractionHeight(Math.max(0.2f, hitboxHeight / pixels));
+            interaction.setResponsive(true);
+            interaction.setPersistent(false);
+            interaction.setInvulnerable(true);
+            interaction.addScoreboardTag(options.scoreboardTag());
+            interaction.addScoreboardTag("hhdui_interaction");
+            interaction.getPersistentDataContainer().set(
+                    sceneKey, PersistentDataType.STRING, id.toString());
+            interaction.getPersistentDataContainer().set(
+                    ownerDataKey, PersistentDataType.STRING, ownerKey);
+        });
     }
 
     UiHit hit(Player player) {
@@ -337,96 +572,149 @@ final class UiScene implements UiHandle {
                 options.pixelsPerBlock(), options.maxDistance());
         if (projection == null) return null;
 
+        boolean mirror = isTwoSided() && !isFrontFacing(player);
+        float localX = mirror ? -projection.localX() : projection.localX();
+        float localY = projection.localY();
+
         UiHit buttonHit = document.buttons().stream()
-                .filter(button -> button.contains(projection.localX(), projection.localY()))
+                .filter(button -> button.contains(localX, localY))
                 .findFirst()
                 .map(button -> new UiHit(this, button, null, player,
-                        projection.localX(), projection.localY(), projection.distance()))
+                                         localX, localY, projection.distance()))
                 .orElse(null);
 
         if (buttonHit != null) return buttonHit;
-        return controlStates.values().stream()
-                .filter(control -> control.contains(projection.localX(), projection.localY()))
-                .findFirst()
-                .map(control -> new UiHit(this, null, control, player,
-                        projection.localX(), projection.localY(), projection.distance()))
-                .orElse(null);
-    }
 
-    /** Finds a scroll viewport even when a button row is layered above it. */
-    UiHit scrollHit(Player player) {
-        if (removed || !shouldShow(player)) return null;
-        PlaneBasis basis = planeBasis(player);
-        UiRaycaster.Projection projection = UiRaycaster.project(
-                player.getEyeLocation().toVector(), player.getEyeLocation().getDirection(),
-                origin.toVector(), basis.normal(), basis.right(), basis.up(),
-                options.pixelsPerBlock(), options.maxDistance());
-        if (projection == null) return null;
         return controlStates.values().stream()
-                .filter(control -> control instanceof UiScrollList)
-                .filter(control -> control.contains(projection.localX(), projection.localY()))
+                .filter(control -> control.contains(localX, localY))
                 .findFirst()
                 .map(control -> new UiHit(this, null, control, player,
-                        projection.localX(), projection.localY(), projection.distance()))
+                                          localX, localY, projection.distance()))
                 .orElse(null);
     }
 
     UiRaycaster.Projection projectCursor(Player player) {
         if (removed || !shouldShow(player)) return null;
         PlaneBasis basis = planeBasis(player);
-        return UiRaycaster.project(
+        UiRaycaster.Projection raw = UiRaycaster.project(
                 player.getEyeLocation().toVector(),
                 player.getEyeLocation().getDirection(),
                 origin.toVector(), basis.normal(), basis.right(), basis.up(),
                 options.pixelsPerBlock(), options.maxDistance());
+        if (raw == null) return null;
+        boolean mirror = isTwoSided() && !isFrontFacing(player);
+        return mirror
+               ? new UiRaycaster.Projection(-raw.localX(), raw.localY(), raw.distance())
+               : raw;
     }
 
     int findModelNodeAt(float localX, float localY) {
+        if (document == null) return -1;
+        for (int i = 0; i < document.nodes().size(); i++) {
+            UiNode node = document.nodes().get(i);
+            if (node instanceof EntityModelNode model && model.contains(localX, localY)) {
+                return i;
+            } else if (node instanceof MobEntityNode mob && mob.contains(localX, localY)) {
+                return i;
+            }
+        }
         return -1;
     }
 
     boolean dragModel(int nodeIndex, float deltaX, float deltaY) {
-        return false;
+        if (nodeIndex < 0 || nodeIndex >= nodeEntities.size() || document == null || nodeIndex >= document.nodes().size()) {
+            return false;
+        }
+        UiNode node = document.nodes().get(nodeIndex);
+        EntityModelNode model = null;
+        UiModelRotation rotation = null;
+        if (node instanceof EntityModelNode em) {
+            model = em;
+            rotation = em.rotation();
+        } else if (node instanceof MobEntityNode mob) {
+            rotation = mob.rotation();
+            model = EntityModelNode.forMob(
+                            mob.entityType().name().toLowerCase(),
+                            mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
+                    .withYaw(mob.yaw())
+                    .withPitch(mob.pitch())
+                    .withDoubleSided(mob.doubleSided());
+        }
+        if (model == null) return false;
+
+        float sensitivity = rotation != null ? rotation.sensitivity() : 1.0f;
+        float newYaw = model.yaw() + deltaX * sensitivity;
+        float newPitch = model.pitch() - deltaY * sensitivity;
+        if (rotation != null) {
+            newYaw = rotation.clampYaw(newYaw);
+            newPitch = rotation.clampPitch(newPitch);
+        }
+
+        EntityModelNode updated = model.withRotation(newYaw, newPitch, model.roll());
+        List<Transformation> transforms = computeModelTransforms(updated, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = nodeEntities.get(nodeIndex);
+        if (list != null) {
+            for (int j = 0; j < list.size() && j < transforms.size(); j++) {
+                Display display = list.get(j);
+                if (display != null && display.isValid()) {
+                    display.setInterpolationDelay(0);
+                    display.setInterpolationDuration(1);
+                    display.setTransformation(transforms.get(j));
+                }
+            }
+        }
+        return true;
     }
 
     void releaseModelDrag(int nodeIndex) {
-    }
-
-    void activate(UiHit hit) {
-        if (hit.control() != null) {
-            activateControl(hit);
+        if (nodeIndex < 0 || nodeIndex >= nodeEntities.size() || document == null || nodeIndex >= document.nodes().size()) {
             return;
         }
-        UiButtonClickEvent event = new UiButtonClickEvent(
-                this, hit.button(), hit.player(), hit.localX(), hit.localY(), hit.distance());
-        Bukkit.getPluginManager().callEvent(event);
-        if (event.isCancelled()) return;
-
-        playClickSound(hit.player());
-        executeAction(hit.button(), hit.player());
-
-        UiClick click = new UiClick(this, hit.button(), hit.player(),
-                hit.localX(), hit.localY(), hit.distance());
-        for (UiClickHandler handler : clickHandlers) {
-            try {
-                handler.onClick(click);
-            } catch (RuntimeException exception) {
-                plugin.getLogger().log(java.util.logging.Level.SEVERE,
-                        "UI click handler failed for " + ownerKey + "/" + hit.button().id(), exception);
+        UiNode node = document.nodes().get(nodeIndex);
+        List<Transformation> transforms = getNodeTransformations(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = nodeEntities.get(nodeIndex);
+        if (list != null) {
+            for (int j = 0; j < list.size() && j < transforms.size(); j++) {
+                Display display = list.get(j);
+                if (display != null && display.isValid()) {
+                    display.setInterpolationDelay(0);
+                    display.setInterpolationDuration(INTERPOLATION_TICKS);
+                    display.setTransformation(transforms.get(j));
+                }
             }
         }
     }
 
+    boolean activate(UiHit hit) {
+        return triggerClick(hit);
+    }
+
+    UiHit scrollHit(Player player) {
+        if (removed || controlStates.isEmpty() || !shouldShow(player)) return null;
+        PlaneBasis basis = planeBasis(player);
+        UiRaycaster.Projection projection = UiRaycaster.project(
+                player.getEyeLocation().toVector(),
+                player.getEyeLocation().getDirection(),
+                origin.toVector(), basis.normal(), basis.right(), basis.up(),
+                options.pixelsPerBlock(), options.maxDistance());
+        if (projection == null) return null;
+
+        boolean mirror = isTwoSided() && !isFrontFacing(player);
+        float localX = mirror ? -projection.localX() : projection.localX();
+        float localY = projection.localY();
+
+        return controlStates.values().stream()
+                .filter(c -> c instanceof UiScrollList && c.contains(localX, localY))
+                .findFirst()
+                .map(control -> new UiHit(this, null, control, player,
+                                          localX, localY, projection.distance()))
+                .orElse(null);
+    }
+
     boolean scroll(UiHit hit, int nextOffset) {
-        if (!(hit.control() instanceof UiScrollList list)) return false;
-        int previousOffset = list.offset();
-        boolean changed = changeControl(hit, nextOffset, true);
-        if (changed && !isAnimating()) {
-            UiScrollList updated = (UiScrollList) controlStates.get(list.id());
-            int direction = Integer.compare(updated.offset(), previousOffset);
-            animateScrollViewport(updated, direction);
-        }
-        return changed;
+        if (hit == null || !(hit.control() instanceof UiScrollList scrollList)) return false;
+        int clamped = Math.clamp(nextOffset, 0, scrollList.maxOffset());
+        return changeControl(hit, clamped, true);
     }
 
     /**
@@ -443,11 +731,11 @@ final class UiScene implements UiHandle {
         int durationTicks = 11;
         UiEasing easing = UiEasing.CUBIC_OUT;
         UiAnimation.Direction movement = direction > 0
-                ? UiAnimation.Direction.BOTTOM : UiAnimation.Direction.TOP;
+                                         ? UiAnimation.Direction.BOTTOM : UiAnimation.Direction.TOP;
         List<UiAnimation> animations = new ArrayList<>(document.nodes().size());
         for (UiNode node : document.nodes()) {
             if (nodeInScrollViewport(node, list)) {
-                int rowIndex = Math.max(0, Math.min(3, (int) Math.floor((node.y() - list.y()) / rowHeight)));
+                int rowIndex = Math.clamp((int)Math.floor((node.y() - list.y()) / rowHeight), 0, 3);
                 boolean isEntering = direction > 0 ? (rowIndex == 3) : (rowIndex == 0);
                 int delay = direction > 0 ? (rowIndex * 1) : ((3 - rowIndex) * 1);
 
@@ -465,9 +753,9 @@ final class UiScene implements UiHandle {
                 animations.add(animation);
             } else {
                 animations.add(UiAnimation.builder()
-                        .durationTicks(durationTicks)
-                        .easing(easing)
-                        .build());
+                                       .durationTicks(durationTicks)
+                                       .easing(easing)
+                                       .build());
             }
         }
         animateNodes(animations);
@@ -492,175 +780,168 @@ final class UiScene implements UiHandle {
                 && ny < list.y() + list.height() - 0.5f;
     }
 
-    /** Updates a slider while its owning player keeps the drag gesture active. */
     boolean dragSlider(Player player, String controlId) {
-        if (removed) return false;
-        UiControl state = controlStates.get(controlId);
-        if (!(state instanceof UiSlider slider) || !shouldShow(player)) return false;
+        return updateSlider(player, controlId);
+    }
 
-        PlaneBasis basis = planeBasis(player);
-        UiRaycaster.Projection projection = UiRaycaster.project(
-                player.getEyeLocation().toVector(),
-                player.getEyeLocation().getDirection(),
-                origin.toVector(), basis.normal(), basis.right(), basis.up(),
-                options.pixelsPerBlock(), options.maxDistance());
+    boolean updateHover(Player player) {
+        if (removed || !shouldShow(player) || isAnimating() || nodeEntities.isEmpty()) return false;
+        UiRaycaster.Projection projection = projectCursor(player);
+
+        boolean anyUpdated = false;
+        for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
+            UiNode node = document.nodes().get(i);
+            UiModelRotation rotation = null;
+            EntityModelNode model = null;
+            if (node instanceof EntityModelNode em) {
+                model = em;
+                rotation = em.rotation();
+            } else if (node instanceof MobEntityNode mob) {
+                rotation = mob.rotation();
+                model = EntityModelNode.forMob(
+                                mob.entityType().name().toLowerCase(),
+                                mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
+                        .withYaw(mob.yaw())
+                        .withPitch(mob.pitch())
+                        .withDoubleSided(mob.doubleSided());
+            }
+
+            if (model != null && rotation != null && rotation.mode() == UiModelRotation.Mode.CURSOR_TRACKING) {
+                EntityModelNode targetModel;
+                if (projection != null && model.contains(projection.localX(), projection.localY())) {
+                    float centerX = model.x() + model.width() * 0.5f;
+                    float centerY = model.y() + model.height() * 0.5f;
+                    float deltaX = (projection.localX() - centerX) / (model.width() * 0.5f);
+                    float deltaY = (projection.localY() - centerY) / (model.height() * 0.5f);
+
+                    float maxAngle = 35.0f;
+                    float targetYaw = rotation.clampYaw(model.yaw() + deltaX * maxAngle);
+                    float targetPitch = rotation.clampPitch(model.pitch() - deltaY * maxAngle);
+                    targetModel = model.withRotation(targetYaw, targetPitch, model.roll());
+                } else {
+                    targetModel = model;
+                }
+
+                List<Transformation> transforms = computeModelTransforms(targetModel, 1.0f, 0.0f, 0.0f, 0.0f);
+                List<Display> list = nodeEntities.get(i);
+                if (list != null) {
+                    for (int j = 0; j < list.size() && j < transforms.size(); j++) {
+                        Display display = list.get(j);
+                        if (display != null && display.isValid()) {
+                            display.setInterpolationDelay(0);
+                            display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+                            display.setTransformation(transforms.get(j));
+                        }
+                    }
+                }
+                anyUpdated = true;
+            }
+        }
+        return anyUpdated;
+    }
+
+    private boolean updateSlider(Player player, String controlId) {
+        UiControl control = controlStates.get(controlId);
+        if (!(control instanceof UiSlider slider)) return false;
+
+        UiRaycaster.Projection projection = projectCursor(player);
         if (projection == null) return false;
 
-        UiHit dragHit = new UiHit(this, null, slider, player,
-                projection.localX(), projection.localY(), projection.distance());
-        return changeControl(dragHit, slider.valueAt(projection.localX()), false);
+        double nextValue = slider.valueAt(projection.localX());
+        UiHit hit = new UiHit(this, null, slider, player, projection.localX(), projection.localY(), projection.distance());
+        return changeControl(hit, nextValue, false);
     }
 
-    private void activateControl(UiHit hit) {
-        UiControl control = hit.control();
-        if (control instanceof UiScrollList) return;
-        double nextValue = control instanceof UiSlider slider
-                ? slider.valueAt(hit.localX())
-                : ((UiCheckbox) control).checked() ? 0.0 : 1.0;
-        changeControl(hit, nextValue, true);
+    private boolean triggerClick(UiHit hit) {
+        if (hit == null) return false;
+        boolean accepted = false;
+        if (hit.button() != null) {
+            UiClick click = new UiClick(this, hit.button(), hit.player(), hit.localX(), hit.localY(), hit.distance());
+            for (UiClickHandler handler : clickHandlers) {
+                handler.onClick(click);
+                accepted = true;
+            }
+            if (executeButtonAction(hit.button(), hit.player())) accepted = true;
+        } else if (hit.control() != null) {
+            accepted = switch (hit.control()) {
+                case UiButton ignored -> false;
+                case UiCheckbox checkbox -> changeControl(hit, checkbox.checked() ? 0.0 : 1.0, true);
+                case UiSlider slider -> changeControl(hit, slider.valueAt(hit.localX()), true);
+                case UiScrollList scrollList -> {
+                    int nextOffset = Math.min(scrollList.maxOffset(), scrollList.offset() + scrollList.step());
+                    yield changeControl(hit, nextOffset, true);
+                }
+            };
+        }
+        if (accepted && options.clickSound() != null) {
+            hit.player().playSound(origin, options.clickSound(),
+                                   options.clickSoundVolume(), options.clickSoundPitch());
+        }
+        return accepted;
     }
 
-    private boolean changeControl(UiHit hit, double nextValue, boolean playSound) {
+    private boolean executeButtonAction(UiButton button, Player player) {
+        var action = button.action();
+        switch (action.type()) {
+            case NONE -> { return false; }
+            case OPEN_URL -> player.sendMessage(action.label()
+                    .clickEvent(ClickEvent.openUrl(action.value())));
+            case RUN_PLAYER_COMMAND -> player.performCommand(action.value());
+            case RUN_CONSOLE_COMMAND -> plugin.getServer().dispatchCommand(
+                    plugin.getServer().getConsoleSender(), action.value());
+            case SUGGEST_COMMAND -> player.sendMessage(action.label()
+                    .clickEvent(ClickEvent.suggestCommand(action.value())));
+        }
+        return true;
+    }
+
+    private boolean changeControl(UiHit hit, double nextValue, boolean updateScene) {
         UiControl control = hit.control();
-        double oldValue = controlValue(control);
-        if (Double.compare(oldValue, nextValue) == 0) return false;
+        if (control == null) return false;
 
-        UiControlChangeEvent event = new UiControlChangeEvent(this, control, hit.player(),
-                oldValue, nextValue, hit.localX(), hit.localY(), hit.distance());
-        Bukkit.getPluginManager().callEvent(event);
-        if (event.isCancelled()) return false;
+        double oldValue = switch (control) {
+            case UiButton ignored -> 0.0;
+            case UiCheckbox checkbox -> checkbox.checked() ? 1.0 : 0.0;
+            case UiSlider slider -> slider.value();
+            case UiScrollList scrollList -> scrollList.offset();
+        };
 
-        UiControl nextControl = control instanceof UiSlider slider
-                ? slider.withValue(nextValue)
-                : control instanceof UiCheckbox checkbox
-                ? checkbox.checked(nextValue >= 0.5)
-                : ((UiScrollList) control).withOffset((int) Math.round(nextValue));
+        UiControl nextControl = switch (control) {
+            case UiButton button -> button;
+            case UiCheckbox checkbox -> checkbox.checked(nextValue > 0.5);
+            case UiSlider slider -> slider.withValue(nextValue);
+            case UiScrollList scrollList -> scrollList.withOffset((int) Math.round(nextValue));
+        };
+
+        if (control.equals(nextControl)) return false;
+
         controlStates.put(control.id(), nextControl);
-        if (playSound) playClickSound(hit.player());
-        UiControlChange change = new UiControlChange(this, nextControl, hit.player(),
-                oldValue, controlValue(nextControl), hit.localX(), hit.localY(), hit.distance());
+        UiControlChange change = new UiControlChange(this, nextControl, hit.player(), oldValue, nextValue, hit.localX(), hit.localY(), hit.distance());
         for (UiControlChangeHandler handler : controlChangeHandlers) {
-            try {
-                handler.onChange(change);
-            } catch (RuntimeException exception) {
-                plugin.getLogger().log(java.util.logging.Level.SEVERE,
-                        "UI control handler failed for " + ownerKey + "/" + control.id(), exception);
-            }
+            handler.onChange(change);
+        }
+        if (updateScene) {
+            update(this.document);
         }
         return true;
-    }
-
-    private double controlValue(UiControl control) {
-        if (control instanceof UiSlider slider) return slider.value();
-        if (control instanceof UiCheckbox checkbox) return checkbox.checked() ? 1.0 : 0.0;
-        if (control instanceof UiScrollList list) return list.offset();
-        throw new IllegalArgumentException("Unsupported UI control: " + control.getClass().getName());
-    }
-
-    private void playClickSound(Player player) {
-        if (options.clickSound() == null || options.clickSoundVolume() <= 0.0f) return;
-        player.playSound(player.getLocation(), options.clickSound(),
-                options.clickSoundVolume(), options.clickSoundPitch());
-    }
-
-    private void respawn() {
-        clearEntities();
-        spawnIfLoaded();
-        syncViewers();
-    }
-
-    private void spawnIfLoaded() {
-        World world = origin.getWorld();
-        if (world == null || !world.isChunkLoaded(origin.getBlockX() >> 4, origin.getBlockZ() >> 4)) return;
-        nodeEntities.clear();
-        for (int i = 0; i < document.nodes().size(); i++) nodeEntities.add(null);
-        java.util.stream.IntStream.range(0, document.nodes().size())
-                .boxed()
-                .sorted(java.util.Comparator.comparingDouble(
-                        index -> document.nodes().get(index).depth()))
-                .forEach(index -> {
-                    Display display = spawnNode(document.nodes().get(index));
-                    entities.add(display);
-                    nodeEntities.set(index, display);
-                });
-        spawnInteraction();
-        applyAnimation(animationProgress());
-        applyNodeAnimations();
-    }
-
-    /** Updates only nodes whose type/content changed; stable entities survive page updates. */
-    private boolean incrementalUpdate(UiDocument previous, UiDocument next) {
-        World world = origin.getWorld();
-        if (world == null || !world.isChunkLoaded(origin.getBlockX() >> 4, origin.getBlockZ() >> 4)) {
-            return false;
-        }
-        int common = Math.min(previous.nodes().size(), next.nodes().size());
-        boolean entitySetChanged = previous.nodes().size() != next.nodes().size();
-        for (int i = 0; i < common; i++) {
-            UiNode oldNode = previous.nodes().get(i);
-            UiNode newNode = next.nodes().get(i);
-            Display current = i < nodeEntities.size() ? nodeEntities.get(i) : null;
-            if (current == null || !current.isValid()) return false;
-            if (oldNode.getClass() != newNode.getClass()) {
-                replaceNode(i, newNode);
-                entitySetChanged = true;
-            } else if (!oldNode.equals(newNode)) {
-                updateNode(current, newNode);
-            }
-        }
-        for (int i = common; i < next.nodes().size(); i++) {
-            Display display = spawnNode(next.nodes().get(i));
-            nodeEntities.add(display);
-            entities.add(display);
-        }
-        while (nodeEntities.size() > next.nodes().size()) {
-            int last = nodeEntities.size() - 1;
-            Display display = nodeEntities.remove(last);
-            if (display != null && display.isValid()) display.remove();
-            entities.remove(display);
-        }
-
-        if (!sameInteractionLayout(previous, next)) {
-            if (interactionEntity != null && interactionEntity.isValid()) interactionEntity.remove();
-            interactionEntity = null;
-            spawnInteraction();
-        }
-        // Newly spawned/replaced entities need a fresh showEntity packet even
-        // when the player was already visible for the previous document.
-        if (entitySetChanged) visibleViewers.clear();
-        return true;
-    }
-
-    private void replaceNode(int index, UiNode node) {
-        Display previous = nodeEntities.get(index);
-        if (previous != null && previous.isValid()) previous.remove();
-        entities.remove(previous);
-        Display replacement = spawnNode(node);
-        nodeEntities.set(index, replacement);
-        entities.add(replacement);
     }
 
     private void updateControlStates(UiDocument next) {
-        Map<String, UiControl> previous = new LinkedHashMap<>(controlStates);
-        controlStates.clear();
         next.controls().forEach(control -> {
-            UiControl old = previous.get(control.id());
-            if (old instanceof UiSlider oldSlider && control instanceof UiSlider slider
-                    && sameControlLayout(oldSlider, slider)) {
-                controlStates.put(control.id(), slider.withValue(oldSlider.value()));
-            } else if (old instanceof UiCheckbox oldCheckbox && control instanceof UiCheckbox checkbox
-                    && sameControlLayout(oldCheckbox, checkbox)) {
-                controlStates.put(control.id(), checkbox.checked(oldCheckbox.checked()));
-            } else if (old instanceof UiScrollList oldList && control instanceof UiScrollList list
-                    && sameControlLayout(oldList, list)) {
-                controlStates.put(control.id(), list);
-            } else {
-                controlStates.put(control.id(), control);
+            UiControl existing = controlStates.get(control.id());
+            switch (existing) {
+                case UiSlider oldSlider when control instanceof UiSlider slider && sameControlLayout(oldSlider, slider) ->
+                        controlStates.put(control.id(), slider.withValue(oldSlider.value()));
+                case UiCheckbox oldCheckbox when control instanceof UiCheckbox checkbox && sameControlLayout(oldCheckbox, checkbox) ->
+                        controlStates.put(control.id(), checkbox.checked(oldCheckbox.checked()));
+                case UiScrollList oldList when control instanceof UiScrollList list && sameControlLayout(oldList, list) ->
+                        controlStates.put(control.id(), list);
+                case null, default -> controlStates.put(control.id(), control);
             }
         });
     }
 
-    private Display spawnNode(UiNode node) {
+    private List<Display> spawnNode(UiNode node) {
         if (node instanceof UiBackgroundNode background) return spawnBackground(background);
         if (node instanceof TextNode text) return spawnText(text);
         if (node instanceof AlignedTextNode text) return spawnAlignedText(text);
@@ -669,97 +950,185 @@ final class UiScene implements UiHandle {
         if (node instanceof BlockNode block) return spawnBlock(block);
         if (node instanceof EntityModelNode model) return spawnEntityModel(model);
         if (node instanceof MobEntityNode mob) return spawnMobEntity(mob);
+        if (node instanceof LineNode line) return spawnLine(line);
+        if (node instanceof ParallelogramNode parallelogram) return spawnParallelogram(parallelogram);
+        if (node instanceof TriangleNode triangle) return spawnTriangle(triangle);
+        if (node instanceof PolylineNode polyline) return spawnPolyline(polyline);
         throw new IllegalArgumentException("Unsupported UI node: " + node.getClass().getName());
     }
 
-    private TextDisplay spawnBackground(UiBackgroundNode node) {
-        return origin.getWorld().spawn(origin, TextDisplay.class, display -> {
-            configure(display, node);
-            display.text(Component.text("....."));
-            display.setTextOpacity((byte) 0);
-            display.setAlignment(TextDisplay.TextAlignment.LEFT);
-            display.setBackgroundColor(node.background());
-            display.setTransformation(backgroundTransform(node, 1.0f));
-        });
+    private List<Display> spawnBackground(UiBackgroundNode node) {
+        List<Transformation> transforms = computeBackgroundTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+                configure(display, node);
+                display.text(Component.text(" "));
+                display.setTextOpacity((byte) 0);
+                display.setAlignment(TextDisplay.TextAlignment.LEFT);
+                display.setBackgroundColor(node.background());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
     }
 
-    private TextDisplay spawnText(TextNode node) {
-        return origin.getWorld().spawn(origin, TextDisplay.class, display -> {
-            configure(display, node);
-            display.text(node.text());
-            display.setAlignment(screenAlignment(node.alignment()));
-            display.setLineWidth(node.lineWidth());
-            display.setShadowed(node.shadow());
-            display.setSeeThrough(node.seeThrough());
-            display.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
-            display.setTextOpacity((byte) 255);
-            display.setTransformation(transform(node, node.scale(), node.scale(), node.scale()));
-        });
+    private List<Display> spawnText(TextNode node) {
+        List<Transformation> transforms = computeTextTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+                configure(display, node);
+                display.text(node.text());
+                display.setShadowed(node.shadow());
+                display.setSeeThrough(node.seeThrough());
+                display.setAlignment(node.alignment());
+                display.setLineWidth(node.lineWidth());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
     }
 
-    private TextDisplay spawnAlignedText(AlignedTextNode node) {
-        return origin.getWorld().spawn(origin, TextDisplay.class, display -> {
-            configure(display, node);
-            display.text(node.text());
-            display.setAlignment(TextDisplay.TextAlignment.CENTER);
-            display.setLineWidth(Math.max(1,
-                    Math.round(node.width() * 20.0f / node.fontSize())));
-            display.setShadowed(node.shadow());
-            display.setSeeThrough(node.seeThrough());
-            display.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
-            display.setTextOpacity((byte) 255);
-            float displayScale = node.fontSize() / 20.0f;
-            display.setTransformation(transform(
-                    node, displayScale, displayScale, displayScale));
-        });
+    private List<Display> spawnAlignedText(AlignedTextNode node) {
+        List<Transformation> transforms = computeAlignedTextTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+                configure(display, node);
+                display.text(node.text());
+                display.setAlignment(TextDisplay.TextAlignment.CENTER);
+                display.setLineWidth(Math.max(1,
+                                              Math.round(node.width() * 20.0f / node.fontSize())));
+                display.setShadowed(node.shadow());
+                display.setSeeThrough(node.seeThrough());
+                display.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
+                display.setTextOpacity((byte) 255);
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
     }
 
-    private ItemDisplay spawnItem(ItemNode node) {
-        return origin.getWorld().spawn(origin, ItemDisplay.class, display -> {
-            configure(display, node);
-            display.setItemStack(node.item());
-            display.setItemDisplayTransform(node.transform());
-            display.setTransformation(transform(node, node.scale(), node.scale(), node.scale()));
-        });
+    private List<Display> spawnItem(ItemNode node) {
+        List<Transformation> transforms = computeItemTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, ItemDisplay.class, display -> {
+                configure(display, node);
+                display.setItemStack(node.item());
+                display.setItemDisplayTransform(node.transform());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
     }
 
-    private ItemDisplay spawnIcon(UiIconNode node) {
-        return origin.getWorld().spawn(origin, ItemDisplay.class, display -> {
-            configure(display, node);
-            display.setItemStack(node.item());
-            display.setItemDisplayTransform(node.transform());
-            float pixels = options.pixelsPerBlock();
-            display.setTransformation(transform(node,
-                    node.width() / pixels,
-                    node.height() / pixels,
-                    Math.min(node.width(), node.height()) / pixels));
-        });
+    private List<Display> spawnIcon(UiIconNode node) {
+        List<Transformation> transforms = computeIconTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, ItemDisplay.class, display -> {
+                configure(display, node);
+                display.setItemStack(node.item());
+                display.setItemDisplayTransform(node.transform());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
     }
 
-    private ItemDisplay spawnEntityModel(EntityModelNode node) {
-        return origin.getWorld().spawn(origin, ItemDisplay.class, display -> {
-            configure(display, node);
-            display.setItemStack(node.item());
-            display.setItemDisplayTransform(node.transform());
-            display.setTransformation(modelTransform(node, 1.0f, 0.0f, 0.0f, 0.0f));
-        });
+    private List<Display> spawnEntityModel(EntityModelNode node) {
+        List<Transformation> transforms = computeModelTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, ItemDisplay.class, display -> {
+                configure(display, node);
+                display.setItemStack(node.item());
+                display.setItemDisplayTransform(node.transform());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
     }
 
-    private ItemDisplay spawnMobEntity(MobEntityNode node) {
+    private List<Display> spawnMobEntity(MobEntityNode node) {
         EntityModelNode model = EntityModelNode.forMob(
-                node.entityType().name().toLowerCase(),
-                node.x(), node.y(), node.width(), node.height(), node.scale())
+                        node.entityType().name().toLowerCase(),
+                        node.x(), node.y(), node.width(), node.height(), node.scale())
                 .withYaw(node.yaw())
-                .withPitch(node.pitch());
+                .withPitch(node.pitch())
+                .withDoubleSided(node.doubleSided());
         return spawnEntityModel(model);
     }
 
-    private BlockDisplay spawnBlock(BlockNode node) {
-        return origin.getWorld().spawn(origin, BlockDisplay.class, display -> {
-            configure(display, node);
-            display.setBlock(node.block());
-            display.setTransformation(blockTransform(node, 1.0f, 0.0f, 0.0f, 0.0f));
-        });
+    private List<Display> spawnBlock(BlockNode node) {
+        List<Transformation> transforms = computeBlockTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, BlockDisplay.class, display -> {
+                configure(display, node);
+                display.setBlock(node.block());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
+    }
+
+    private List<Display> spawnLine(LineNode node) {
+        List<Transformation> transforms = computeLineTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+                configure(display, node);
+                display.text(Component.text(" "));
+                display.setBackgroundColor(node.color());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
+    }
+
+    private List<Display> spawnParallelogram(ParallelogramNode node) {
+        List<Transformation> transforms = computeParallelogramTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+                configure(display, node);
+                display.text(Component.text(" "));
+                display.setBackgroundColor(node.color());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
+    }
+
+    private List<Display> spawnTriangle(TriangleNode node) {
+        List<Transformation> transforms = computeTriangleTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+                configure(display, node);
+                display.text(Component.text(" "));
+                display.setBackgroundColor(node.color());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
+    }
+
+    private List<Display> spawnPolyline(PolylineNode node) {
+        List<Transformation> transforms = computePolylineTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> list = new ArrayList<>(transforms.size());
+        for (Transformation tf : transforms) {
+            list.add(origin.getWorld().spawn(origin, TextDisplay.class, display -> {
+                configure(display, node);
+                display.text(Component.text(" "));
+                display.setBackgroundColor(node.color());
+                display.setTransformation(tf);
+            }));
+        }
+        return list;
     }
 
     private void spawnInteraction() {
@@ -775,9 +1144,11 @@ final class UiScene implements UiHandle {
         maxX = Math.max(maxX, controls.stream()
                 .map(control -> control.x() + control.width() + control.hitSlop())
                 .max(Float::compare).orElse(0.0f));
-        float minY = document.buttons().stream().map(button -> button.y() - button.hitSlop())
+        float minY = document.buttons().stream()
+                .map(button -> button.y() - button.hitSlop())
                 .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
-        minY = Math.min(minY, controls.stream().map(control -> control.y() - control.hitSlop())
+        minY = Math.min(minY, controls.stream()
+                .map(control -> control.y() - control.hitSlop())
                 .min(Float::compare).orElse(0.0f));
         float maxY = document.buttons().stream()
                 .map(button -> button.y() + button.height() + button.hitSlop())
@@ -824,25 +1195,37 @@ final class UiScene implements UiHandle {
         display.setShadowRadius(0.0f);
         display.setInterpolationDelay(0);
         display.setInterpolationDuration(INTERPOLATION_TICKS);
-        display.addScoreboardTag(options.scoreboardTag());
-        display.addScoreboardTag("hhdui_scene");
-        display.getPersistentDataContainer().set(sceneKey, PersistentDataType.STRING, id.toString());
-        display.getPersistentDataContainer().set(ownerDataKey, PersistentDataType.STRING, ownerKey);
-    }
-
-    private Transformation transform(UiNode node, float sx, float sy, float sz) {
-        return transform(node, sx, sy, sz, 0.0f, 0.0f, 0.0f);
     }
 
     private Transformation transform(UiNode node, float sx, float sy, float sz,
-                                      float offsetX, float offsetY, float offsetZ) {
+                                     float offsetX, float offsetY, float offsetZ) {
         Quaternionf rotation = localRotation();
         float pixels = options.pixelsPerBlock();
         Vector3f translation = new Vector3f((node.x() + offsetX) / pixels,
-                -(node.y() + offsetY) / pixels, node.depth() + offsetZ);
+                                            -(node.y() + offsetY) / pixels, node.depth() + offsetZ);
         rotation.transform(translation);
         return new Transformation(
                 translation, rotation, new Vector3f(sx, sy, sz), new Quaternionf());
+    }
+
+    private Transformation transformBack(UiNode node, float sx, float sy, float sz,
+                                         float offsetX, float offsetY, float offsetZ) {
+        Quaternionf baseRotation = localRotation();
+        Quaternionf backRotation = new Quaternionf(baseRotation).rotateY((float) Math.PI);
+        float pixels = options.pixelsPerBlock();
+        // The back display must share the same logical anchor as the front
+        // display.  Moving aligned text to boxX + boxWidth shifts every
+        // back-side label by an entire text box after the 180-degree turn.
+        // Mirror only changes the world-side X axis; it must not change the
+        // text alignment anchor itself.
+        float targetX = mirrorSide ? -(node.x() + offsetX) : (node.x() + offsetX);
+        float extraBackOffset = (node instanceof ItemNode || node instanceof UiIconNode) ? 0.026f : 0.022f;
+        float backDepth = -(node.depth() + extraBackOffset + offsetZ);
+        Vector3f translation = new Vector3f(targetX / pixels,
+                                            -(node.y() + offsetY) / pixels, backDepth);
+        baseRotation.transform(translation);
+        return new Transformation(
+                translation, backRotation, new Vector3f(sx, sy, sz), new Quaternionf());
     }
 
     private Transformation modelTransform(EntityModelNode node, float scale,
@@ -855,7 +1238,7 @@ final class UiScene implements UiHandle {
         Quaternionf totalRotation = new Quaternionf(baseRotation).mul(modelRot);
         float pixels = options.pixelsPerBlock();
         Vector3f translation = new Vector3f((node.x() + offsetX) / pixels,
-                -(node.y() + offsetY) / pixels, node.depth() + offsetZ);
+                                            -(node.y() + offsetY) / pixels, node.depth() + offsetZ);
         baseRotation.transform(translation);
         return new Transformation(
                 translation, totalRotation,
@@ -864,7 +1247,7 @@ final class UiScene implements UiHandle {
     }
 
     private Transformation blockTransform(BlockNode node, float scale,
-                                           float offsetX, float offsetY, float offsetZ) {
+                                          float offsetX, float offsetY, float offsetZ) {
         float pixels = options.pixelsPerBlock();
         Quaternionf rotation = localRotation();
         // Scale symmetrically from the center of the block
@@ -878,71 +1261,69 @@ final class UiScene implements UiHandle {
         return new Transformation(
                 translation, rotation,
                 new Vector3f(node.width() / pixels * scale,
-                        node.height() / pixels * scale,
-                        node.thickness() / pixels * scale),
+                             node.height() / pixels * scale,
+                             node.thickness() / pixels * scale),
                 new Quaternionf());
     }
 
-    private void tickAnimation() {
-        if (animation != null) {
-            animationAge++;
-            applyAnimation(animationProgress());
-            if (animationAge >= animation.durationTicks()) {
-                applyAnimation(1.0);
-                animation = null;
-            }
-        }
-        if (!nodeAnimations.isEmpty()) {
-            boolean running = false;
-            for (int i = 0; i < nodeAnimations.size(); i++) {
-                UiAnimation current = nodeAnimations.get(i);
-                nodeAnimationAges[i]++;
-                if (!isStaticAnimation(current)) {
-                    applyAnimationToNode(i, current, nodeAnimationProgress(i));
-                }
-                if (nodeAnimationAges[i] < current.durationTicks()) running = true;
-                else if (!isStaticAnimation(current)) applyAnimationToNode(i, current, 1.0);
-            }
-            if (!running) {
-                nodeAnimations = List.of();
-                nodeAnimationAges = new int[0];
-            }
-        }
+    private Transformation modelTransformBack(EntityModelNode node, float scale,
+                                              float offsetX, float offsetY, float offsetZ) {
+        Quaternionf baseRotation = localRotation();
+        Quaternionf modelRot = new Quaternionf()
+                .rotateY((float) Math.toRadians(node.yaw() + 180.0f))
+                .rotateX((float) Math.toRadians(-node.pitch()))
+                .rotateZ((float) Math.toRadians(-node.roll()));
+        Quaternionf totalRotation = new Quaternionf(baseRotation).mul(modelRot);
+        float pixels = options.pixelsPerBlock();
+        float targetX = mirrorSide ? -(node.x() + offsetX) : (node.x() + offsetX);
+        float backDepth = -(node.depth() + 0.028f + offsetZ);
+        Vector3f translation = new Vector3f(targetX / pixels,
+                                            -(node.y() + offsetY) / pixels, backDepth);
+        baseRotation.transform(translation);
+        return new Transformation(
+                translation, totalRotation,
+                new Vector3f(node.scaleX() * scale, node.scaleY() * scale, node.scaleZ() * scale),
+                new Quaternionf());
     }
 
-    private void tickAutoSpin() {
-        if (isAnimating() || nodeEntities.isEmpty() || document == null) return;
-        for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
-            UiNode node = document.nodes().get(i);
-            UiModelRotation rotation = null;
-            EntityModelNode model = null;
-            if (node instanceof EntityModelNode em) {
-                model = em;
-                rotation = em.rotation();
-            } else if (node instanceof MobEntityNode mob) {
-                rotation = mob.rotation();
-                model = EntityModelNode.forMob(
-                        mob.entityType().name().toLowerCase(),
-                        mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
-                        .withYaw(mob.yaw())
-                        .withPitch(mob.pitch());
-            }
-            if (model != null && rotation != null && rotation.mode() == UiModelRotation.Mode.AUTO_SPIN) {
-                Display display = nodeEntities.get(i);
-                if (display != null && display.isValid()) {
-                    display.setInterpolationDelay(0);
-                    display.setInterpolationDuration(1);
-                    float currentYaw = (float) ((System.currentTimeMillis() * 0.05 * rotation.autoSpinSpeed()) % 360.0);
-                    EntityModelNode spinning = model.withYaw(currentYaw);
-                    display.setTransformation(modelTransform(spinning, 1.0f, 0.0f, 0.0f, 0.0f));
-                }
-            }
-        }
-    }
+    private List<Transformation> computeBlockTransforms(BlockNode node, float scale,
+                                                        float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        Quaternionf rotation = localRotation();
+        float centerShiftX = (node.width() * 0.5f) * (1.0f - scale);
+        float centerShiftY = (node.height() * 0.5f) * (1.0f - scale);
+        float thickness = isDoubleSided(node) ? Math.max(node.thickness(), 2.0f) : node.thickness();
+        Vector3f translation = new Vector3f(
+                (node.x() + offsetX + centerShiftX) / pixels,
+                -(node.y() + node.height() + offsetY - centerShiftY) / pixels,
+                node.depth() + offsetZ - thickness / pixels);
+        rotation.transform(translation);
 
-    private double animationProgress() {
-        if (animation == null || animationAge <= 0) return 0.0;
-        return Math.min(1.0, animationAge / (double) animation.durationTicks());
+        boolean doubleSided = isDoubleSided(node);
+        boolean asymmetric = Math.abs(node.x() + (node.x() + node.width())) > 1.0f;
+        List<Transformation> list = new ArrayList<>(doubleSided && asymmetric ? 2 : 1);
+        list.add(new Transformation(
+                translation, rotation,
+                new Vector3f(node.width() / pixels * scale,
+                             node.height() / pixels * scale,
+                             thickness / pixels * scale),
+                new Quaternionf()));
+
+        if (doubleSided && asymmetric) {
+            float mirroredX = -(node.x() + node.width());
+            Vector3f backTranslation = new Vector3f(
+                    (mirroredX + offsetX + centerShiftX) / pixels,
+                    -(node.y() + node.height() + offsetY - centerShiftY) / pixels,
+                    node.depth() + offsetZ - thickness / pixels);
+            rotation.transform(backTranslation);
+            list.add(new Transformation(
+                    backTranslation, rotation,
+                    new Vector3f(node.width() / pixels * scale,
+                                 node.height() / pixels * scale,
+                                 thickness / pixels * scale),
+                    new Quaternionf()));
+        }
+        return list;
     }
 
     private void applyAnimation(double progress) {
@@ -952,136 +1333,509 @@ final class UiScene implements UiHandle {
         }
     }
 
-    private void applyNodeAnimations() {
-        if (nodeAnimations.isEmpty()) return;
-        for (int i = 0; i < nodeAnimations.size(); i++) {
-            UiAnimation current = nodeAnimations.get(i);
-            if (!isStaticAnimation(current)) {
-                applyAnimationToNode(i, current, nodeAnimationProgress(i));
-            }
-        }
+    private Transformation toTransformation(TRSResult trs) {
+        Quaternionf baseRot = localRotation();
+        Vector3f worldTranslation = new Vector3f(trs.translation());
+        baseRot.transform(worldTranslation);
+        Quaternionf finalLeftRot = new Quaternionf(baseRot).mul(trs.leftRotation());
+        return new Transformation(worldTranslation, finalLeftRot, trs.scale(), trs.rightRotation());
     }
 
-    private double nodeAnimationProgress(int index) {
-        UiAnimation current = nodeAnimations.get(index);
-        int age = nodeAnimationAges[index];
-        if (age <= 0) return 0.0;
-        return Math.min(1.0, age / (double) current.durationTicks());
+    private List<Transformation> computeBackgroundTransforms(UiBackgroundNode node, float scale,
+                                                             float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        float frontDepth = node.depth() + BACKGROUND_DEPTH_OFFSET + offsetZ;
+        Vector3f p1 = new Vector3f((node.x() + offsetX) / pixels, -(node.y() + node.height() + offsetY) / pixels, frontDepth);
+        Vector3f p2 = new Vector3f((node.x() + node.width() + offsetX) / pixels, -(node.y() + node.height() + offsetY) / pixels, frontDepth);
+        Vector3f p3 = new Vector3f((node.x() + offsetX) / pixels, -(node.y() + offsetY) / pixels, frontDepth);
+        if (scale != 1.0f) {
+            Vector3f center = new Vector3f((node.x() + node.width() * 0.5f + offsetX) / pixels,
+                                           -(node.y() + node.height() * 0.5f + offsetY) / pixels, frontDepth);
+            p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+            p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
+            p3.set(new Vector3f(center).add(new Vector3f(p3).sub(center).mul(scale)));
+        }
+        boolean doubleSided = isDoubleSided(node);
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        list.add(toTransformation(DisplayShapeMath.computeParallelogramTRS(p1, p2, p3)));
+        if (doubleSided) {
+            float backDepth = -(node.depth() + BACKGROUND_DEPTH_OFFSET) + offsetZ;
+            float leftX = mirrorSide ? -(node.x() + node.width() + offsetX)
+                    : node.x() + node.width() + offsetX;
+            float rightX = mirrorSide ? -(node.x() + offsetX) : node.x() + offsetX;
+            Vector3f p1b = new Vector3f(leftX / pixels,
+                    -(node.y() + node.height() + offsetY) / pixels, backDepth);
+            Vector3f p2b = new Vector3f(rightX / pixels,
+                    -(node.y() + node.height() + offsetY) / pixels, backDepth);
+            Vector3f p3b = new Vector3f(leftX / pixels,
+                    -(node.y() + offsetY) / pixels, backDepth);
+            if (scale != 1.0f) {
+                Vector3f center = new Vector3f((leftX + rightX) * 0.5f / pixels,
+                        -(node.y() + node.height() * 0.5f + offsetY) / pixels, backDepth);
+                p1b.set(new Vector3f(center).add(new Vector3f(p1b).sub(center).mul(scale)));
+                p2b.set(new Vector3f(center).add(new Vector3f(p2b).sub(center).mul(scale)));
+                p3b.set(new Vector3f(center).add(new Vector3f(p3b).sub(center).mul(scale)));
+            }
+            list.add(toTransformation(DisplayShapeMath.computeParallelogramTRS(p1b, p2b, p3b)));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeTextTransforms(TextNode node, float scale,
+                                                       float offsetX, float offsetY, float offsetZ) {
+        float displayScale = node.scale() * scale;
+        boolean doubleSided = isDoubleSided(node);
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        list.add(transform(node, displayScale, displayScale, displayScale, offsetX, offsetY, offsetZ));
+        if (doubleSided) {
+            list.add(transformBack(node, displayScale, displayScale, displayScale, offsetX, offsetY, offsetZ));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeAlignedTextTransforms(AlignedTextNode node, float scale,
+                                                              float offsetX, float offsetY, float offsetZ) {
+        float displayScale = node.fontSize() / 20.0f * scale;
+        boolean doubleSided = isDoubleSided(node);
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        list.add(transform(node, displayScale, displayScale, displayScale, offsetX, offsetY, offsetZ));
+        if (doubleSided) {
+            list.add(transformBack(node, displayScale, displayScale, displayScale, offsetX, offsetY, offsetZ));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeItemTransforms(ItemNode node, float scale,
+                                                       float offsetX, float offsetY, float offsetZ) {
+        float displayScale = node.scale() * scale;
+        boolean doubleSided = isDoubleSided(node);
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        list.add(transform(node, displayScale, displayScale, displayScale, offsetX, offsetY, offsetZ));
+        if (doubleSided) {
+            list.add(transformBack(node, displayScale, displayScale, displayScale, offsetX, offsetY, offsetZ));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeIconTransforms(UiIconNode node, float scale,
+                                                       float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        float sx = node.width() / pixels * scale;
+        float sy = node.height() / pixels * scale;
+        float sz = Math.min(node.width(), node.height()) / pixels * scale;
+        boolean doubleSided = isDoubleSided(node);
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        list.add(transform(node, sx, sy, sz, offsetX, offsetY, offsetZ));
+        if (doubleSided) {
+            list.add(transformBack(node, sx, sy, sz, offsetX, offsetY, offsetZ));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeModelTransforms(EntityModelNode node, float scale,
+                                                        float offsetX, float offsetY, float offsetZ) {
+        boolean doubleSided = isDoubleSided(node);
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        list.add(modelTransform(node, scale, offsetX, offsetY, offsetZ));
+        if (doubleSided) {
+            list.add(modelTransformBack(node, scale, offsetX, offsetY, offsetZ));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeLineTransforms(LineNode node, float scale,
+                                                       float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        float x1 = node.x1();
+        float y1 = node.y1();
+        float x2 = node.x2();
+        float y2 = node.y2();
+        float depth = node.depth();
+        float rollRad = (float) Math.toRadians(node.roll());
+        boolean doubleSided = isDoubleSided(node);
+
+        Vector3f p1 = new Vector3f((x1 + offsetX) / pixels, -(y1 + offsetY) / pixels, depth + offsetZ);
+        Vector3f p2 = new Vector3f((x2 + offsetX) / pixels, -(y2 + offsetY) / pixels, depth + offsetZ);
+        if (p1.distanceSquared(p2) < 1e-6f) {
+            p2.add(0.001f, 0.0f, 0.0f);
+        }
+        float thickness = Math.max(0.0001f, (node.thickness() / pixels) * scale);
+        if (scale != 1.0f) {
+            Vector3f center = new Vector3f(p1).add(p2).mul(0.5f);
+            p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+            p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
+        }
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        TRSResult trs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, rollRad);
+        list.add(toTransformation(trs));
+        if (doubleSided) {
+            float backDepth = -(depth + 0.022f + offsetZ);
+            float bx1 = mirrorSide ? -x1 : x1;
+            float bx2 = mirrorSide ? -x2 : x2;
+            Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(y1 + offsetY) / pixels, backDepth);
+            Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(y2 + offsetY) / pixels, backDepth);
+            if (scale != 1.0f) {
+                scaleAroundMidpoint(p1b, p2b, scale);
+            }
+            // Keep the back segment as a separate, reversed face.  Reversing the
+            // endpoints makes the line's local winding deterministic at every angle.
+            TRSResult backTrs = DisplayShapeMath.computeLineTRS(p2b, p1b, thickness, -rollRad);
+            list.add(toTransformation(backTrs));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeParallelogramTransforms(ParallelogramNode node, float scale,
+                                                                float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        float depth = node.depth();
+        boolean doubleSided = isDoubleSided(node);
+
+        Vector3f p1 = new Vector3f((node.x1() + offsetX) / pixels, -(node.y1() + offsetY) / pixels, depth + offsetZ);
+        Vector3f p2 = new Vector3f((node.x2() + offsetX) / pixels, -(node.y2() + offsetY) / pixels, depth + offsetZ);
+        Vector3f p3 = new Vector3f((node.x3() + offsetX) / pixels, -(node.y3() + offsetY) / pixels, depth + offsetZ);
+
+        Vector3f[] front = normalizeParallelogramWinding(p1, p2, p3);
+        p1 = front[0];
+        p2 = front[1];
+        p3 = front[2];
+
+        if (scale != 1.0f) {
+            Vector3f center = new Vector3f(p2).add(p3).mul(0.5f);
+            p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+            p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
+            p3.set(new Vector3f(center).add(new Vector3f(p3).sub(center).mul(scale)));
+        }
+
+        List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
+        TRSResult trs = DisplayShapeMath.computeParallelogramTRS(p1, p2, p3);
+        list.add(toTransformation(trs));
+        if (doubleSided) {
+            float backDepth = -(depth + 0.022f + offsetZ);
+            float bx1 = mirrorSide ? -node.x1() : node.x1();
+            float bx2 = mirrorSide ? -node.x2() : node.x2();
+            float bx3 = mirrorSide ? -node.x3() : node.x3();
+            Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(node.y1() + offsetY) / pixels, backDepth);
+            Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(node.y2() + offsetY) / pixels, backDepth);
+            Vector3f p3b = new Vector3f((bx3 + offsetX) / pixels, -(node.y3() + offsetY) / pixels, backDepth);
+            scaleAroundParallelogramCenter(p1b, p2b, p3b, scale);
+            // Preserve the original width edge while reversing the surface winding.
+            Vector3f[] backSource = normalizeParallelogramWinding(p1b, p2b, p3b);
+            Vector3f[] back = reverseParallelogramWinding(backSource[0], backSource[1], backSource[2]);
+            TRSResult backTrs = DisplayShapeMath.computeParallelogramTRS(back[0], back[1], back[2]);
+            list.add(toTransformation(backTrs));
+        }
+        return list;
+    }
+
+    private List<Transformation> computeTriangleTransforms(TriangleNode node, float scale,
+                                                           float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        float depth = node.depth();
+        boolean doubleSided = isDoubleSided(node);
+
+        Vector3f p1 = new Vector3f((node.x1() + offsetX) / pixels, -(node.y1() + offsetY) / pixels, depth + offsetZ);
+        Vector3f p2 = new Vector3f((node.x2() + offsetX) / pixels, -(node.y2() + offsetY) / pixels, depth + offsetZ);
+        Vector3f p3 = new Vector3f((node.x3() + offsetX) / pixels, -(node.y3() + offsetY) / pixels, depth + offsetZ);
+
+        Vector3f[] front = normalizeTriangleWinding(p1, p2, p3);
+        p1 = front[0];
+        Vector3f frontP2 = front[1];
+        Vector3f frontP3 = front[2];
+
+        if (scale != 1.0f) {
+            Vector3f center = new Vector3f(p1).add(frontP2).add(frontP3).div(3.0f);
+            p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+            frontP2.set(new Vector3f(center).add(new Vector3f(frontP2).sub(center).mul(scale)));
+            frontP3.set(new Vector3f(center).add(new Vector3f(frontP3).sub(center).mul(scale)));
+        }
+
+        List<TRSResult> trsResults = DisplayShapeMath.computeTriangleTRS(p1, frontP2, frontP3);
+        List<Transformation> list = new ArrayList<>(doubleSided ? 6 : 3);
+        for (TRSResult trs : trsResults) {
+            list.add(toTransformation(trs));
+        }
+        if (doubleSided) {
+            float backDepth = -(depth + 0.022f + offsetZ);
+            float bx1 = mirrorSide ? -node.x1() : node.x1();
+            float bx2 = mirrorSide ? -node.x2() : node.x2();
+            float bx3 = mirrorSide ? -node.x3() : node.x3();
+            Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(node.y1() + offsetY) / pixels, backDepth);
+            Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(node.y2() + offsetY) / pixels, backDepth);
+            Vector3f p3b = new Vector3f((bx3 + offsetX) / pixels, -(node.y3() + offsetY) / pixels, backDepth);
+            scaleAroundCentroid(p1b, p2b, p3b, scale);
+            Vector3f[] backSource = normalizeTriangleWinding(p1b, p2b, p3b);
+            Vector3f[] back = reverseTriangleWinding(backSource[0], backSource[1], backSource[2]);
+            List<TRSResult> backTrsResults = DisplayShapeMath.computeTriangleTRS(back[0], back[1], back[2]);
+            for (TRSResult trs : backTrsResults) {
+                list.add(toTransformation(trs));
+            }
+        }
+        return list;
+    }
+
+    private List<Transformation> computePolylineTransforms(PolylineNode node, float scale,
+                                                           float offsetX, float offsetY, float offsetZ) {
+        List<PolylineNode.Point> pts = node.points();
+        if (pts.size() < 2) {
+            return List.of(transform(node, scale, scale, scale, offsetX, offsetY, offsetZ));
+        }
+        float pixels = options.pixelsPerBlock();
+        float depth = node.depth();
+        float thickness = Math.max(0.0001f, (node.thickness() / pixels) * scale);
+        boolean doubleSided = isDoubleSided(node);
+
+        int segmentCount = pts.size() - 1 + (node.closed() && pts.size() > 2 ? 1 : 0);
+        List<Transformation> list = new ArrayList<>(doubleSided ? segmentCount * 2 : segmentCount);
+
+        for (int i = 0; i < segmentCount; i++) {
+            PolylineNode.Point ptA = pts.get(i % pts.size());
+            PolylineNode.Point ptB = pts.get((i + 1) % pts.size());
+
+            Vector3f p1 = new Vector3f((ptA.x() + offsetX) / pixels, -(ptA.y() + offsetY) / pixels, depth + offsetZ);
+            Vector3f p2 = new Vector3f((ptB.x() + offsetX) / pixels, -(ptB.y() + offsetY) / pixels, depth + offsetZ);
+            if (p1.distanceSquared(p2) < 1e-6f) {
+                p2.add(0.001f, 0.0f, 0.0f);
+            }
+            if (scale != 1.0f) {
+                Vector3f center = new Vector3f(p1).add(p2).mul(0.5f);
+                p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+                p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
+            }
+            TRSResult trs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, 0.0f);
+            list.add(toTransformation(trs));
+            if (doubleSided) {
+                float backDepth = -(depth + 0.022f + offsetZ);
+                float bx1 = mirrorSide ? -ptA.x() : ptA.x();
+                float bx2 = mirrorSide ? -ptB.x() : ptB.x();
+                Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(ptA.y() + offsetY) / pixels, backDepth);
+                Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(ptB.y() + offsetY) / pixels, backDepth);
+                if (scale != 1.0f) {
+                    scaleAroundMidpoint(p1b, p2b, scale);
+                }
+                // Polyline ordering is intentionally [front, back] per segment;
+                // syncSideVisibility relies on this stable one-to-one mapping.
+                TRSResult backTrs = DisplayShapeMath.computeLineTRS(p2b, p1b, thickness, 0.0f);
+                list.add(toTransformation(backTrs));
+            }
+        }
+        return list;
+    }
+
+    private Vector3f[] normalizeTriangleWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
+        if (new Vector3f(p2).sub(p1).cross(new Vector3f(p3).sub(p1)).z < 0.0f) {
+            return new Vector3f[]{new Vector3f(p1), new Vector3f(p3), new Vector3f(p2)};
+        }
+        return new Vector3f[]{new Vector3f(p1), new Vector3f(p2), new Vector3f(p3)};
+    }
+
+    private Vector3f[] normalizeParallelogramWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
+        if (new Vector3f(p2).sub(p1).cross(new Vector3f(p3).sub(p1)).z < 0.0f) {
+            Vector3f widthEdge = new Vector3f(p2).sub(p1);
+            return new Vector3f[]{new Vector3f(p3), new Vector3f(p3).add(widthEdge), new Vector3f(p1)};
+        }
+        return new Vector3f[]{new Vector3f(p1), new Vector3f(p2), new Vector3f(p3)};
+    }
+
+    private Vector3f[] reverseTriangleWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
+        return new Vector3f[]{new Vector3f(p1), new Vector3f(p3), new Vector3f(p2)};
+    }
+
+    private Vector3f[] reverseParallelogramWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
+        Vector3f widthEdge = new Vector3f(p2).sub(p1);
+        return new Vector3f[]{new Vector3f(p3), new Vector3f(p3).add(widthEdge), new Vector3f(p1)};
+    }
+
+    private void scaleAroundMidpoint(Vector3f p1, Vector3f p2, float scale) {
+        Vector3f center = new Vector3f(p1).add(p2).mul(0.5f);
+        p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+        p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
+    }
+
+    private void scaleAroundCentroid(Vector3f p1, Vector3f p2, Vector3f p3, float scale) {
+        if (scale == 1.0f) return;
+        Vector3f center = new Vector3f(p1).add(p2).add(p3).div(3.0f);
+        p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+        p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
+        p3.set(new Vector3f(center).add(new Vector3f(p3).sub(center).mul(scale)));
+    }
+
+    private void scaleAroundParallelogramCenter(Vector3f p1, Vector3f p2, Vector3f p3, float scale) {
+        if (scale == 1.0f) return;
+        Vector3f center = new Vector3f(p2).add(p3).mul(0.5f);
+        p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
+        p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
+        p3.set(new Vector3f(center).add(new Vector3f(p3).sub(center).mul(scale)));
+    }
+
+    private List<Transformation> getNodeTransformations(UiNode node, float scale,
+                                                        float offsetX, float offsetY, float offsetZ) {
+        if (node instanceof BlockNode block) {
+            return computeBlockTransforms(block, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof AlignedTextNode text) {
+            return computeAlignedTextTransforms(text, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof TextNode text) {
+            return computeTextTransforms(text, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof ItemNode item) {
+            return computeItemTransforms(item, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof UiIconNode icon) {
+            return computeIconTransforms(icon, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof EntityModelNode model) {
+            return computeModelTransforms(model, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof MobEntityNode mob) {
+            EntityModelNode model = EntityModelNode.forMob(
+                            mob.entityType().name().toLowerCase(),
+                            mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
+                    .withYaw(mob.yaw())
+                    .withPitch(mob.pitch())
+                    .withDoubleSided(mob.doubleSided());
+            return computeModelTransforms(model, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof UiBackgroundNode background) {
+            return computeBackgroundTransforms(background, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof LineNode line) {
+            return computeLineTransforms(line, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof ParallelogramNode parallelogram) {
+            return computeParallelogramTransforms(parallelogram, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof TriangleNode triangle) {
+            return computeTriangleTransforms(triangle, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof PolylineNode polyline) {
+            return computePolylineTransforms(polyline, scale, offsetX, offsetY, offsetZ);
+        }
+        return List.of();
     }
 
     private void applyAnimationToNode(int index, UiAnimation current, double progress) {
-        if (index >= nodeEntities.size()) return;
-        Display display = nodeEntities.get(index);
-        if (display == null || !display.isValid()) return;
+        if (index >= nodeEntities.size() || index >= document.nodes().size()) return;
         double eased = current.easing().apply(progress);
         float scale = interpolate(current.fromScale(), current.toScale(), eased);
         float opacity = Math.max(0.0f, Math.min(1.0f,
-                interpolate(current.fromOpacity(), current.toOpacity(), eased)));
+                                                interpolate(current.fromOpacity(), current.toOpacity(), eased)));
         float offsetX = current.offsetX() * (1.0f - (float) eased);
         float offsetY = current.offsetY() * (1.0f - (float) eased);
         float offsetZ = current.offsetZ() * (1.0f - (float) eased);
         UiNode node = document.nodes().get(index);
-        if (node instanceof BlockNode block) {
-            display.setTransformation(blockTransform(block, scale, offsetX, offsetY, offsetZ));
-        } else if (node instanceof AlignedTextNode text) {
-            float displayScale = text.fontSize() / 20.0f * scale;
-            display.setTransformation(transform(text, displayScale, displayScale,
-                    displayScale, offsetX, offsetY, offsetZ));
-        } else if (node instanceof TextNode text) {
-            float displayScale = text.scale() * scale;
-            display.setTransformation(transform(text, displayScale, displayScale,
-                    displayScale, offsetX, offsetY, offsetZ));
-        } else if (node instanceof ItemNode item) {
-            float displayScale = item.scale() * scale;
-            display.setTransformation(transform(item, displayScale, displayScale,
-                    displayScale, offsetX, offsetY, offsetZ));
-        } else if (node instanceof UiIconNode icon) {
-            float pixels = options.pixelsPerBlock();
-            display.setTransformation(transform(icon, icon.width() / pixels * scale,
-                    icon.height() / pixels * scale,
-                    Math.min(icon.width(), icon.height()) / pixels * scale,
-                    offsetX, offsetY, offsetZ));
-        } else if (node instanceof EntityModelNode model) {
-            display.setTransformation(modelTransform(model, scale, offsetX, offsetY, offsetZ));
-        } else if (node instanceof MobEntityNode mob) {
-            EntityModelNode model = EntityModelNode.forMob(
-                    mob.entityType().name().toLowerCase(),
-                    mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
-                    .withYaw(mob.yaw())
-                    .withPitch(mob.pitch());
-            display.setTransformation(modelTransform(model, scale, offsetX, offsetY, offsetZ));
-        } else if (node instanceof UiBackgroundNode background) {
-            display.setTransformation(backgroundTransform(background, scale,
-                    offsetX, offsetY, offsetZ));
-        }
-        if (display instanceof TextDisplay textDisplay) {
-            if (node instanceof UiBackgroundNode background) {
-                textDisplay.setTextOpacity((byte) 0);
-                textDisplay.setBackgroundColor(withAlpha(background.background(), opacity));
-            } else {
-                textDisplay.setTextOpacity((byte) Math.round(opacity * 255.0f));
+        List<Transformation> transforms = getNodeTransformations(node, scale, offsetX, offsetY, offsetZ);
+        List<Display> displays = nodeEntities.get(index);
+        for (int j = 0; j < displays.size() && j < transforms.size(); j++) {
+            Display display = displays.get(j);
+            if (display == null || !display.isValid()) continue;
+            display.setInterpolationDelay(0);
+            display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+            display.setTransformation(transforms.get(j));
+            if (display instanceof TextDisplay textDisplay) {
+                if (node instanceof UiBackgroundNode background) {
+                    textDisplay.setTextOpacity((byte) 0);
+                    textDisplay.setBackgroundColor(withAlpha(background.background(), opacity));
+                } else {
+                    textDisplay.setTextOpacity((byte) Math.round(opacity * 255.0f));
+                }
             }
         }
     }
 
-    private void configureAnimationInterpolation() {
-        for (int i = 0; i < nodeEntities.size() && i < nodeAnimations.size(); i++) {
-            if (isStaticAnimation(nodeAnimations.get(i))) continue;
-            Display display = nodeEntities.get(i);
-            if (display == null || !display.isValid()) continue;
-            display.setInterpolationDelay(0);
-            display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+    private void applyAnimationFrame(float progress) {
+        if (animation == null) return;
+        float scale = animation.fromScale() + (animation.toScale() - animation.fromScale()) * progress;
+        float invProgress = 1.0f - progress;
+        float offsetX = animation.offsetX() * invProgress;
+        float offsetY = animation.offsetY() * invProgress;
+        float offsetZ = animation.offsetZ() * invProgress;
+        float opacity = animation.fromOpacity() + (animation.toOpacity() - animation.fromOpacity()) * progress;
+        byte opacityByte = (byte) Math.round(opacity * 255.0f);
+
+        for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
+            UiNode node = document.nodes().get(i);
+            List<Transformation> transforms = getNodeTransformations(node, scale, offsetX, offsetY, offsetZ);
+            List<Display> displays = nodeEntities.get(i);
+            if (displays == null) continue;
+
+            for (int j = 0; j < displays.size() && j < transforms.size(); j++) {
+                Display display = displays.get(j);
+                if (display == null || !display.isValid()) continue;
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+                display.setTransformation(transforms.get(j));
+                if (display instanceof TextDisplay textDisplay) {
+                    if (node instanceof UiBackgroundNode background) {
+                        textDisplay.setTextOpacity((byte) 0);
+                        textDisplay.setBackgroundColor(withAlpha(background.background(), opacity));
+                    } else {
+                        textDisplay.setTextOpacity(opacityByte);
+                    }
+                }
+            }
         }
     }
 
-    private boolean isStaticAnimation(UiAnimation animation) {
-        return animation.offsetX() == 0.0f && animation.offsetY() == 0.0f
-                && animation.offsetZ() == 0.0f
-                && animation.fromScale() == 1.0f && animation.toScale() == 1.0f
-                && animation.fromOpacity() == 1.0f && animation.toOpacity() == 1.0f;
+    private void applyNodeAnimationFrames() {
+        for (int i = 0; i < nodeAnimations.size() && i < document.nodes().size() && i < nodeEntities.size(); i++) {
+            UiAnimation a = nodeAnimations.get(i);
+            UiNode node = document.nodes().get(i);
+            List<Display> displays = nodeEntities.get(i);
+            if (displays == null) continue;
+
+            float scale = 1.0f;
+            float offsetX = 0.0f;
+            float offsetY = 0.0f;
+            float offsetZ = 0.0f;
+            byte opacityByte = (byte) 255;
+
+            if (a.durationTicks() > 0) {
+                int effectiveAge = nodeAnimationAges[i] - a.delayTicks();
+                float progress;
+                if (effectiveAge < 0) {
+                    progress = 0.0f;
+                } else if (effectiveAge >= a.durationTicks()) {
+                    progress = 1.0f;
+                } else {
+                    progress = (float) a.easing().apply((float) effectiveAge / (float) a.durationTicks());
+                }
+
+                scale = a.fromScale() + (a.toScale() - a.fromScale()) * progress;
+                float invProgress = 1.0f - progress;
+                offsetX = a.offsetX() * invProgress;
+                offsetY = a.offsetY() * invProgress;
+                offsetZ = a.offsetZ() * invProgress;
+                float opacity = a.fromOpacity() + (a.toOpacity() - a.fromOpacity()) * progress;
+                opacityByte = (byte) Math.round(opacity * 255.0f);
+            }
+
+            List<Transformation> transforms = getNodeTransformations(node, scale, offsetX, offsetY, offsetZ);
+            for (int j = 0; j < displays.size() && j < transforms.size(); j++) {
+                Display display = displays.get(j);
+                if (display == null || !display.isValid()) continue;
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+                display.setTransformation(transforms.get(j));
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.setTextOpacity(opacityByte);
+                }
+            }
+        }
     }
 
-    private Color withAlpha(Color color, float opacity) {
-        int alpha = Math.round(color.getAlpha()
-                * Math.max(0.0f, Math.min(1.0f, opacity)));
-        return Color.fromARGB(alpha, color.getRed(), color.getGreen(), color.getBlue());
+    private void resetTransforms() {
+        resetTransforms(ANIMATION_INTERPOLATION_TICKS);
     }
 
-    private Transformation backgroundTransform(UiBackgroundNode node, float scale) {
-        return backgroundTransform(node, scale, 0.0f, 0.0f, 0.0f);
-    }
+    private void resetTransforms(int interpolationTicks) {
+        for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
+            UiNode node = document.nodes().get(i);
+            List<Transformation> transforms = getNodeTransformations(node, 1.0f, 0.0f, 0.0f, 0.0f);
+            List<Display> displays = nodeEntities.get(i);
+            if (displays == null) continue;
 
-    private Transformation backgroundTransform(UiBackgroundNode node, float scale,
-                                                float offsetX, float offsetY,
-                                                float offsetZ) {
-        float pixels = options.pixelsPerBlock();
-        return transform(node,
-                node.width() / pixels * BACKGROUND_NATIVE_WIDTH_SCALE * scale,
-                node.height() / pixels * BACKGROUND_NATIVE_HEIGHT_SCALE * scale,
-                0.0f, offsetX + node.width() * 0.5f,
-                offsetY + node.height() * 1.0f,
-                offsetZ + BACKGROUND_DEPTH_OFFSET);
-    }
-
-    private float interpolate(float from, float to, double progress) {
-        return (float) (from + (to - from) * progress);
-    }
-
-    private TextDisplay.TextAlignment screenAlignment(TextDisplay.TextAlignment alignment) {
-        return switch (alignment) {
-            case LEFT -> TextDisplay.TextAlignment.RIGHT;
-            case RIGHT -> TextDisplay.TextAlignment.LEFT;
-            case CENTER -> TextDisplay.TextAlignment.CENTER;
-        };
-    }
-
-    private TextDisplay.TextAlignment screenAlignment(
-            UiTextAlignment alignment) {
-        return switch (alignment) {
-            case LEFT -> TextDisplay.TextAlignment.RIGHT;
-            case RIGHT -> TextDisplay.TextAlignment.LEFT;
-            case CENTER -> TextDisplay.TextAlignment.CENTER;
-        };
+            for (int j = 0; j < displays.size() && j < transforms.size(); j++) {
+                Display display = displays.get(j);
+                if (display == null || !display.isValid()) continue;
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(interpolationTicks);
+                display.setTransformation(transforms.get(j));
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.setTextOpacity((byte) 255);
+                }
+            }
+        }
     }
 
     private void syncViewers() {
@@ -1106,23 +1860,137 @@ final class UiScene implements UiHandle {
             else visibleViewers.remove(player.getUniqueId());
         }
         if (visible && options.cullItemBackfaces()) syncItemBackfaces(player);
+        if (visible) syncSideVisibility(player);
+    }
+
+    private void showEntities(Player player) {
+        entities.forEach(entity -> player.showEntity(plugin, entity));
+        visibleViewers.add(player.getUniqueId());
+        syncItemBackfaces(player);
+        syncSideVisibility(player);
+    }
+
+    private void syncSideVisibility(Player player) {
+        boolean front = isFrontFacing(player);
+        for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
+            List<Display> displays = nodeEntities.get(i);
+            UiNode node = document.nodes().get(i);
+            if (displays == null || displays.isEmpty()) continue;
+            boolean twoSided = isDoubleSided(node);
+            if (displays.size() == 1) {
+                if (front || twoSided) player.showEntity(plugin, displays.get(0));
+                else player.hideEntity(plugin, displays.get(0));
+                continue;
+            }
+            for (int j = 0; j < displays.size(); j++) {
+                boolean back = isBackDisplay(node, displays.size(), j);
+                boolean show = twoSided && (front != back);
+                if (show) player.showEntity(plugin, displays.get(j));
+                else player.hideEntity(plugin, displays.get(j));
+            }
+        }
+    }
+
+    private boolean isBackDisplay(UiNode node, int size, int index) {
+        if (node instanceof PolylineNode) return (index & 1) == 1;
+        if (node instanceof TriangleNode) return index >= size / 2;
+        return index > 0;
+    }
+
+    private void configureAnimationInterpolation() {
+        for (int i = 0; i < nodeEntities.size() && i < nodeAnimations.size(); i++) {
+            if (isStaticAnimation(nodeAnimations.get(i))) continue;
+            List<Display> displays = nodeEntities.get(i);
+            if (displays == null) continue;
+            for (Display display : displays) {
+                if (display == null || !display.isValid()) continue;
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+            }
+        }
+    }
+
+    private boolean isStaticAnimation(UiAnimation animation) {
+        return animation.offsetX() == 0.0f && animation.offsetY() == 0.0f
+                && animation.offsetZ() == 0.0f
+                && animation.fromScale() == 1.0f && animation.toScale() == 1.0f
+                && animation.fromOpacity() == 1.0f && animation.toOpacity() == 1.0f;
+    }
+
+    private Color withAlpha(Color color, float opacity) {
+        int alpha = Math.round(color.getAlpha()
+                                       * Math.max(0.0f, Math.min(1.0f, opacity)));
+        return Color.fromARGB(alpha, color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    private Transformation backgroundTransform(UiBackgroundNode node, float scale) {
+        return backgroundTransform(node, scale, 0.0f, 0.0f, 0.0f);
+    }
+
+    private Transformation backgroundTransform(UiBackgroundNode node, float scale,
+                                               float offsetX, float offsetY,
+                                               float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        return transform(node,
+                         node.width() / pixels * BACKGROUND_NATIVE_WIDTH_SCALE * scale,
+                         node.height() / pixels * BACKGROUND_NATIVE_HEIGHT_SCALE * scale,
+                         0.0f, offsetX + node.width() * 0.5f,
+                         offsetY + node.height() * 1.0f,
+                         offsetZ + BACKGROUND_DEPTH_OFFSET);
+    }
+
+    private float interpolate(float from, float to, double progress) {
+        return (float) (from + (to - from) * progress);
+    }
+
+    private TextDisplay.TextAlignment screenAlignment(TextDisplay.TextAlignment alignment) {
+        return switch (alignment) {
+            case LEFT -> TextDisplay.TextAlignment.RIGHT;
+            case RIGHT -> TextDisplay.TextAlignment.LEFT;
+            case CENTER -> TextDisplay.TextAlignment.CENTER;
+        };
+    }
+
+    private TextDisplay.TextAlignment screenAlignment(
+            UiTextAlignment alignment) {
+        return switch (alignment) {
+            case LEFT -> TextDisplay.TextAlignment.RIGHT;
+            case RIGHT -> TextDisplay.TextAlignment.LEFT;
+            case CENTER -> TextDisplay.TextAlignment.CENTER;
+        };
+    }
+
+    /** A mirrored side needs the same back-face display as double-sided mode. */
+    private boolean isTwoSided() {
+        return options.doubleSided()
+                || document.nodes().stream().anyMatch(UiNode::doubleSided);
+    }
+
+    private boolean isDoubleSided(UiNode node) {
+        return node.doubleSided() || options.doubleSided();
     }
 
     private void syncItemBackfaces(Player player) {
-        if (cameraTransform.billboard() != Display.Billboard.FIXED) return;
+        if (isTwoSided() || cameraTransform.billboard() != Display.Billboard.FIXED) return;
         boolean frontFacing = isFrontFacing(player);
-        for (int i = 0; i < nodeEntities.size(); i++) {
+        for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
             UiNode node = document.nodes().get(i);
+            if (node.doubleSided()) continue;
             if (!(node instanceof ItemNode) && !(node instanceof UiIconNode) && !(node instanceof EntityModelNode) && !(node instanceof MobEntityNode)) continue;
-            Display display = nodeEntities.get(i);
-            if (display == null || !display.isValid()) continue;
-            if (frontFacing) player.showEntity(plugin, display);
-            else player.hideEntity(plugin, display);
+            List<Display> list = nodeEntities.get(i);
+            if (list == null) continue;
+            for (Display display : list) {
+                if (display == null || !display.isValid()) continue;
+                if (frontFacing) player.showEntity(plugin, display);
+                else player.hideEntity(plugin, display);
+            }
         }
     }
 
     private boolean isFrontFacing(Player player) {
-        Vector normal = planeBasis(player).normal();
+        Vector normal = origin.getDirection();
+        if (normal.lengthSquared() < 0.0001) normal.setZ(1.0);
+        normal.normalize();
         Vector toPlayer = player.getEyeLocation().toVector().subtract(origin.toVector());
         if (toPlayer.lengthSquared() < 0.0001) return true;
         return normal.dot(toPlayer.normalize()) > 0.0;
@@ -1136,7 +2004,7 @@ final class UiScene implements UiHandle {
         if (player.getEyeLocation().distanceSquared(origin) > options.maxDistance() * options.maxDistance()) {
             return false;
         }
-        if (!options.requireFront()) return true;
+        if (!options.requireFront() || isTwoSided()) return true;
         var normal = origin.getDirection().setY(0.0);
         var toPlayer = player.getEyeLocation().toVector().subtract(origin.toVector()).setY(0.0);
         return normal.lengthSquared() < 0.0001 || toPlayer.lengthSquared() < 0.0001
@@ -1153,6 +2021,7 @@ final class UiScene implements UiHandle {
         entities.clear();
         nodeEntities.clear();
         visibleViewers.clear();
+        renderedScrollOffsets.clear();
         if (interactionEntity != null && interactionEntity.isValid()) interactionEntity.remove();
         interactionEntity = null;
     }
@@ -1161,103 +2030,202 @@ final class UiScene implements UiHandle {
         if (removed) throw new IllegalStateException("UI scene has been removed");
     }
 
-    private void updateNode(Display display, UiNode node) {
-        if (display != null && display.isValid()) {
-            display.setInterpolationDelay(0);
-            display.setInterpolationDuration(INTERPOLATION_TICKS);
+    private void updateNode(List<Display> currentDisplays, UiNode node) {
+        if (currentDisplays == null || currentDisplays.isEmpty()) return;
+        for (Display display : currentDisplays) {
+            if (display != null && display.isValid()) {
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(INTERPOLATION_TICKS);
+            }
         }
         if (node instanceof UiBackgroundNode background) {
-            TextDisplay textDisplay = (TextDisplay) display;
-            textDisplay.setBackgroundColor(background.background());
-            textDisplay.setTransformation(backgroundTransform(background, 1.0f));
+            List<Transformation> transforms = computeBackgroundTransforms(background, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.setBackgroundColor(background.background());
+                    textDisplay.setTransformation(transforms.get(j));
+                }
+            }
         } else if (node instanceof TextNode text) {
-            TextDisplay textDisplay = (TextDisplay) display;
-            textDisplay.text(text.text());
-            textDisplay.setAlignment(screenAlignment(text.alignment()));
-            textDisplay.setLineWidth(text.lineWidth());
-            textDisplay.setShadowed(text.shadow());
-            textDisplay.setSeeThrough(text.seeThrough());
-            textDisplay.setTransformation(transform(text, text.scale(), text.scale(), text.scale()));
+            List<Transformation> transforms = computeTextTransforms(text, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.text(text.text());
+                    textDisplay.setShadowed(text.shadow());
+                    textDisplay.setSeeThrough(text.seeThrough());
+                    textDisplay.setAlignment(text.alignment());
+                    textDisplay.setLineWidth(text.lineWidth());
+                    textDisplay.setTransformation(transforms.get(j));
+                }
+            }
         } else if (node instanceof AlignedTextNode text) {
-            TextDisplay textDisplay = (TextDisplay) display;
-            textDisplay.text(text.text());
-            textDisplay.setLineWidth(Math.max(1,
-                    Math.round(text.width() * 20.0f / text.fontSize())));
-            textDisplay.setShadowed(text.shadow());
-            textDisplay.setSeeThrough(text.seeThrough());
-            float scale = text.fontSize() / 20.0f;
-            textDisplay.setTransformation(transform(text, scale, scale, scale));
+            List<Transformation> transforms = computeAlignedTextTransforms(text, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.text(text.text());
+                    textDisplay.setShadowed(text.shadow());
+                    textDisplay.setSeeThrough(text.seeThrough());
+                    textDisplay.setLineWidth(Math.max(1,
+                                                      Math.round(text.width() * 20.0f / text.fontSize())));
+                    textDisplay.setTransformation(transforms.get(j));
+                }
+            }
         } else if (node instanceof ItemNode item) {
-            ItemDisplay itemDisplay = (ItemDisplay) display;
-            itemDisplay.setItemStack(item.item());
-            itemDisplay.setItemDisplayTransform(item.transform());
-            itemDisplay.setTransformation(transform(item, item.scale(), item.scale(), item.scale()));
+            List<Transformation> transforms = computeItemTransforms(item, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof ItemDisplay itemDisplay) {
+                    itemDisplay.setItemStack(item.item());
+                    itemDisplay.setItemDisplayTransform(item.transform());
+                    itemDisplay.setTransformation(transforms.get(j));
+                }
+            }
         } else if (node instanceof UiIconNode icon) {
-            ItemDisplay itemDisplay = (ItemDisplay) display;
-            itemDisplay.setItemStack(icon.item());
-            itemDisplay.setItemDisplayTransform(icon.transform());
-            float pixels = options.pixelsPerBlock();
-            itemDisplay.setTransformation(transform(icon, icon.width() / pixels,
-                    icon.height() / pixels, Math.min(icon.width(), icon.height()) / pixels));
+            List<Transformation> transforms = computeIconTransforms(icon, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof ItemDisplay itemDisplay) {
+                    itemDisplay.setItemStack(icon.item());
+                    itemDisplay.setItemDisplayTransform(icon.transform());
+                    itemDisplay.setTransformation(transforms.get(j));
+                }
+            }
+        } else if (node instanceof BlockNode block) {
+            List<Transformation> transforms = computeBlockTransforms(block, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof BlockDisplay blockDisplay) {
+                    blockDisplay.setBlock(block.block());
+                    blockDisplay.setTransformation(transforms.get(j));
+                }
+            }
         } else if (node instanceof EntityModelNode model) {
-            ItemDisplay itemDisplay = (ItemDisplay) display;
-            itemDisplay.setItemStack(model.item());
-            itemDisplay.setItemDisplayTransform(model.transform());
-            itemDisplay.setTransformation(modelTransform(model, 1.0f, 0.0f, 0.0f, 0.0f));
+            List<Transformation> transforms = computeModelTransforms(model, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof ItemDisplay itemDisplay) {
+                    itemDisplay.setItemStack(model.item());
+                    itemDisplay.setItemDisplayTransform(model.transform());
+                    itemDisplay.setTransformation(transforms.get(j));
+                }
+            }
         } else if (node instanceof MobEntityNode mob) {
             EntityModelNode model = EntityModelNode.forMob(
-                    mob.entityType().name().toLowerCase(),
-                    mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
+                            mob.entityType().name().toLowerCase(),
+                            mob.x(), mob.y(), mob.width(), mob.height(), mob.scale())
                     .withYaw(mob.yaw())
-                    .withPitch(mob.pitch());
-            ItemDisplay itemDisplay = (ItemDisplay) display;
-            itemDisplay.setItemStack(model.item());
-            itemDisplay.setItemDisplayTransform(model.transform());
-            itemDisplay.setTransformation(modelTransform(model, 1.0f, 0.0f, 0.0f, 0.0f));
-        } else if (node instanceof BlockNode block) {
-            BlockDisplay blockDisplay = (BlockDisplay) display;
-            blockDisplay.setBlock(block.block());
-            blockDisplay.setTransformation(blockTransform(block, 1.0f, 0.0f, 0.0f, 0.0f));
+                    .withPitch(mob.pitch())
+                    .withDoubleSided(mob.doubleSided());
+            List<Transformation> transforms = computeModelTransforms(model, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof ItemDisplay itemDisplay) {
+                    itemDisplay.setItemStack(model.item());
+                    itemDisplay.setItemDisplayTransform(model.transform());
+                    itemDisplay.setTransformation(transforms.get(j));
+                }
+            }
+        } else if (node instanceof LineNode line) {
+            List<Transformation> transforms = computeLineTransforms(line, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.setBackgroundColor(line.color());
+                    textDisplay.setTransformation(transforms.get(j));
+                }
+            }
+        } else if (node instanceof ParallelogramNode parallelogram) {
+            List<Transformation> transforms = computeParallelogramTransforms(parallelogram, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.setBackgroundColor(parallelogram.color());
+                    textDisplay.setTransformation(transforms.get(j));
+                }
+            }
+        } else if (node instanceof TriangleNode triangle) {
+            List<Transformation> transforms = computeTriangleTransforms(triangle, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.setBackgroundColor(triangle.color());
+                    textDisplay.setTransformation(transforms.get(j));
+                }
+            }
+        } else if (node instanceof PolylineNode polyline) {
+            List<Transformation> transforms = computePolylineTransforms(polyline, 1.0f, 0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < currentDisplays.size() && j < transforms.size(); j++) {
+                Display display = currentDisplays.get(j);
+                if (display instanceof TextDisplay textDisplay) {
+                    textDisplay.setBackgroundColor(polyline.color());
+                    textDisplay.setTransformation(transforms.get(j));
+                }
+            }
         }
     }
 
-    private boolean sameInteractionLayout(UiDocument current, UiDocument next) {
-        if (current.buttons().size() != next.buttons().size()
-                || current.controls().size() != next.controls().size()) return false;
-        for (int i = 0; i < current.buttons().size(); i++) {
-            UiButton a = current.buttons().get(i);
-            UiButton b = next.buttons().get(i);
-            if (!a.id().equals(b.id()) || a.x() != b.x() || a.y() != b.y()
-                    || a.width() != b.width() || a.height() != b.height()
-                    || a.hitSlop() != b.hitSlop()) return false;
+    private boolean incrementalUpdate(UiDocument previous, UiDocument next) {
+        if (previous == null || previous.nodes().size() != next.nodes().size()) return false;
+        for (int i = 0; i < next.nodes().size(); i++) {
+            UiNode prev = previous.nodes().get(i);
+            UiNode curr = next.nodes().get(i);
+            if (!prev.getClass().equals(curr.getClass())) return false;
+            if (prev.doubleSided() != curr.doubleSided()) return false;
+            if (prev instanceof PolylineNode p1 && curr instanceof PolylineNode p2) {
+                if (p1.points().size() != p2.points().size()) return false;
+            }
         }
-        return sameControlLayouts(current.controls(), next.controls());
-    }
-
-    private boolean sameControlLayout(UiControl current, UiControl next) {
-        return current.id().equals(next.id()) && current.getClass() == next.getClass()
-                && current.x() == next.x() && current.y() == next.y()
-                && current.width() == next.width() && current.height() == next.height()
-                && current.hitSlop() == next.hitSlop()
-                && (!(current instanceof UiSlider left) || !(next instanceof UiSlider right)
-                || (left.minimum() == right.minimum()
-                && left.maximum() == right.maximum() && left.step() == right.step()));
-    }
-
-    private boolean sameControlLayouts(List<UiControl> current, List<UiControl> next) {
-        if (current.size() != next.size()) return false;
-        for (int i = 0; i < current.size(); i++) {
-            if (!sameControlLayout(current.get(i), next.get(i))) return false;
+        for (int i = 0; i < next.nodes().size(); i++) {
+            updateNode(nodeEntities.get(i), next.nodes().get(i));
         }
+        updateInteractionHitbox();
         return true;
     }
 
+    private void respawn() {
+        clearEntities();
+        if (document != null) {
+            for (UiNode node : document.nodes()) {
+                List<Display> spawned = spawnNode(node);
+                nodeEntities.add(spawned);
+                entities.addAll(spawned);
+            }
+            for (UiControl control : document.controls()) {
+                if (control instanceof UiScrollList scrollList) {
+                    renderedScrollOffsets.put(scrollList.id(), scrollList.offset());
+                }
+            }
+        }
+        spawnInteraction();
+        syncViewers();
+    }
+
+    private void applyCameraTransform() {
+        for (Display display : entities) {
+            if (display.isValid()) {
+                display.setBillboard(cameraTransform.billboard());
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(INTERPOLATION_TICKS);
+            }
+        }
+        resetTransforms();
+    }
+
     private Quaternionf localRotation() {
-        float radians = (float) (Math.PI / 180.0);
-        return new Quaternionf().rotateXYZ(
-                cameraTransform.angleX() * radians,
-                cameraTransform.angleY() * radians,
-                cameraTransform.angleZ() * radians);
+        Quaternionf rotation = new Quaternionf();
+        if (cameraTransform.angleZ() != 0.0f) {
+            rotation.rotateZ((float) Math.toRadians(cameraTransform.angleZ()));
+        }
+        if (cameraTransform.angleY() != 0.0f) {
+            rotation.rotateY((float) Math.toRadians(cameraTransform.angleY()));
+        }
+        if (cameraTransform.angleX() != 0.0f) {
+            rotation.rotateX((float) Math.toRadians(cameraTransform.angleX()));
+        }
+        return rotation;
     }
 
     private PlaneBasis planeBasis(Player player) {
@@ -1269,61 +2237,27 @@ final class UiScene implements UiHandle {
         if (cameraNormal.lengthSquared() < 0.0001) cameraNormal = baseNormal.clone();
         cameraNormal.normalize();
 
-        Vector normal;
-        if (cameraTransform.lockX() && cameraTransform.lockY()) {
-            normal = baseNormal;
-        } else if (cameraTransform.lockX()) {
-            normal = cameraNormal.clone().setY(0);
-            if (normal.lengthSquared() < 0.0001) normal = baseNormal.clone().setY(0);
-            normal.normalize();
-        } else if (cameraTransform.lockY()) {
-            Vector horizontal = baseNormal.clone().setY(0);
-            if (horizontal.lengthSquared() < 0.0001) horizontal.setZ(1);
-            horizontal.normalize();
-            double vertical = Math.max(-0.9999, Math.min(0.9999, cameraNormal.getY()));
-            normal = horizontal.multiply(Math.sqrt(1.0 - vertical * vertical))
-                    .setY(vertical).normalize();
-        } else {
-            normal = cameraNormal;
+        Vector normal = baseNormal;
+        if (!cameraTransform.lockX() && !cameraTransform.lockY()) normal = cameraNormal;
+        else if (!cameraTransform.lockX()) {
+            normal = new Vector(cameraNormal.getX(), baseNormal.getY(), cameraNormal.getZ()).normalize();
+        } else if (!cameraTransform.lockY()) {
+            normal = new Vector(baseNormal.getX(), cameraNormal.getY(), baseNormal.getZ()).normalize();
         }
 
         Vector right = new Vector(normal.getZ(), 0, -normal.getX());
-        if (right.lengthSquared() < 0.0001) right.setX(1);
+        if (right.lengthSquared() < 0.0001) right = new Vector(1, 0, 0);
         right.normalize();
         Vector up = normal.clone().crossProduct(right).normalize();
 
-        double radians = Math.PI / 180.0;
-        if (cameraTransform.angleX() != 0) {
-            Vector axis = right.clone();
-            up.rotateAroundAxis(axis, cameraTransform.angleX() * radians);
-            normal.rotateAroundAxis(axis, cameraTransform.angleX() * radians);
-        }
-        if (cameraTransform.angleY() != 0) {
-            Vector axis = up.clone();
-            right.rotateAroundAxis(axis, cameraTransform.angleY() * radians);
-            normal.rotateAroundAxis(axis, cameraTransform.angleY() * radians);
-        }
-        if (cameraTransform.angleZ() != 0) {
-            Vector axis = normal.clone();
-            right.rotateAroundAxis(axis, cameraTransform.angleZ() * radians);
-            up.rotateAroundAxis(axis, cameraTransform.angleZ() * radians);
-        }
-        return new PlaneBasis(normal.normalize(), right.normalize(), up.normalize());
+        return new PlaneBasis(normal, right, up);
     }
 
-    private void executeAction(UiButton button, Player player) {
-        UiButtonAction action = button.action();
-        String value = action.value().replace("{player}", player.getName());
-        switch (action.type()) {
-            case NONE -> { }
-            case RUN_PLAYER_COMMAND -> Bukkit.dispatchCommand(player, value);
-            case RUN_CONSOLE_COMMAND -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), value);
-            case OPEN_URL -> player.sendMessage(
-                    Component.text("Link: ", NamedTextColor.GRAY)
-                            .append(action.label().clickEvent(ClickEvent.openUrl(value))));
-            case SUGGEST_COMMAND -> player.sendMessage(
-                    action.label().clickEvent(ClickEvent.suggestCommand(value)));
-        }
+    private static boolean sameControlLayout(UiControl a, UiControl b) {
+        return Math.abs(a.x() - b.x()) < 0.01f
+                && Math.abs(a.y() - b.y()) < 0.01f
+                && Math.abs(a.width() - b.width()) < 0.01f
+                && Math.abs(a.height() - b.height()) < 0.01f;
     }
 
     private record PlaneBasis(Vector normal, Vector right, Vector up) {}

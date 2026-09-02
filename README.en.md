@@ -1,11 +1,11 @@
-<div align="center">
+<div align=\"center\">
 
 # HaoHan Display UI
 
 A standalone engine plugin for building interactive in-world Minecraft UIs with Display Entities.
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
-[![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)
+[![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)\
 [![Purpur](https://img.shields.io/badge/Purpur-Compatible-8A4FFF?style=for-the-badge)](https://purpurmc.org/)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Gradle](https://img.shields.io/badge/Gradle-Build-02303A?style=for-the-badge&logo=gradle&logoColor=white)](https://gradle.org/)
@@ -42,16 +42,18 @@ The video demonstrates `/hhdui demo` and its test pages:
 4. Camera billboards, X/Y/Z axis locks, and 45-degree rotations.
 5. URL, player command, console command, and permission-tested command actions.
 6. Slider, checkbox, and control callbacks.
-7. Shapes, icons, and text with independent random animations.
-8. Application navigation scroll list (Choose App).
-9. **Mixed 3D Mobs & Items Grid (8 Slots)**: Compact cute living mobs (Baby Cow, Baby Pig, Allay, Baby Zombie) mixed with 3D items (Diamond Sword, Trident, Helmet, Totem) in framed slot boxes with hover spin, auto spin, 3D tilt, and angle snapping.
-10. **3D Entity Showcase & Inspector**: Full-size living mob inspector (Living Cow, Dragon Head 360°, Diamond Knight Zombie).
+7. **Geometric Shapes**: Analytical 3-piece triangle decomposition (`TriangleNode`), cyberpunk slanted badges (`ParallelogramNode`), axial rolled beams (`LineNode` roll), and closed star/pulse waveforms (`PolylineNode`).
+8. Shapes, icons, and text with independent random animations.
+9. Application navigation scroll list (Choose App).
+10. **Mixed 3D Mobs & Items Grid (8 Slots)**: Compact cute living mobs (Baby Cow, Baby Pig, Allay, Baby Zombie) mixed with 3D items (Diamond Sword, Trident, Helmet, Totem) in framed slot boxes with hover spin, auto spin, 3D tilt, and angle snapping.
+11. **3D Entity Showcase & Inspector**: Full-size living mob inspector (Living Cow, Dragon Head 360°, Diamond Knight Zombie).
 
 ## Features
 
 | Area | Capabilities |
 | --- | --- |
-| Rendering | `TextDisplay`, `ItemDisplay`, `BlockDisplay`, and layered panels. |
+| Rendering | `TextDisplay`, `ItemDisplay`, `BlockDisplay`, 2D/3D shapes, and layered panels. |
+| Shapes & Geometry | Analytical 3-piece triangles (`TriangleNode`), parallelograms/slanted badges (`ParallelogramNode`), closed polylines (`PolylineNode`), axial rolled lines (`LineNode.roll`). |
 | 3D Custom Models | 3D custom item and mob model rendering (`EntityModelNode`) with 3-axis scale, transforms (HEAD/FIXED/GUI), and Euler rotation angles (Yaw, Pitch, Roll). |
 | Vanilla Living Mobs | Native Minecraft living mob rendering (`MobEntityNode`) like Cows, Zombies, Allays... with `NoAI`, `Silent`, `Invulnerable`, custom scale (`GENERIC_SCALE`), and customizer consumers without needing resource packs. |
 | Model Rotation | Interactive cursor tracking on hover, continuous auto-spinning, and hover-triggered spinning. |
@@ -87,7 +89,7 @@ The video demonstrates `/hhdui demo` and its test pages:
 
 ## Installation
 
-1. Build or download `HaoHanDisplayUI-1.0.1.jar`.
+1. Build or download `HaoHanDisplayUI-1.0.2.jar`.
 2. Copy the JAR into the server's `plugins/` directory.
 3. Add the dependency to the consumer plugin's `plugin.yml`:
 
@@ -97,7 +99,7 @@ depend: [HaoHanDisplayUI]
 
 4. Restart the server.
 5. Run `/hhdui info` to confirm that the engine is active.
-6. Run `/hhdui demo` in game to open the built-in 10-page demonstration.
+6. Run `/hhdui demo` in game to open the built-in 11-page demonstration.
 
 ## Build From Source
 
@@ -110,7 +112,7 @@ Run in the project's root directory:
 The output JAR:
 
 ```text
-build/libs/HaoHanDisplayUI-1.0.1.jar
+build/libs/HaoHanDisplayUI-1.0.2.jar
 ```
 
 Fast assemble without tests:
@@ -133,7 +135,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.1'
+    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.2'
 }
 ```
 
@@ -145,7 +147,7 @@ Server operators receive this permission by default.
 | Command | Description |
 | --- | --- |
 | `/hhdui info` | Displays active scene count and the service registration name. |
-| `/hhdui demo` | Creates a private 10-page demonstration UI for the sender. |
+| `/hhdui demo` | Creates a private 11-page demonstration UI for the sender. |
 | `/hhdui clear` | Removes all active demonstration scenes. |
 
 ## Permissions
@@ -162,7 +164,8 @@ The public API is organized by responsibility:
 | --- | --- |
 | `api` | Service, documents, handles, and scene options. |
 | `api.layout` | Rectangles, anchors, and camera transforms. |
-| `api.node` | Text, item, icon, block, 3D entity model, and vanilla mob entity nodes. |
+| `api.node` | Text, item, icon, block, shape (Triangle, Parallelogram, Line, Polyline), 3D entity model, and vanilla mob entity nodes. |
+| `api.shape` | TRS matrix calculations and analytical geometry for Display Entities. |
 | `api.text` | Rich text builders and alignment helpers. |
 | `api.interaction` | Buttons, actions, and click callbacks. |
 | `api.interaction.event` | Interaction Bukkit events. |
@@ -183,6 +186,10 @@ import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.api.node.MobEntityNode;
+import vn.haohan.displayui.api.node.TriangleNode;
+import vn.haohan.displayui.api.node.ParallelogramNode;
+import vn.haohan.displayui.api.node.LineNode;
+import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 ```
@@ -465,8 +472,7 @@ handle.stopAnimation();
 ```
 
 Built-in presets: `fadeIn`, `fadeOut`, `slideIn`, `scaleIn`. Supported easings:
-`LINEAR`, quadratic, cubic, ease-in/out, `BACK_OUT`, and `ELASTIC_OUT`.
-
+`LINEAR`, quadratic, cubic, ease-in/out, `BACK_OUT`, and `ELASTIC_OUT`.\
 ## Slider and checkbox controls
 
 ```java
@@ -514,6 +520,10 @@ UiRect indicator = checkbox.indicatorRect();
 | --- | --- |
 | `MobEntityNode` | Native living mob (`LivingEntity`) with NoAI, scale, customizer, yaw/pitch, and hover-spin. |
 | `EntityModelNode` | 3D custom entity/item model with hover-spin, cursor tracking, Euler rotation, and angle locks. |
+| `TriangleNode` | Analytical 3-piece triangle decomposition with exact 2D shearing. |
+| `ParallelogramNode` | Parallelograms and cyberpunk slanted badge quad panels. |
+| `LineNode` | 2D/3D line segment with thickness and axial rotation (`roll`). |
+| `PolylineNode` | Multi-point continuous polyline, supports closed loops (`closed`). |
 | `AlignedTextNode` | Rectangle-based text with layout and optical correction. |
 | `TextNode` | Low-level text with direct anchor, line width, and scale control. |
 | `UiIconNode` | Box-based item icon with intrinsic texture dimensions. |
@@ -733,27 +743,28 @@ Best practices:
 
 ```text
 HaoHanDisplayUI/
-├─ src/main/java/vn/haohan/displayui/
-│  ├─ api/                  Public API for consumer plugins (Document, Handle, Service, Options, Pager)
-│  │  ├─ animation/         UiAnimation, UiEasing, UiEffects
-│  │  ├─ icon/              UiIconRegistry
-│  │  ├─ interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
-│  │  │  └─ event/          UiButtonClickEvent, UiControlChangeEvent
-│  │  ├─ layout/            UiRect, UiAnchor, UiCameraTransform
-│  │  ├─ node/              MobEntityNode, EntityModelNode, AlignedTextNode, TextNode, UiIconNode, ItemNode, BlockNode
-│  │  ├─ text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
-│  │  └─ view/              UiAudience
-│  ├─ runtime/              Scene, raycaster, packet visibility, model rotation & interaction runtime
-│  ├─ DisplayUiCommand.java Administrative commands (/hhdui demo, info, clear)
-│  └─ HaoHanDisplayUIPlugin.java Plugin entry point
-├─ src/main/resources/
-│  └─ plugin.yml
-├─ src/test/java/           JUnit 5 test suite (Model, Pager, Raycast, MobEntity, etc.)
-├─ media/
-│  ├─ Demo.gif              Demo animation for GitHub README
-│  └─ Demo.mp4              High-quality video with sound
-├─ build.gradle
-└─ settings.gradle
+├── src/main/java/vn/haohan/displayui/
+│   ├── api/                  Public API for consumer plugins (Document, Handle, Service, Options, Pager)
+│   │   ├── animation/         UiAnimation, UiEasing, UiEffects
+│   │   ├── icon/              UiIconRegistry
+│   │   ├── interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
+│   │   │   └── event/          UiButtonClickEvent, UiControlChangeEvent
+│   │   ├── layout/            UiRect, UiAnchor, UiCameraTransform
+│   │   ├── node/              MobEntityNode, EntityModelNode, TriangleNode, ParallelogramNode, LineNode, PolylineNode, AlignedTextNode, TextNode, UiIconNode, ItemNode, BlockNode
+│   │   ├── shape/             DisplayShapeMath, TRSResult
+│   │   ├── text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
+│   │   └── view/              UiAudience
+│   ├── runtime/              Scene, raycaster, packet visibility, model rotation & interaction runtime
+│   ├── DisplayUiCommand.java Administrative commands (/hhdui demo, info, clear)
+│   └── HaoHanDisplayUIPlugin.java Plugin entry point
+├── src/main/resources/
+│   └── plugin.yml
+├── src/test/java/           JUnit 5 test suite (DisplayShapeTest, Model, Pager, Raycast, MobEntity, etc.)
+├── media/
+│   ├── Demo.gif              Demo animation for GitHub README
+│   └── Demo.mp4              High-quality video with sound
+├── build.gradle
+└── settings.gradle
 ```
 
 ## Operational Notes

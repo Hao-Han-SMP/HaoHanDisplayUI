@@ -32,7 +32,8 @@ public record TextNode(
         float scale,
         TextDisplay.TextAlignment alignment,
         boolean shadow,
-        boolean seeThrough
+        boolean seeThrough,
+        boolean doubleSided
 ) implements UiNode {
     public TextNode {
         Objects.requireNonNull(text, "text");
@@ -41,8 +42,21 @@ public record TextNode(
         if (scale <= 0.0f) throw new IllegalArgumentException("scale must be positive");
     }
 
+    public TextNode(Component text, float x, float y, float depth, int lineWidth, float scale,
+                    TextDisplay.TextAlignment alignment, boolean shadow, boolean seeThrough) {
+        this(text, x, y, depth, lineWidth, scale, alignment, shadow, seeThrough, false);
+    }
+
     public static TextNode left(Component text, float x, float y, int lineWidth) {
         return new TextNode(text, x, y, 0.002f, lineWidth, 0.5f,
-                TextDisplay.TextAlignment.LEFT, true, false);
+                TextDisplay.TextAlignment.LEFT, true, false, false);
+    }
+
+    public TextNode withDoubleSided(boolean doubleSided) {
+        return new TextNode(text, x, y, depth, lineWidth, scale, alignment, shadow, seeThrough, doubleSided);
+    }
+
+    public TextNode doubleSided(boolean doubleSided) {
+        return withDoubleSided(doubleSided);
     }
 }

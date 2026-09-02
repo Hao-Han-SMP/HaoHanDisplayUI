@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
+import vn.haohan.displayui.api.view.UiFollowMode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,9 @@ public final class DemoContext {
     private int selectedApp;
     private final List<AppEntry> appEntries = new ArrayList<>(AppEntry.defaultApps());
     private UiCameraTransform cameraTransform = UiCameraTransform.fixed();
+    private UiFollowMode followMode = UiFollowMode.NONE;
+    private boolean doubleSided = false;
+    private boolean mirrorSide = true;
     private Consumer<DemoContext> pageUpdater;
 
     public DemoContext(UUID playerId) {
@@ -54,11 +58,32 @@ public final class DemoContext {
 
     public List<AppEntry> appEntries() { return appEntries; }
 
+    public boolean doubleSided() { return doubleSided; }
+    public void doubleSided(boolean doubleSided) { this.doubleSided = doubleSided; }
+
+    public boolean mirrorSide() { return mirrorSide; }
+    public void mirrorSide(boolean mirrorSide) { this.mirrorSide = mirrorSide; }
+
     public UiCameraTransform cameraTransform() { return cameraTransform; }
     public void cameraTransform(UiCameraTransform cameraTransform) {
         this.cameraTransform = cameraTransform;
         if (handle != null && handle.isValid()) {
             handle.cameraTransform(cameraTransform);
+        }
+    }
+
+    public UiFollowMode followMode() { return followMode; }
+    public void followMode(UiFollowMode followMode) {
+        this.followMode = followMode;
+        if (handle != null && handle.isValid()) {
+            Player p = player();
+            if (p != null) {
+                if (followMode == UiFollowMode.NONE) {
+                    handle.stopFollow();
+                } else {
+                    handle.follow(p, followMode, 3.0, 0.22f);
+                }
+            }
         }
     }
 

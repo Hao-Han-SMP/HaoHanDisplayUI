@@ -136,11 +136,11 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
 
         UiHit nearest = nearestHit(player);
         if (nearest == null) return false;
-        nearest.scene().activate(nearest);
+        boolean handled = nearest.scene().activate(nearest);
         if (nearest.control() instanceof vn.haohan.displayui.api.interaction.UiSlider slider) {
             dragging.put(player.getUniqueId(), new SliderDragSession(nearest.scene(), slider.id()));
         }
-        return true;
+        return handled;
     }
 
     public boolean handleScroll(Player player, int direction) {

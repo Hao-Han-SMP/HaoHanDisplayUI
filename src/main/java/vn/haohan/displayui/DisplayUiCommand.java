@@ -18,104 +18,87 @@
  */
 package vn.haohan.displayui;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import vn.haohan.displayui.api.DisplayUiService;
 import vn.haohan.displayui.api.UiOptions;
+import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.animation.UiEasing;
 import vn.haohan.displayui.api.interaction.UiControlChange;
-import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.demo.DemoContext;
 import vn.haohan.displayui.demo.DemoPage;
 import vn.haohan.displayui.demo.DemoUiRenderer;
 import vn.haohan.displayui.demo.mobgrid.MobGridShowcase;
 import vn.haohan.displayui.demo.pages.*;
-import vn.haohan.displayui.runtime.DisplayUiServiceImpl;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 final class DisplayUiCommand implements CommandExecutor, TabCompleter {
-    private static final String LEGACY_DEMO_OWNER = "haohandisplayui:demo";
+    private static final List<String> SUBCOMMANDS = List.of(
+            "demo", "mobgrid", "clear", "stats", "page", "follow", "camera", "reload");
+    private static final List<String> FOLLOW_OPTIONS = List.of("none", "smooth", "hard");
+    private static final List<String> CAMERA_PRESETS = List.of("fixed", "face_player", "tilt_up", "tilt_down", "rotate_left", "rotate_right", "skew", "reset");
 
     private final HaoHanDisplayUIPlugin plugin;
-    private final DisplayUiServiceImpl service;
+    private final DisplayUiService service;
+    private final Map<UUID, DemoContext> demos = new HashMap<>();
+    private final Map<UUID, MobGridShowcase.Session> mobGrids = new HashMap<>();
     private final List<DemoPage> pages;
-    private final Map<UUID, DemoContext> demos = new LinkedHashMap<>();
-    private final Map<UUID, MobGridShowcase.Session> mobGrids = new LinkedHashMap<>();
 
-    DisplayUiCommand(HaoHanDisplayUIPlugin plugin, DisplayUiServiceImpl service) {
-        this.plugin = plugin;
-        this.service = service;
+    DisplayUiCommand(HaoHanDisplayUIPlugin plugin, DisplayUiService service) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.service = Objects.requireNonNull(service, "service");
         this.pages = List.of(
                 new TextStylesDemoPage(),
                 new ListLayoutsDemoPage(),
-                new InteractiveHoverDemoPage(),
-                new CameraAxisLockDemoPage(),
-                new ActionsLinkCommandDemoPage(),
                 new LiveControlsDemoPage(),
+                new GeometricShapesDemoPage(),
                 new PresetEffectGalleryDemoPage(),
-                new ChooseAppScrollListDemoPage(),
                 new MixedGrid3DDemoPage(),
-                new MobShowcase3DDemoPage()
+                new MobShowcase3DDemoPage(),
+                new ChooseAppScrollListDemoPage(),
+                new ActionsLinkCommandDemoPage(),
+                new CameraAxisLockDemoPage()
         );
-
-        Bukkit.getScheduler().runTaskTimer(plugin, this::animateDemos, 1L, 1L);
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::animateDemos, 1L, 1L);
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-                             @NotNull String label, @NotNull String[] args) {
-        String action = args.length == 0 ? "info" : args[0].toLowerCase();
-        return switch (action) {
-            case "info" -> info(sender);
-            case "demo" -> demo(sender);
-            case "mobgrid", "testallmobs", "allmobs" -> mobGrid(sender, args);
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!sender.hasPermission("haohan.displayui.admin")) {
+            sender.sendMessage("§cYou do not have permission to use this command.");
+            return true;
+        }
+
+        String sub = (args.length > 0) ? args[0].toLowerCase() : "demo";
+        return switch (sub) {
+            case "demo" -> startDemo(sender);
+            case "mobgrid" -> mobGrid(sender, args);
             case "clear" -> clear(sender);
-            default -> false;
+            case "stats" -> stats(sender);
+            case "page" -> setPage(sender, args);
+            case "follow" -> setFollow(sender, args);
+            case "camera" -> setCamera(sender, args);
+            case "reload" -> reload(sender);
+            default -> {
+                sender.sendMessage("§cUnknown subcommand. Use /hhdui <demo|mobgrid|clear|stats|page|follow|camera|reload>");
+                yield true;
+            }
         };
     }
 
-    @Override
-    public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
-                                                @NotNull String alias, @NotNull String[] args) {
-        if (args.length == 1) {
-            List<String> sub = List.of("info", "demo", "mobgrid", "testallmobs", "clear");
-            String prefix = args[0].toLowerCase();
-            return sub.stream().filter(s -> s.startsWith(prefix)).toList();
-        }
-        if (args.length == 2) {
-            String sub = args[0].toLowerCase();
-            if (sub.equals("mobgrid") || sub.equals("testallmobs") || sub.equals("allmobs")) {
-                int totalPages = MobGridShowcase.totalPages();
-                List<String> pageOptions = new ArrayList<>();
-                pageOptions.add("1");
-                for (int p = 5; p <= totalPages; p += 5) {
-                    pageOptions.add(String.valueOf(p));
-                }
-                if (!pageOptions.contains(String.valueOf(totalPages))) {
-                    pageOptions.add(String.valueOf(totalPages));
-                }
-                return pageOptions.stream().filter(p -> p.startsWith(args[1])).toList();
-            }
-        }
-        return Collections.emptyList();
-    }
-
-    private boolean info(CommandSender sender) {
-        sender.sendMessage("§dHaoHanDisplayUI §7- active scenes: §f" + service.active().size());
-        sender.sendMessage("§7Total Registered Mobs: §f" + EntityModelNode.getRegisteredMobNames().size());
-        sender.sendMessage("§7API: §fvn.haohan.displayui.api.DisplayUiService");
-        return true;
-    }
-
-    private boolean demo(CommandSender sender) {
+    private boolean startDemo(CommandSender sender) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage("§cThis command must be run by a player.");
             return true;
@@ -135,6 +118,7 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 DemoUiRenderer.render(pages, context),
                 new UiOptions(80.0f, 12.0, false, 0.2f, "haohan_display_ui", context.cameraTransform()),
                 candidate -> candidate.getUniqueId().equals(player.getUniqueId())));
+        context.handle().mirrorSide(context.mirrorSide());
 
         context.handle().onClick(click -> onDemoClick(context, click.button().id(), click.player()));
         context.handle().onControlChange(change -> onDemoControlChange(context, change));
@@ -160,29 +144,27 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
             } catch (NumberFormatException ignored) {}
         }
 
-        int totalPages = MobGridShowcase.totalPages();
-        targetPage = Math.min(targetPage, totalPages - 1);
-
         cleanupExisting(player.getUniqueId());
 
         Location origin = player.getEyeLocation()
-                .add(player.getEyeLocation().getDirection().multiply(3.0));
+                .add(player.getEyeLocation().getDirection().multiply(4.0));
         origin.setYaw(player.getLocation().getYaw() + 180.0f);
         origin.setPitch(0.0f);
 
         MobGridShowcase.Session session = new MobGridShowcase.Session(player.getUniqueId(), targetPage);
-        session.handle(service.create(mobGridOwner(player.getUniqueId()), origin,
+        UiHandle handle = service.create(
+                "mobgrid:" + player.getUniqueId(),
+                origin,
                 MobGridShowcase.buildPage(session),
                 new UiOptions(80.0f, 12.0, false, 0.2f, "haohan_display_ui_mobgrid", session.cameraTransform()),
-                candidate -> candidate.getUniqueId().equals(player.getUniqueId())));
+                candidate -> candidate.getUniqueId().equals(player.getUniqueId()));
 
-        session.handle().onClick(click -> MobGridShowcase.onClick(session, click.button().id(), click.player()));
-        session.handle().animate(UiAnimation.fadeIn(12, UiEasing.EASE_OUT));
+        session.handle(handle);
+        handle.onClick(click -> MobGridShowcase.onClick(session, click.button().id(), click.player()));
+        handle.animate(UiAnimation.fadeIn(10, UiEasing.EASE_OUT));
         mobGrids.put(player.getUniqueId(), session);
 
-        sender.sendMessage("§a[DisplayUI] Opened Minecraft Mobs Grid (Page " + (targetPage + 1) + "/" + totalPages
-                + ", " + EntityModelNode.getRegisteredMobNames().size() + " total mobs).");
-        sender.sendMessage("§7Hover to 3D spin models · Click any slot to view model file and CMD ID in chat.");
+        sender.sendMessage("§aOpened 3D Mob Grid showcase (Page " + (targetPage + 1) + ")");
         return true;
     }
 
@@ -206,6 +188,23 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
             case "next_page" -> {
                 context.page((context.page() + 1) % pages.size());
                 showPage(context);
+                return;
+            }
+            case "toggle_doublesided" -> {
+                context.doubleSided(!context.doubleSided());
+                context.updateView();
+                player.sendMessage(context.doubleSided()
+                        ? "§6✧ Double-Sided Rendering: §aENABLED (All elements rendered 2-sided)"
+                        : "§6✧ Double-Sided Rendering: §cDISABLED (Single-sided standard)");
+                return;
+            }
+            case "toggle_mirrorside" -> {
+                context.mirrorSide(!context.mirrorSide());
+                context.handle().mirrorSide(context.mirrorSide());
+                context.updateView();
+                player.sendMessage(context.mirrorSide()
+                        ? "§b✦ Mirror Side: §aENABLED (True mirrored layout and bidirectional controls)"
+                        : "§b✦ Mirror Side: §cDISABLED (Standard 3D rotation)");
                 return;
             }
             default -> {}
@@ -250,16 +249,12 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
             context.advanceGradientFrame();
             DemoPage activePage = pages.get(context.page());
             activePage.onTick(context);
-
-            if (context.page() == 0) {
-                context.updateView();
-            }
         }
 
         Iterator<MobGridShowcase.Session> gridIterator = mobGrids.values().iterator();
         while (gridIterator.hasNext()) {
             MobGridShowcase.Session session = gridIterator.next();
-            Player player = Bukkit.getPlayer(session.playerId());
+            Player player = plugin.getServer().getPlayer(session.playerId());
             if (player == null || session.handle() == null || !session.handle().isValid()) {
                 if (session.handle() != null && session.handle().isValid()) session.handle().remove();
                 gridIterator.remove();
@@ -268,33 +263,165 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean clear(CommandSender sender) {
-        int removed = 0;
-        for (DemoContext context : demos.values()) {
-            if (context.handle() != null && context.handle().isValid()) {
-                context.handle().remove();
-                removed++;
-            }
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§cThis command must be run by a player.");
+            return true;
         }
-        demos.clear();
 
-        for (MobGridShowcase.Session session : mobGrids.values()) {
-            if (session.handle() != null && session.handle().isValid()) {
-                session.handle().remove();
-                removed++;
-            }
-        }
-        mobGrids.clear();
-
-        removed += service.removeOwnedBy(LEGACY_DEMO_OWNER);
-        sender.sendMessage("§aRemoved " + removed + " active Display UI scene(s).");
+        cleanupExisting(player.getUniqueId());
+        sender.sendMessage("§aDemo UI removed.");
         return true;
     }
 
-    private String demoOwner(UUID playerId) {
-        return "haohandisplayui:demo/" + playerId.toString().toLowerCase();
+    private boolean stats(CommandSender sender) {
+        sender.sendMessage("§6--- HaoHanDisplayUI Stats ---");
+        sender.sendMessage("§7Active Scenes: §f" + service.active().size());
+        sender.sendMessage("§7Active Demos: §f" + demos.size());
+        sender.sendMessage("§7Active Mob Grids: §f" + mobGrids.size());
+        return true;
     }
 
-    private String mobGridOwner(UUID playerId) {
-        return "haohandisplayui:mobgrid/" + playerId.toString().toLowerCase();
+    private boolean setPage(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§cThis command must be run by a player.");
+            return true;
+        }
+
+        DemoContext context = demos.get(player.getUniqueId());
+        if (context == null || context.handle() == null || !context.handle().isValid()) {
+            sender.sendMessage("§cYou don't have an active demo UI. Use /hhdui demo first.");
+            return true;
+        }
+
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /hhdui page <1-" + pages.size() + ">");
+            return true;
+        }
+
+        try {
+            int pageNum = Integer.parseInt(args[1]) - 1;
+            if (pageNum < 0 || pageNum >= pages.size()) {
+                sender.sendMessage("§cPage number must be between 1 and " + pages.size());
+                return true;
+            }
+
+            context.page(pageNum);
+            showPage(context);
+            sender.sendMessage("§aSwitched to page " + (pageNum + 1) + ": " + pages.get(pageNum).title());
+        } catch (NumberFormatException e) {
+            sender.sendMessage("§cInvalid page number: " + args[1]);
+        }
+        return true;
+    }
+
+    private boolean setFollow(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§cThis command must be run by a player.");
+            return true;
+        }
+
+        DemoContext context = demos.get(player.getUniqueId());
+        if (context == null || context.handle() == null || !context.handle().isValid()) {
+            sender.sendMessage("§cYou don't have an active demo UI. Use /hhdui demo first.");
+            return true;
+        }
+
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /hhdui follow <none|smooth|hard>");
+            return true;
+        }
+
+        String modeStr = args[1].toLowerCase();
+        vn.haohan.displayui.api.view.UiFollowMode mode = switch (modeStr) {
+            case "smooth" -> vn.haohan.displayui.api.view.UiFollowMode.SMOOTH;
+            case "hard" -> vn.haohan.displayui.api.view.UiFollowMode.HARD;
+            case "none" -> vn.haohan.displayui.api.view.UiFollowMode.NONE;
+            default -> null;
+        };
+
+        if (mode == null) {
+            sender.sendMessage("§cInvalid follow mode. Choose from: none, smooth, hard");
+            return true;
+        }
+
+        context.followMode(mode);
+        sender.sendMessage("§aFollow mode set to: " + mode.name());
+        return true;
+    }
+
+    private boolean setCamera(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§cThis command must be run by a player.");
+            return true;
+        }
+
+        DemoContext context = demos.get(player.getUniqueId());
+        if (context == null || context.handle() == null || !context.handle().isValid()) {
+            sender.sendMessage("§cYou don't have an active demo UI. Use /hhdui demo first.");
+            return true;
+        }
+
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /hhdui camera <fixed|face_player|tilt_up|tilt_down|rotate_left|rotate_right|skew|reset>");
+            return true;
+        }
+
+        String preset = args[1].toLowerCase();
+        vn.haohan.displayui.api.layout.UiCameraTransform transform = switch (preset) {
+            case "fixed", "reset" -> vn.haohan.displayui.api.layout.UiCameraTransform.fixed();
+            case "face_player" -> vn.haohan.displayui.api.layout.UiCameraTransform.cameraFacing();
+            case "tilt_up" -> vn.haohan.displayui.api.layout.UiCameraTransform.fixed().angleX(-25.0f);
+            case "tilt_down" -> vn.haohan.displayui.api.layout.UiCameraTransform.fixed().angleX(25.0f);
+            case "rotate_left" -> vn.haohan.displayui.api.layout.UiCameraTransform.fixed().angleY(-30.0f);
+            case "rotate_right" -> vn.haohan.displayui.api.layout.UiCameraTransform.fixed().angleY(30.0f);
+            case "skew" -> vn.haohan.displayui.api.layout.UiCameraTransform.fixed().angles(15.0f, -20.0f, 5.0f);
+            default -> null;
+        };
+
+        if (transform == null) {
+            sender.sendMessage("§cInvalid camera preset. Choose from: fixed, face_player, tilt_up, tilt_down, rotate_left, rotate_right, skew, reset");
+            return true;
+        }
+
+        context.cameraTransform(transform);
+        sender.sendMessage("§aCamera transform set to: " + preset);
+        return true;
+    }
+
+    private boolean reload(CommandSender sender) {
+        plugin.reloadConfig();
+        sender.sendMessage("§aHaoHanDisplayUI configuration reloaded.");
+        return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!sender.hasPermission("haohan.displayui.admin")) return List.of();
+
+        if (args.length == 1) {
+            return SUBCOMMANDS.stream()
+                    .filter(s -> s.startsWith(args[0].toLowerCase()))
+                    .toList();
+        } else if (args.length == 2) {
+            String sub = args[0].toLowerCase();
+            if ("follow".equals(sub)) {
+                return FOLLOW_OPTIONS.stream()
+                        .filter(s -> s.startsWith(args[1].toLowerCase()))
+                        .toList();
+            } else if ("camera".equals(sub)) {
+                return CAMERA_PRESETS.stream()
+                        .filter(s -> s.startsWith(args[1].toLowerCase()))
+                        .toList();
+            } else if ("page".equals(sub)) {
+                List<String> pageNums = new ArrayList<>();
+                for (int i = 1; i <= pages.size(); i++) pageNums.add(String.valueOf(i));
+                return pageNums.stream().filter(s -> s.startsWith(args[1])).toList();
+            }
+        }
+        return List.of();
+    }
+
+    private String demoOwner(UUID playerId) {
+        return "demo:" + playerId;
     }
 }

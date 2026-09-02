@@ -46,7 +46,8 @@ public record AlignedTextNode(
         UiVerticalAlignment verticalAlignment,
         float verticalOffset,
         boolean shadow,
-        boolean seeThrough
+        boolean seeThrough,
+        boolean doubleSided
 ) implements UiNode {
     public AlignedTextNode {
         Objects.requireNonNull(text, "text");
@@ -66,7 +67,7 @@ public record AlignedTextNode(
                            UiTextAlignment alignment) {
         this(text, x, y, width, height, 0.002f, alignment,
                 0.0f, 0.0f, 10.0f, UiText.estimateWidth(text, 10.0f),
-                UiVerticalAlignment.CENTER, 0.0f, false, false);
+                UiVerticalAlignment.CENTER, 0.0f, false, false, false);
     }
 
     public AlignedTextNode(Component text, UiRect bounds, UiTextAlignment alignment) {
@@ -81,7 +82,17 @@ public record AlignedTextNode(
                            boolean shadow, boolean seeThrough) {
         this(text, boxX, boxY, width, height, depth, alignment, leftOffset,
                 rightOffset, fontSize, contentWidth, UiVerticalAlignment.CENTER,
-                verticalOffset, shadow, seeThrough);
+                verticalOffset, shadow, seeThrough, false);
+    }
+
+    public AlignedTextNode(Component text, float boxX, float boxY, float width,
+                           float height, float depth, UiTextAlignment alignment,
+                           float leftOffset, float rightOffset, float fontSize,
+                           float contentWidth, UiVerticalAlignment verticalAlignment,
+                           float verticalOffset, boolean shadow, boolean seeThrough) {
+        this(text, boxX, boxY, width, height, depth, alignment, leftOffset,
+                rightOffset, fontSize, contentWidth, verticalAlignment,
+                verticalOffset, shadow, seeThrough, false);
     }
 
     @Override
@@ -109,7 +120,7 @@ public record AlignedTextNode(
     public AlignedTextNode offsets(float left, float right) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, left, right, fontSize, contentWidth,
-                verticalAlignment, verticalOffset, shadow, seeThrough);
+                verticalAlignment, verticalOffset, shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode offset(float bothSides) {
@@ -119,7 +130,7 @@ public record AlignedTextNode(
     public AlignedTextNode nudgeX(float pixels) {
         return new AlignedTextNode(text, boxX + pixels, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
-                verticalAlignment, verticalOffset, shadow, seeThrough);
+                verticalAlignment, verticalOffset, shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode opticalPreset(UiTextOpticalPreset preset) {
@@ -130,43 +141,53 @@ public record AlignedTextNode(
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, size,
                 UiText.estimateWidth(text, size), verticalAlignment, verticalOffset,
-                shadow, seeThrough);
+                shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode verticalOffset(float offset) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
-                verticalAlignment, offset, shadow, seeThrough);
+                verticalAlignment, offset, shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode shadowed(boolean shadow) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
-                verticalAlignment, verticalOffset, shadow, seeThrough);
+                verticalAlignment, verticalOffset, shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode seeThrough(boolean seeThrough) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
-                verticalAlignment, verticalOffset, shadow, seeThrough);
+                verticalAlignment, verticalOffset, shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode atDepth(float depth) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
-                verticalAlignment, verticalOffset, shadow, seeThrough);
+                verticalAlignment, verticalOffset, shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode align(UiVerticalAlignment verticalAlignment) {
         return new AlignedTextNode(text, boxX, boxY, width, height, depth,
                 alignment, leftOffset, rightOffset, fontSize, contentWidth,
                 Objects.requireNonNull(verticalAlignment, "verticalAlignment"),
-                verticalOffset, shadow, seeThrough);
+                verticalOffset, shadow, seeThrough, doubleSided);
     }
 
     public AlignedTextNode top() { return align(UiVerticalAlignment.TOP); }
     public AlignedTextNode centerVertical() { return align(UiVerticalAlignment.CENTER); }
     public AlignedTextNode bottom() { return align(UiVerticalAlignment.BOTTOM); }
+
+    public AlignedTextNode withDoubleSided(boolean doubleSided) {
+        return new AlignedTextNode(text, boxX, boxY, width, height, depth,
+                alignment, leftOffset, rightOffset, fontSize, contentWidth,
+                verticalAlignment, verticalOffset, shadow, seeThrough, doubleSided);
+    }
+
+    public AlignedTextNode doubleSided(boolean doubleSided) {
+        return withDoubleSided(doubleSided);
+    }
 
     public float boxWidth() { return width; }
     public float boxHeight() { return height; }

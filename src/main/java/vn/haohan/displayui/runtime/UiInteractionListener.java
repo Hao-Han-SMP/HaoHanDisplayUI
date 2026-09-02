@@ -14,8 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
- */
+ * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.\n */
 package vn.haohan.displayui.runtime;
 
 import org.bukkit.entity.Player;
@@ -75,11 +74,18 @@ public final class UiInteractionListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     public void onHotbarScroll(PlayerItemHeldEvent event) {
         if (event.getNewSlot() == event.getPreviousSlot()) return;
-        int direction = event.getNewSlot() > event.getPreviousSlot() ? 1 : -1;
-        if (service.handleScroll(event.getPlayer(), direction)) event.setCancelled(true);
+        int prev = event.getPreviousSlot();
+        int next = event.getNewSlot();
+        // Shortest directed step on circular 9-slot hotbar (handles 0 <-> 8 wrapping)
+        int diff = (next - prev + 9) % 9;
+        if (diff > 4) diff -= 9;
+        int direction = Integer.compare(diff, 0);
+        if (direction != 0 && service.handleScroll(event.getPlayer(), direction)) {
+            event.setCancelled(true);
+        }
     }
 
-    @EventHandler(priority = EventPriority.NORMAL)
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
         boolean isUiEntity = event.getRightClicked().getScoreboardTags().contains("hhdui_interaction")

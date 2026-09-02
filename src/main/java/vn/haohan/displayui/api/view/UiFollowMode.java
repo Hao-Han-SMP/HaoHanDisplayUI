@@ -16,15 +16,16 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package vn.haohan.displayui.api.node;
+package vn.haohan.displayui.api.view;
 
-/** One renderable node in a UI document. Coordinates are logical pixels. */
-public sealed interface UiNode permits TextNode, AlignedTextNode, ItemNode, UiIconNode, BlockNode,
-        UiBackgroundNode, EntityModelNode, MobEntityNode, LineNode, TriangleNode,
-        ParallelogramNode, PolylineNode {
-    float x();
-    float y();
-    float depth();
-    boolean doubleSided();
-    UiNode withDoubleSided(boolean doubleSided);
+/**
+ * Camera and player tracking modes for displaying interactive floating HUD interfaces.
+ */
+public enum UiFollowMode {
+    /** Stationary world-anchored UI (no follow). */
+    NONE,
+    /** Rigid HUD follow (instant 1:1 camera lock without delay). */
+    HARD,
+    /** Smooth interpolated / damped follow with subtle trailing inertia. */
+    SMOOTH
 }

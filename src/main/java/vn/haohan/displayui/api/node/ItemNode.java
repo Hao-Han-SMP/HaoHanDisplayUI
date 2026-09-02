@@ -29,7 +29,8 @@ public record ItemNode(
         float y,
         float depth,
         float scale,
-        ItemDisplay.ItemDisplayTransform transform
+        ItemDisplay.ItemDisplayTransform transform,
+        boolean doubleSided
 ) implements UiNode {
     public ItemNode {
         Objects.requireNonNull(item, "item");
@@ -39,12 +40,25 @@ public record ItemNode(
         item = item.clone();
     }
 
+    public ItemNode(ItemStack item, float x, float y, float depth, float scale,
+                    ItemDisplay.ItemDisplayTransform transform) {
+        this(item, x, y, depth, scale, transform, false);
+    }
+
     @Override
     public ItemStack item() {
         return item.clone();
     }
 
     public static ItemNode fixed(ItemStack item, float x, float y, float scale) {
-        return new ItemNode(item, x, y, 0.003f, scale, ItemDisplay.ItemDisplayTransform.FIXED);
+        return new ItemNode(item, x, y, 0.003f, scale, ItemDisplay.ItemDisplayTransform.FIXED, false);
+    }
+
+    public ItemNode withDoubleSided(boolean doubleSided) {
+        return new ItemNode(item, x, y, depth, scale, transform, doubleSided);
+    }
+
+    public ItemNode doubleSided(boolean doubleSided) {
+        return withDoubleSided(doubleSided);
     }
 }

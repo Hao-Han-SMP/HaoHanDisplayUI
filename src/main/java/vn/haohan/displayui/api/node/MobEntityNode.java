@@ -41,7 +41,8 @@ public record MobEntityNode(
         float pitch,
         boolean hoverRotatable,
         UiModelRotation rotation,
-        Consumer<LivingEntity> customizer
+        Consumer<LivingEntity> customizer,
+        boolean doubleSided
 ) implements UiNode {
     public MobEntityNode {
         Objects.requireNonNull(entityType, "entityType");
@@ -61,25 +62,33 @@ public record MobEntityNode(
         }
     }
 
+    public MobEntityNode(EntityType entityType, float x, float y, float depth,
+                         float scale, float width, float height,
+                         float yaw, float pitch, boolean hoverRotatable,
+                         UiModelRotation rotation, Consumer<LivingEntity> customizer) {
+        this(entityType, x, y, depth, scale, width, height, yaw, pitch,
+                hoverRotatable, rotation, customizer, false);
+    }
+
     public MobEntityNode(EntityType entityType, float x, float y, float scale) {
         this(entityType, x, y, 0.005f, scale, 32.0f, 32.0f,
-                0.0f, 0.0f, true, UiModelRotation.defaults(), null);
+                0.0f, 0.0f, true, UiModelRotation.defaults(), null, false);
     }
 
     public MobEntityNode(EntityType entityType, float x, float y, float width, float height, float scale) {
         this(entityType, x, y, 0.005f, scale, width, height,
-                0.0f, 0.0f, true, UiModelRotation.defaults(), null);
+                0.0f, 0.0f, true, UiModelRotation.defaults(), null, false);
     }
 
     public MobEntityNode(EntityType entityType, UiRect bounds, float scale) {
         this(entityType, Objects.requireNonNull(bounds, "bounds").centerX(), bounds.centerY(),
                 0.005f, scale, bounds.width(), bounds.height(),
-                0.0f, 0.0f, true, UiModelRotation.defaults(), null);
+                0.0f, 0.0f, true, UiModelRotation.defaults(), null, false);
     }
 
     public MobEntityNode withRotation(float yawDegrees, float pitchDegrees) {
         return new MobEntityNode(entityType, x, y, depth, scale, width, height,
-                yawDegrees, pitchDegrees, hoverRotatable, rotation, customizer);
+                yawDegrees, pitchDegrees, hoverRotatable, rotation, customizer, doubleSided);
     }
 
     public MobEntityNode withYaw(float yawDegrees) {
@@ -92,32 +101,41 @@ public record MobEntityNode(
 
     public MobEntityNode withScale(float newScale) {
         return new MobEntityNode(entityType, x, y, depth, newScale, width, height,
-                yaw, pitch, hoverRotatable, rotation, customizer);
+                yaw, pitch, hoverRotatable, rotation, customizer, doubleSided);
     }
 
     public MobEntityNode withSize(float newWidth, float newHeight) {
         return new MobEntityNode(entityType, x, y, depth, scale, newWidth, newHeight,
-                yaw, pitch, hoverRotatable, rotation, customizer);
+                yaw, pitch, hoverRotatable, rotation, customizer, doubleSided);
     }
 
     public MobEntityNode withDepth(float newDepth) {
         return new MobEntityNode(entityType, x, y, newDepth, scale, width, height,
-                yaw, pitch, hoverRotatable, rotation, customizer);
+                yaw, pitch, hoverRotatable, rotation, customizer, doubleSided);
     }
 
     public MobEntityNode withCustomizer(Consumer<LivingEntity> newCustomizer) {
         return new MobEntityNode(entityType, x, y, depth, scale, width, height,
-                yaw, pitch, hoverRotatable, rotation, newCustomizer);
+                yaw, pitch, hoverRotatable, rotation, newCustomizer, doubleSided);
     }
 
     public MobEntityNode hoverRotatable(boolean rotatable) {
         return new MobEntityNode(entityType, x, y, depth, scale, width, height,
-                yaw, pitch, rotatable, rotation, customizer);
+                yaw, pitch, rotatable, rotation, customizer, doubleSided);
     }
 
     public MobEntityNode withRotationConstraint(UiModelRotation constraint) {
         return new MobEntityNode(entityType, x, y, depth, scale, width, height,
-                yaw, pitch, hoverRotatable, constraint, customizer);
+                yaw, pitch, hoverRotatable, constraint, customizer, doubleSided);
+    }
+
+    public MobEntityNode withDoubleSided(boolean doubleSided) {
+        return new MobEntityNode(entityType, x, y, depth, scale, width, height,
+                yaw, pitch, hoverRotatable, rotation, customizer, doubleSided);
+    }
+
+    public MobEntityNode doubleSided(boolean doubleSided) {
+        return withDoubleSided(doubleSided);
     }
 
     public MobEntityNode lockYaw(boolean locked) {
@@ -152,10 +170,9 @@ public record MobEntityNode(
         return withRotationConstraint(UiModelRotation.hoverSpin(degreesPerTick));
     }
 
-    public boolean contains(float localX, float localY) {
+    public boolean contains(float px, float py) {
         float halfW = width * 0.5f;
         float halfH = height * 0.5f;
-        return localX >= x - halfW && localX <= x + halfW
-                && localY >= y - halfH && localY <= y + halfH;
+        return px >= x - halfW && px <= x + halfW && py >= y - halfH && py <= y + halfH;
     }
 }

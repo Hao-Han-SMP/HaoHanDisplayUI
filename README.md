@@ -1,4 +1,4 @@
-<div align="center">
+<div align=\"center\">
 
 # HaoHan Display UI
 
@@ -41,16 +41,18 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 4. Camera billboard, khóa trục X/Y/Z và góc xoay 45°.
 5. URL, player command, console command và command permission test.
 6. Slider, checkbox và control callback.
-7. Shape, icon và text chạy random animation theo từng node.
-8. Scroll list điều hướng danh sách ứng dụng (Choose App).
-9. **Lưới 3D Mobs & Items thu nhỏ (8 ô)**: Trộn lẫn các mob nhỏ xinh (Bò con, Heo con, Allay, Zombie bé) cùng các item 3D (Kiếm, Nón, Đinh ba, Totem) trong các ô slot kính viền xám, hỗ trợ hover spin, auto spin, 3D tilt và snap góc.
-10. **3D Entity Showcase & Inspector**: Trình diễn các model lớn (Bò lớn, Đầu rồng Ender 360°, Zombie Hiệp sĩ full giáp).
+7. **Geometric Shapes**: Ghép tam giác 3 mảnh (`TriangleNode`), thẻ vát Cyberpunk (`ParallelogramNode`), chùm tia xoay trục (`LineNode` roll) và ngôi sao/sóng tim khép kín (`PolylineNode`).
+8. Shape, icon và text chạy random animation theo từng node.
+9. Scroll list điều hướng danh sách ứng dụng (Choose App).
+10. **Lưới 3D Mobs & Items thu nhỏ (8 ô)**: Trộn lẫn các mob nhỏ xinh (Bò con, Heo con, Allay, Zombie bé) cùng các item 3D (Kiếm, Nón, Đinh ba, Totem) trong các ô slot kính viền xám, hỗ trợ hover spin, auto spin, 3D tilt và snap góc.
+11. **3D Entity Showcase & Inspector**: Trình diễn các model lớn (Bò lớn, Đầu rồng Ender 360°, Zombie Hiệp sĩ full giáp).
 
 ## Tính năng
 
 | Nhóm | Khả năng |
 | --- | --- |
-| Render | `TextDisplay`, `ItemDisplay`, `BlockDisplay` và panel nhiều layer. |
+| Render | `TextDisplay`, `ItemDisplay`, `BlockDisplay`, shape 2D/3D và panel nhiều layer. |
+| Shapes & Geometry | Ghép tam giác giải tích (`TriangleNode`), hình bình hành/thẻ vát (`ParallelogramNode`), đa tuyến khép kín (`PolylineNode`), đoạn thẳng xoay trục (`LineNode.roll`). |
 | 3D Custom Models | Hiển thị 3D item/mob model (`EntityModelNode`) với scale 3 trục, transform (HEAD/FIXED/GUI) và góc Euler (Yaw, Pitch, Roll). |
 | Vanilla Living Mobs | Hiển thị Mob thực tế (`MobEntityNode`) như Bò, Zombie, Allay... với `NoAI`, `Silent`, `Invulnerable`, custom scale (`GENERIC_SCALE`), customizer consumer (baby, trang bị, hiệu ứng) mà không cần resource pack. |
 | Model Rotation | Xoay 3D tương tác khi hover (cursor tracking), tự xoay liên tục (auto-spin), xoay khi hover (hover-spin). |
@@ -85,7 +87,7 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 
 ## Cài đặt
 
-1. Build hoặc tải `HaoHanDisplayUI-1.0.1.jar`.
+1. Build hoặc tải `HaoHanDisplayUI-1.0.2.jar`.
 2. Copy file JAR vào thư mục `plugins/` của server.
 3. Trong `plugin.yml` của plugin consumer, thêm dependency:
 
@@ -95,7 +97,7 @@ depend: [HaoHanDisplayUI]
 
 4. Khởi động lại server.
 5. Chạy `/hhdui info` để xác nhận engine hoạt động.
-6. Chạy `/hhdui demo` trong game để mở UI thử nghiệm (10 trang demo).
+6. Chạy `/hhdui demo` trong game để mở UI thử nghiệm (11 trang demo).
 
 ## Build từ mã nguồn
 
@@ -108,7 +110,7 @@ Chạy tại thư mục gốc của dự án:
 JAR đầu ra:
 
 ```text
-build/libs/HaoHanDisplayUI-1.0.1.jar
+build/libs/HaoHanDisplayUI-1.0.2.jar
 ```
 
 Build nhanh không chạy test:
@@ -131,7 +133,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.1'
+    compileOnly 'vn.haohan:HaoHanDisplayUI:1.0.2'
 }
 ```
 
@@ -143,7 +145,7 @@ permission này theo mặc định.
 | Lệnh | Mô tả |
 | --- | --- |
 | `/hhdui info` | Hiển thị số scene đang hoạt động và tên API service. |
-| `/hhdui demo` | Tạo UI demo 10 trang riêng cho người chạy lệnh. |
+| `/hhdui demo` | Tạo UI demo 11 trang riêng cho người chạy lệnh. |
 | `/hhdui clear` | Xóa toàn bộ scene demo đang được quản lý. |
 
 ## Permission
@@ -161,7 +163,8 @@ phẳng:
 | --- | --- |
 | `api` | Service, document, handle và tùy chọn của scene. |
 | `api.layout` | Rectangle, anchor và camera transform. |
-| `api.node` | Các node text, item, icon, block, 3D entity model và vanilla mob entity. |
+| `api.node` | Các node text, item, icon, block, shape (Triangle, Parallelogram, Line, Polyline), 3D entity model và vanilla mob entity. |
+| `api.shape` | Phép biến đổi TRS và hình học giải tích cho Display Entity. |
 | `api.text` | Builder rich text và helper căn chỉnh text. |
 | `api.interaction` | Button, action và click callback. |
 | `api.interaction.event` | Bukkit event của interaction. |
@@ -182,6 +185,10 @@ import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.api.node.MobEntityNode;
+import vn.haohan.displayui.api.node.TriangleNode;
+import vn.haohan.displayui.api.node.ParallelogramNode;
+import vn.haohan.displayui.api.node.LineNode;
+import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 ```
@@ -534,6 +541,10 @@ Ví dụ panel `180 × 116 px` với `pixelsPerBlock = 40` có kích thước kh
 | --- | --- |
 | `MobEntityNode` | Vanilla living mob (`LivingEntity`) với NoAI, scale, customizer, yaw/pitch và hover-spin. |
 | `EntityModelNode` | 3D custom entity/item model với hover-spin, cursor tracking, Euler rotation và khóa góc xoay. |
+| `TriangleNode` | Tam giác giải tích 2D/3D ghép 3 mảnh TextDisplay với shear chính xác. |
+| `ParallelogramNode` | Hình bình hành và thẻ vát góc kiểu Cyberpunk. |
+| `LineNode` | Đoạn thẳng 2D/3D với độ dày và góc xoay quanh trục (`roll`). |
+| `PolylineNode` | Đa tuyến liên tục qua nhiều đỉnh, hỗ trợ vẽ khép kín (`closed`). |
 | `AlignedTextNode` | Text theo rectangle, hỗ trợ layout và optical correction. |
 | `TextNode` | API text cấp thấp với anchor, line width và scale trực tiếp. |
 | `UiIconNode` | Item icon theo box và kích thước texture nội tại. |
@@ -788,27 +799,28 @@ Khuyến nghị:
 
 ```text
 HaoHanDisplayUI/
-├─ src/main/java/vn/haohan/displayui/
-│  ├─ api/                  Public API cho plugin consumer (Document, Handle, Service, Options, Pager)
-│  │  ├─ animation/         UiAnimation, UiEasing, UiEffects
-│  │  ├─ icon/              UiIconRegistry
-│  │  ├─ interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
-│  │  │  └─ event/          UiButtonClickEvent, UiControlChangeEvent
-│  │  ├─ layout/            UiRect, UiAnchor, UiCameraTransform
-│  │  ├─ node/              MobEntityNode, EntityModelNode, AlignedTextNode, TextNode, UiIconNode, ItemNode, BlockNode
-│  │  ├─ text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
-│  │  └─ view/              UiAudience
-│  ├─ runtime/              Scene, raycast, packet visibility, model rotation & interaction runtime
-│  ├─ DisplayUiCommand.java Lệnh quản trị (/hhdui demo, info, clear)
-│  └─ HaoHanDisplayUIPlugin.java Entry point plugin
-├─ src/main/resources/
-│  └─ plugin.yml
-├─ src/test/java/           Bộ test JUnit 5 (Model, Pager, Raycast, MobEntity, v.v.)
-├─ media/
-│  ├─ Demo.gif              Demo hiển thị trực tiếp trên GitHub
-│  └─ Demo.mp4              Video chất lượng cao có âm thanh
-├─ build.gradle
-└─ settings.gradle
+├── src/main/java/vn/haohan/displayui/
+│   ├── api/                  Public API cho plugin consumer (Document, Handle, Service, Options, Pager)
+│   │   ├── animation/         UiAnimation, UiEasing, UiEffects
+│   │   ├── icon/              UiIconRegistry
+│   │   ├── interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
+│   │   │   └── event/          UiButtonClickEvent, UiControlChangeEvent
+│   │   ├── layout/            UiRect, UiAnchor, UiCameraTransform
+│   │   ├── node/              MobEntityNode, EntityModelNode, TriangleNode, ParallelogramNode, LineNode, PolylineNode, AlignedTextNode, TextNode, UiIconNode, ItemNode, BlockNode
+│   │   ├── shape/             DisplayShapeMath, TRSResult
+│   │   ├── text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
+│   │   └── view/              UiAudience
+│   ├── runtime/              Scene, raycast, packet visibility, model rotation & interaction runtime
+│   ├── DisplayUiCommand.java Lệnh quản trị (/hhdui demo, info, clear)
+│   └── HaoHanDisplayUIPlugin.java Entry point plugin
+├── src/main/resources/
+│   └── plugin.yml
+├── src/test/java/           Bộ test JUnit 5 (DisplayShapeTest, Model, Pager, Raycast, MobEntity, v.v.)
+├── media/
+│   ├── Demo.gif              Demo hiển thị trực tiếp trên GitHub
+│   └── Demo.mp4              Video chất lượng cao có âm thanh
+├── build.gradle
+└── settings.gradle
 ```
 
 ## Ghi chú vận hành

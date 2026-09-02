@@ -31,7 +31,9 @@ public record UiOptions(
         String clickSound,
         float clickSoundVolume,
         float clickSoundPitch,
-        boolean cullItemBackfaces
+        boolean cullItemBackfaces,
+        boolean doubleSided,
+        boolean mirrorSide
 ) {
     public UiOptions {
         if (pixelsPerBlock <= 0.0f) throw new IllegalArgumentException("pixelsPerBlock must be positive");
@@ -51,33 +53,51 @@ public record UiOptions(
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag) {
         this(pixelsPerBlock, maxDistance, requireFront, viewRange, scoreboardTag,
-                UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true);
+                UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);
     }
 
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag, UiCameraTransform cameraTransform) {
         this(pixelsPerBlock, maxDistance, requireFront, viewRange, scoreboardTag,
-                cameraTransform, "minecraft:ui.button.click", 0.7f, 1.0f, true);
+                cameraTransform, "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);
     }
 
-    /** Backward-compatible constructor from before item backface culling. */
+    /** Backward-compatible constructor from before item backface culling and double-sided. */
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag, UiCameraTransform cameraTransform,
                      String clickSound, float clickSoundVolume, float clickSoundPitch) {
         this(pixelsPerBlock, maxDistance, requireFront, viewRange, scoreboardTag,
-                cameraTransform, clickSound, clickSoundVolume, clickSoundPitch, true);
+                cameraTransform, clickSound, clickSoundVolume, clickSoundPitch, true, false, false);
+    }
+
+    /** Backward-compatible constructor with item backface culling flag. */
+    public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
+                     float viewRange, String scoreboardTag, UiCameraTransform cameraTransform,
+                     String clickSound, float clickSoundVolume, float clickSoundPitch,
+                     boolean cullItemBackfaces) {
+        this(pixelsPerBlock, maxDistance, requireFront, viewRange, scoreboardTag,
+                cameraTransform, clickSound, clickSoundVolume, clickSoundPitch, cullItemBackfaces, false, false);
+    }
+
+    /** Backward-compatible constructor with double-sided flag. */
+    public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
+                     float viewRange, String scoreboardTag, UiCameraTransform cameraTransform,
+                     String clickSound, float clickSoundVolume, float clickSoundPitch,
+                     boolean cullItemBackfaces, boolean doubleSided) {
+        this(pixelsPerBlock, maxDistance, requireFront, viewRange, scoreboardTag,
+                cameraTransform, clickSound, clickSoundVolume, clickSoundPitch, cullItemBackfaces, doubleSided, false);
     }
 
     public UiOptions withCameraTransform(UiCameraTransform transform) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, transform, clickSound, clickSoundVolume, clickSoundPitch,
-                cullItemBackfaces);
+                cullItemBackfaces, doubleSided, mirrorSide);
     }
 
     /** Sets the sound played after a non-cancelled button/control interaction. */
     public UiOptions withClickSound(String sound, float volume, float pitch) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
-                scoreboardTag, cameraTransform, sound, volume, pitch, cullItemBackfaces);
+                scoreboardTag, cameraTransform, sound, volume, pitch, cullItemBackfaces, doubleSided, mirrorSide);
     }
 
     /** Disables interaction sounds for this scene. */
@@ -89,11 +109,25 @@ public record UiOptions(
     public UiOptions withItemBackfaceCulling(boolean enabled) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
-                clickSoundPitch, enabled);
+                clickSoundPitch, enabled, doubleSided, mirrorSide);
+    }
+
+    /** Sets whether the UI should render and accept interaction from both sides. */
+    public UiOptions withDoubleSided(boolean enabled) {
+        return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
+                scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
+                clickSoundPitch, cullItemBackfaces, enabled, mirrorSide);
+    }
+
+    /** Sets whether the back side should be mirrored for seamless viewing and interaction. */
+    public UiOptions withMirrorSide(boolean enabled) {
+        return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
+                scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
+                clickSoundPitch, cullItemBackfaces, doubleSided, enabled);
     }
 
     public static UiOptions defaults() {
         return new UiOptions(40.0f, 8.0, true, 0.15f, "haohan_display_ui",
-                UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true);
+                UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);
     }
 }

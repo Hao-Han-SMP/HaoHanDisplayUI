@@ -25,8 +25,8 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Objects;
 
 /**
- * A 2D item icon with explicit layout and intrinsic texture dimensions.
- * boxX/boxY are the visual top-left corner in logical pixels.
+ * An item icon node rendered inside a UI panel with explicit source and display
+ * dimensions.
  */
 public record UiIconNode(
         ItemStack item,
@@ -37,7 +37,8 @@ public record UiIconNode(
         float height,
         float uWidth,
         float vHeight,
-        ItemDisplay.ItemDisplayTransform transform
+        ItemDisplay.ItemDisplayTransform transform,
+        boolean doubleSided
 ) implements UiNode {
     public UiIconNode {
         Objects.requireNonNull(item, "item");
@@ -52,7 +53,7 @@ public record UiIconNode(
     public UiIconNode(ItemStack item, float x, float y, float width, float height,
                       float uWidth, float vHeight) {
         this(item, x, y, 0.003f, width, height, uWidth, vHeight,
-                ItemDisplay.ItemDisplayTransform.FIXED);
+                ItemDisplay.ItemDisplayTransform.FIXED, false);
     }
 
     public UiIconNode(ItemStack item, UiRect bounds, float uWidth, float vHeight) {
@@ -64,7 +65,13 @@ public record UiIconNode(
                       float uWidth, float vHeight,
                       ItemDisplay.ItemDisplayTransform transform) {
         this(item, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(), depth,
-                bounds.width(), bounds.height(), uWidth, vHeight, transform);
+                bounds.width(), bounds.height(), uWidth, vHeight, transform, false);
+    }
+
+    public UiIconNode(ItemStack item, float boxX, float boxY, float depth,
+                      float width, float height, float uWidth, float vHeight,
+                      ItemDisplay.ItemDisplayTransform transform) {
+        this(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, false);
     }
 
     @Override public ItemStack item() { return item.clone(); }
@@ -75,4 +82,24 @@ public record UiIconNode(
     public float bottom() { return boxY + height; }
     public float scaleU() { return width / uWidth; }
     public float scaleV() { return height / vHeight; }
+
+    public UiIconNode withDoubleSided(boolean doubleSided) {
+        return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
+    }
+
+    public UiIconNode doubleSided(boolean doubleSided) {
+        return withDoubleSided(doubleSided);
+    }
+
+    public UiIconNode withDimensions(float width, float height) {
+        return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
+    }
+
+    public UiIconNode withSource(float uWidth, float vHeight) {
+        return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
+    }
+
+    public UiIconNode withTransform(ItemDisplay.ItemDisplayTransform transform) {
+        return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
+    }
 }

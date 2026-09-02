@@ -23,6 +23,7 @@ import vn.haohan.displayui.api.interaction.UiClickHandler;
 import vn.haohan.displayui.api.interaction.UiControlChangeHandler;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.view.UiAudience;
+import vn.haohan.displayui.api.view.UiFollowMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -38,6 +39,8 @@ public interface UiHandle {
     void move(Location origin);
     void audience(UiAudience audience);
     void cameraTransform(UiCameraTransform transform);
+    /** Sets whether the rendered back side uses mirrored horizontal coordinates. */
+    void mirrorSide(boolean enabled);
     /** Starts or replaces the animation currently running on this scene. */
     void animate(UiAnimation animation);
     /** Animates each document node independently; list index matches node index. */
@@ -54,4 +57,22 @@ public interface UiHandle {
     void show(Player player);
     void hide(Player player);
     void remove();
+
+    /** Configures player camera follow mode with default distance and smoothing. */
+    void follow(Player player, UiFollowMode mode);
+
+    /** Configures player camera follow mode with custom distance. */
+    void follow(Player player, UiFollowMode mode, double distance);
+
+    /** Configures player camera follow mode with custom distance and smooth damping factor (0.0 to 1.0). */
+    void follow(Player player, UiFollowMode mode, double distance, float damping);
+
+    /** Disables player follow mode and leaves the UI at its current world position. */
+    void stopFollow();
+
+    /** Returns the active follow mode. */
+    UiFollowMode followMode();
+
+    /** Returns the target player being followed, or null if follow is disabled. */
+    Player followTarget();
 }
