@@ -126,6 +126,13 @@ public record UiOptions(
                 clickSoundPitch, cullItemBackfaces, doubleSided, enabled);
     }
 
+    /** Configures both two-sided rendering and back-side mirroring together. */
+    public UiOptions withSides(boolean doubleSided, boolean mirrorSide) {
+        return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
+                scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
+                clickSoundPitch, cullItemBackfaces, doubleSided, mirrorSide);
+    }
+
     public static UiOptions defaults() {
         return new UiOptions(40.0f, 8.0, true, 0.15f, "haohan_display_ui",
                 UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);

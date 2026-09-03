@@ -116,16 +116,19 @@ public final class GeometricShapesDemoPage extends BaseDemoPage {
         float starCenterY = -15;
         float outer = 14.0f;
         float inner = 6.2f;
-        PolylineNode.Builder star = PolylineNode.builder()
-                .thickness(1.8f).color(Color.fromRGB(255, 200, 0))
-                .depth(0.002f).doubleSided(true).closed(true);
+        float[][] starPoints = new float[10][2];
         for (int i = 0; i < 10; i++) {
             double angle = Math.toRadians(-90.0 + i * 36.0);
             float radius = (i & 1) == 0 ? outer : inner;
-            star.add((float) (starCenterX + radius * Math.cos(angle)),
-                    (float) (starCenterY + radius * Math.sin(angle)));
+            starPoints[i][0] = (float) (starCenterX + radius * Math.cos(angle));
+            starPoints[i][1] = (float) (starCenterY + radius * Math.sin(angle));
         }
-        builder.add(star.build());
+        for (int i = 0; i < starPoints.length; i++) {
+            float[] start = starPoints[i];
+            float[] end = starPoints[(i + 1) % starPoints.length];
+            builder.add(new LineNode(start[0], start[1], end[0], end[1],
+                    1.8f, 0.002f, Color.fromRGB(255, 200, 0), true, 0.0f));
+        }
 
         // Heart / Pulse waveform below star
         PolylineNode pulse = PolylineNode.builder()

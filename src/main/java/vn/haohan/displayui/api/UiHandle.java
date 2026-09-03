@@ -21,6 +21,7 @@ package vn.haohan.displayui.api;
 import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.interaction.UiClickHandler;
 import vn.haohan.displayui.api.interaction.UiControlChangeHandler;
+import vn.haohan.displayui.api.interaction.UiScrollAnimation;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.view.UiAudience;
 import vn.haohan.displayui.api.view.UiFollowMode;
@@ -39,8 +40,15 @@ public interface UiHandle {
     void move(Location origin);
     void audience(UiAudience audience);
     void cameraTransform(UiCameraTransform transform);
+    /** Enables or disables two-sided rendering for every node in this scene. */
+    void doubleSided(boolean enabled);
     /** Sets whether the rendered back side uses mirrored horizontal coordinates. */
     void mirrorSide(boolean enabled);
+    /** Configures two-sided rendering and back-side mirroring in one call. */
+    default void sides(boolean doubleSided, boolean mirrorSide) {
+        doubleSided(doubleSided);
+        mirrorSide(mirrorSide);
+    }
     /** Starts or replaces the animation currently running on this scene. */
     void animate(UiAnimation animation);
     /** Animates each document node independently; list index matches node index. */
@@ -57,6 +65,14 @@ public interface UiHandle {
     void show(Player player);
     void hide(Player player);
     void remove();
+
+    /** Sets the animation factory used when a scroll list offset changes. */
+    void scrollAnimation(UiScrollAnimation animation);
+
+    /** Disables scroll transitions; list updates remain fully functional. */
+    default void clearScrollAnimation() {
+        scrollAnimation(UiScrollAnimation.none());
+    }
 
     /** Configures player camera follow mode with default distance and smoothing. */
     void follow(Player player, UiFollowMode mode);

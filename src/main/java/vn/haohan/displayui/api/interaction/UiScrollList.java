@@ -2,6 +2,7 @@
 package vn.haohan.displayui.api.interaction;
 
 import net.kyori.adventure.text.Component;
+import vn.haohan.displayui.utils.MathUtils;
 
 /**
  * Scroll-wheel hit area for a list rendered inside a UI document.
@@ -28,7 +29,7 @@ public record UiScrollList(
         if (maxOffset < 0) throw new IllegalArgumentException("maxOffset must be non-negative");
         if (step <= 0) throw new IllegalArgumentException("step must be positive");
         if (hitSlop < 0) throw new IllegalArgumentException("hitSlop must be non-negative");
-        offset = Math.max(0, Math.min(maxOffset, offset));
+        offset = MathUtils.clamp(offset, 0, maxOffset);
         description = description == null ? Component.empty() : description;
     }
 

@@ -9,8 +9,8 @@ import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
-import vn.haohan.displayui.api.node.UiNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.utils.MathUtils;
 import vn.haohan.displayui.api.text.UiText;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.text.UiTextOpticalPreset;
@@ -31,21 +31,14 @@ public final class DemoUiRenderer {
                         PANEL_WIDTH, PANEL_HEIGHT,
                         org.bukkit.Color.fromARGB(0xB0000000)));
 
-        int pageIndex = Math.max(0, Math.min(context.page(), pages.size() - 1));
+        int pageIndex = MathUtils.clamp(context.page(), 0, pages.size() - 1);
         DemoPage page = pages.get(pageIndex);
 
         addHeader(builder, page.title());
         page.build(builder, context);
         addFooter(builder, pageIndex, pages.size(), context.doubleSided(), context.mirrorSide());
 
-        UiDocument doc = builder.build();
-        if (context.doubleSided()) {
-            List<UiNode> nodes = doc.nodes().stream()
-                    .map(node -> node.withDoubleSided(true))
-                    .toList();
-            return new UiDocument(nodes, doc.buttons(), doc.controls());
-        }
-        return doc;
+        return builder.build();
     }
 
     private static void addHeader(UiDocument.Builder builder, String pageTitle) {

@@ -27,6 +27,7 @@ import vn.haohan.displayui.api.interaction.UiControl;
 import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.icon.UiIconRegistry;
 import vn.haohan.displayui.api.view.UiAudience;
+import vn.haohan.displayui.utils.MathUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -290,9 +291,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
         }
 
         private static boolean angleChanged(float current, float previous) {
-            float delta = Math.abs(current - previous) % 360.0f;
-            delta = Math.min(delta, 360.0f - delta);
-            return delta > ANGLE_EPSILON;
+            return MathUtils.angleDifference(current, previous) > ANGLE_EPSILON;
         }
     }
 

@@ -38,7 +38,6 @@ import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.animation.UiAnimation;
-import vn.haohan.displayui.api.animation.UiEasing;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiClick;
@@ -47,6 +46,7 @@ import vn.haohan.displayui.api.interaction.UiControl;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.interaction.UiControlChangeHandler;
 import vn.haohan.displayui.api.interaction.UiScrollList;
+import vn.haohan.displayui.api.interaction.UiScrollAnimation;
 import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.node.UiModelRotation;
@@ -68,6 +68,9 @@ import vn.haohan.displayui.api.shape.TRSResult;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.view.UiAudience;
 import vn.haohan.displayui.api.view.UiFollowMode;
+import vn.haohan.displayui.utils.ColorUtils;
+import vn.haohan.displayui.utils.GeometryUtils;
+import vn.haohan.displayui.utils.MathUtils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -84,8 +87,15 @@ import java.util.function.Consumer;
 public final class UiScene implements UiHandle {
     /** Target length for multi-tick transition animations. */
     private static final int INTERPOLATION_TICKS = 4;
-    /** Short window for per-tick animation targets; avoids chasing old frames. */
-    private static final int ANIMATION_INTERPOLATION_TICKS = 1;
+    /**
+     * Client-side interpolation window for per-tick animation targets.
+     *
+     * Animation frames are produced by the server scheduler at 20 Hz. A
+     * one-tick window exposes every server-frame boundary as a visible step,
+     * especially on high-refresh clients. Two ticks gives the client enough
+     * samples to blend between frames while keeping the animation responsive.
+     */
+    private static final int ANIMATION_INTERPOLATION_TICKS = 2;
     /** Normalizes TextDisplay's native placeholder bounds to UI pixel bounds. */
     private static final float BACKGROUND_NATIVE_WIDTH_SCALE = 4.25f;
     private static final float BACKGROUND_NATIVE_HEIGHT_SCALE = 4.10f;
@@ -105,26 +115,25 @@ public final class UiScene implements UiHandle {
     private final Set<UUID> visibleViewers = new HashSet<>();
     private final List<UiClickHandler> clickHandlers = new CopyOnWriteArrayList<>();
     private final List<UiControlChangeHandler> controlChangeHandlers = new CopyOnWriteArrayList<>();
-    private final Map<String, UiControl> controlStates = new LinkedHashMap<>();
+    private final UiControlStateStore controlStates = new UiControlStateStore();
     private final Map<String, Integer> renderedScrollOffsets = new LinkedHashMap<>();
+    private final UiAnimationClock animationClock = new UiAnimationClock();
+    private final UiFollowController follow = new UiFollowController();
+    private UiScrollAnimation scrollAnimation = UiScrollAnimation.none();
 
     private Location origin;
     private UiDocument document;
     private UiAudience audience;
     private UiCameraTransform cameraTransform;
     private boolean removed;
+    private boolean doubleSided;
     private boolean mirrorSide;
     private Interaction interactionEntity;
     private UiAnimation animation;
-    private int animationAge;
+    private double animationAgeTicks;
     private List<UiAnimation> nodeAnimations = List.of();
-    private int[] nodeAnimationAges = new int[0];
+    private double[] nodeAnimationAgesTicks = new double[0];
 
-    // Follow-mode tracking
-    private UiFollowMode followMode = UiFollowMode.NONE;
-    private Player followTarget;
-    private double followDistance = 3.0;
-    private float followPitchOffset = 0.0f;
 
     UiScene(HaoHanDisplayUIPlugin plugin, UUID id, String ownerKey, Location origin,
             UiDocument document, UiOptions options, UiAudience audience,
@@ -136,6 +145,7 @@ public final class UiScene implements UiHandle {
         this.document = Objects.requireNonNull(document, "document");
         this.options = Objects.requireNonNull(options, "options");
         this.cameraTransform = options.cameraTransform();
+        this.doubleSided = options.doubleSided();
         this.mirrorSide = options.mirrorSide();
         this.audience = Objects.requireNonNull(audience, "audience");
         this.onRemove = Objects.requireNonNull(onRemove, "onRemove");
@@ -171,11 +181,21 @@ public final class UiScene implements UiHandle {
         ensureValid();
         UiDocument next = Objects.requireNonNull(document, "document");
         UiDocument previous = this.document;
-        Map<String, UiControl> oldControls = new LinkedHashMap<>(controlStates);
+        Map<String, UiControl> oldControls = controlStates.snapshot();
         updateControlStates(next);
         this.document = next;
-        if (!incrementalUpdate(previous, next)) respawn();
-        else syncViewers();
+        if (!incrementalUpdate(previous, next)) {
+            respawn();
+        } else {
+            // Document refreshes are allowed while an animation is running
+            // (for example, a page may update a rainbow text every tick).
+            // incrementalUpdate writes the document's base transforms, so
+            // restore the current animation frame before the next tick. This
+            // prevents the client from alternating between static and
+            // animated targets.
+            if (isAnimating()) applyCurrentTransforms(ANIMATION_INTERPOLATION_TICKS);
+            syncViewers();
+        }
 
         for (UiControl newControl : controlStates.values()) {
             if (newControl instanceof UiScrollList newScrollList) {
@@ -225,16 +245,20 @@ public final class UiScene implements UiHandle {
 
     @Override
     public void move(Location origin) {
+        move(origin, 0);
+    }
+
+    private void move(Location origin, int interpolationTicks) {
         ensureValid();
         Objects.requireNonNull(origin, "origin");
         if (origin.getWorld() == null) throw new IllegalArgumentException("origin must have a world");
         this.origin = origin.clone();
         for (Display display : entities) {
             if (display.isValid()) {
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(interpolationTicks);
                 display.teleport(this.origin);
                 display.setRotation(origin.getYaw(), origin.getPitch());
-                display.setInterpolationDelay(0);
-                display.setInterpolationDuration(0);
             }
         }
         updateInteractionHitbox();
@@ -263,8 +287,19 @@ public final class UiScene implements UiHandle {
         ensureValid();
         if (mirrorSide == enabled) return;
         mirrorSide = enabled;
-        resetTransforms();
+        // A side switch changes the direction of the back-face transforms. Do
+        // not interpolate from the old side: when this happens during an
+        // animation, the client can repeatedly chase two opposite targets.
+        applyCurrentTransformsImmediately();
         syncViewers();
+    }
+
+    @Override
+    public void doubleSided(boolean enabled) {
+        ensureValid();
+        if (doubleSided == enabled) return;
+        doubleSided = enabled;
+        respawn();
     }
 
     public UiCameraTransform cameraTransform() {
@@ -284,27 +319,22 @@ public final class UiScene implements UiHandle {
     @Override
     public void follow(Player target, UiFollowMode mode, double distance, float pitchOffset) {
         ensureValid();
-        this.followTarget = Objects.requireNonNull(target, "target");
-        this.followMode = Objects.requireNonNull(mode, "mode");
-        if (distance <= 0.0) throw new IllegalArgumentException("distance must be positive");
-        this.followDistance = distance;
-        this.followPitchOffset = pitchOffset;
+        follow.configure(target, mode, distance, pitchOffset);
     }
 
     @Override
     public void stopFollow() {
-        this.followMode = UiFollowMode.NONE;
-        this.followTarget = null;
+        follow.stop();
     }
 
     @Override
     public UiFollowMode followMode() {
-        return followMode;
+        return follow.mode();
     }
 
     @Override
     public Player followTarget() {
-        return followTarget;
+        return follow.target();
     }
 
     @Override
@@ -330,8 +360,9 @@ public final class UiScene implements UiHandle {
         ensureValid();
         this.animation = Objects.requireNonNull(animation, "animation");
         this.nodeAnimations = List.of();
-        this.nodeAnimationAges = new int[0];
-        this.animationAge = 0;
+        this.nodeAnimationAgesTicks = new double[0];
+        this.animationAgeTicks = 0.0;
+        animationClock.reset();
         configureAnimationInterpolation();
         applyAnimation(0.0);
     }
@@ -354,8 +385,9 @@ public final class UiScene implements UiHandle {
             list = List.copyOf(adapted);
         }
         nodeAnimations = list;
-        nodeAnimationAges = new int[list.size()];
+        nodeAnimationAgesTicks = new double[list.size()];
         animation = null;
+        animationClock.reset();
         configureAnimationInterpolation();
         applyNodeAnimationFrames();
     }
@@ -373,7 +405,9 @@ public final class UiScene implements UiHandle {
         }
         animation = null;
         nodeAnimations = List.of();
-        nodeAnimationAges = new int[0];
+        nodeAnimationAgesTicks = new double[0];
+        animationAgeTicks = 0.0;
+        animationClock.clear();
     }
 
     @Override
@@ -416,6 +450,12 @@ public final class UiScene implements UiHandle {
         onRemove.accept(id);
     }
 
+    @Override
+    public void scrollAnimation(UiScrollAnimation animation) {
+        ensureValid();
+        scrollAnimation = Objects.requireNonNull(animation, "animation");
+    }
+
     void tick() {
         if (removed) return;
         tickFollow();
@@ -424,34 +464,8 @@ public final class UiScene implements UiHandle {
     }
 
     private void tickFollow() {
-        if (followMode == UiFollowMode.NONE || followTarget == null || !followTarget.isOnline()) return;
-        if (followTarget.getWorld() != origin.getWorld()) return;
-
-        Location eye = followTarget.getEyeLocation();
-        Vector dir = eye.getDirection().normalize();
-        Location targetLocation = eye.clone().add(dir.clone().multiply(followDistance));
-        targetLocation.setPitch(eye.getPitch() + followPitchOffset);
-        targetLocation.setYaw(eye.getYaw() + 180.0f);
-
-        switch (followMode) {
-            case HARD -> move(targetLocation);
-            case SMOOTH -> {
-                double lerpPos = 0.18;
-                double lerpRot = 0.20;
-                Location current = origin.clone();
-                current.setX(current.getX() + (targetLocation.getX() - current.getX()) * lerpPos);
-                current.setY(current.getY() + (targetLocation.getY() - current.getY()) * lerpPos);
-                current.setZ(current.getZ() + (targetLocation.getZ() - current.getZ()) * lerpPos);
-                float yawDiff = targetLocation.getYaw() - current.getYaw();
-                while (yawDiff < -180.0f) yawDiff += 360.0f;
-                while (yawDiff > 180.0f) yawDiff -= 360.0f;
-                current.setYaw(current.getYaw() + yawDiff * (float) lerpRot);
-                float pitchDiff = targetLocation.getPitch() - current.getPitch();
-                current.setPitch(current.getPitch() + pitchDiff * (float) lerpRot);
-                move(current);
-            }
-            case NONE -> {}
-        }
+        Location next = follow.next(origin);
+        if (next != null) move(next, follow.interpolationTicks());
     }
 
     private void tickAudience() {
@@ -470,32 +484,40 @@ public final class UiScene implements UiHandle {
 
     private void tickAnimation() {
         if (animation != null) {
-            animationAge++;
-            int effectiveAge = animationAge - animation.delayTicks();
-            if (effectiveAge < 0) return;
+            advanceAnimationClock();
+            double effectiveAge = animationAgeTicks - animation.delayTicks();
+            if (effectiveAge < 0.0) return;
             if (effectiveAge >= animation.durationTicks()) {
                 applyAnimationFrame(1.0f);
                 animation = null;
-                animationAge = 0;
+                animationAgeTicks = 0.0;
             } else {
-                float progress = (float) effectiveAge / (float) animation.durationTicks();
+                float progress = (float) (effectiveAge / animation.durationTicks());
                 applyAnimationFrame((float) animation.easing().apply(progress));
             }
         } else if (!nodeAnimations.isEmpty()) {
+            double deltaTicks = advanceAnimationClock();
             boolean anyRunning = false;
             for (int i = 0; i < nodeAnimations.size(); i++) {
                 UiAnimation a = nodeAnimations.get(i);
                 if (a.durationTicks() <= 0) continue;
-                nodeAnimationAges[i]++;
-                int effectiveAge = nodeAnimationAges[i] - a.delayTicks();
+                nodeAnimationAgesTicks[i] += deltaTicks;
+                double effectiveAge = nodeAnimationAgesTicks[i] - a.delayTicks();
                 if (effectiveAge < a.durationTicks()) anyRunning = true;
             }
             applyNodeAnimationFrames();
             if (!anyRunning) {
                 nodeAnimations = List.of();
-                nodeAnimationAges = new int[0];
+                nodeAnimationAgesTicks = new double[0];
             }
         }
+    }
+
+    /** Advances animation time from a monotonic clock, expressed in 20 Hz ticks. */
+    private double advanceAnimationClock() {
+        double deltaTicks = animationClock.advance();
+        if (animation != null) animationAgeTicks += deltaTicks;
+        return deltaTicks;
     }
 
     private void updateInteractionHitbox() {
@@ -572,7 +594,7 @@ public final class UiScene implements UiHandle {
                 options.pixelsPerBlock(), options.maxDistance());
         if (projection == null) return null;
 
-        boolean mirror = isTwoSided() && !isFrontFacing(player);
+        boolean mirror = mirrorSide && isTwoSided() && !isFrontFacing(player);
         float localX = mirror ? -projection.localX() : projection.localX();
         float localY = projection.localY();
 
@@ -602,7 +624,7 @@ public final class UiScene implements UiHandle {
                 origin.toVector(), basis.normal(), basis.right(), basis.up(),
                 options.pixelsPerBlock(), options.maxDistance());
         if (raw == null) return null;
-        boolean mirror = isTwoSided() && !isFrontFacing(player);
+        boolean mirror = mirrorSide && isTwoSided() && !isFrontFacing(player);
         return mirror
                ? new UiRaycaster.Projection(-raw.localX(), raw.localY(), raw.distance())
                : raw;
@@ -699,7 +721,7 @@ public final class UiScene implements UiHandle {
                 options.pixelsPerBlock(), options.maxDistance());
         if (projection == null) return null;
 
-        boolean mirror = isTwoSided() && !isFrontFacing(player);
+        boolean mirror = mirrorSide && isTwoSided() && !isFrontFacing(player);
         float localX = mirror ? -projection.localX() : projection.localX();
         float localY = projection.localY();
 
@@ -725,59 +747,8 @@ public final class UiScene implements UiHandle {
      * - All existing rows glide synchronously with cubic-out momentum for a natural scroll feel.
      */
     private void animateScrollViewport(UiScrollList list, int direction) {
-        if (direction == 0 || document.nodes().isEmpty()) return;
-        float rowHeight = list.height() / 4.0f;
-        float slideDistance = 18.0f;
-        int durationTicks = 11;
-        UiEasing easing = UiEasing.CUBIC_OUT;
-        UiAnimation.Direction movement = direction > 0
-                                         ? UiAnimation.Direction.BOTTOM : UiAnimation.Direction.TOP;
-        List<UiAnimation> animations = new ArrayList<>(document.nodes().size());
-        for (UiNode node : document.nodes()) {
-            if (nodeInScrollViewport(node, list)) {
-                int rowIndex = Math.clamp((int)Math.floor((node.y() - list.y()) / rowHeight), 0, 3);
-                boolean isEntering = direction > 0 ? (rowIndex == 3) : (rowIndex == 0);
-                int delay = direction > 0 ? (rowIndex * 1) : ((3 - rowIndex) * 1);
-
-                float fromScale = isEntering ? 0.25f : 1.0f;
-                float fromOpacity = isEntering ? 0.0f : 1.0f;
-
-                UiAnimation animation = UiAnimation.builder()
-                        .durationTicks(durationTicks)
-                        .delayTicks(delay)
-                        .easing(easing)
-                        .offset(movement, slideDistance)
-                        .scale(fromScale, 1.0f)
-                        .opacity(fromOpacity, 1.0f)
-                        .build();
-                animations.add(animation);
-            } else {
-                animations.add(UiAnimation.builder()
-                                       .durationTicks(durationTicks)
-                                       .easing(easing)
-                                       .build());
-            }
-        }
-        animateNodes(animations);
-    }
-
-    private boolean nodeInScrollViewport(UiNode node, UiScrollList list) {
-        if (node instanceof UiBackgroundNode) return false;
-        // Exclude full-width panel backgrounds or external frames
-        if (node instanceof BlockNode block && (block.width() > list.width() - 5.0f || block.x() >= list.x() + list.width() - 15.0f)) {
-            return false;
-        }
-        // Exclude title/subtitle texts that span header or right controls
-        if (node instanceof AlignedTextNode text && (text.width() > list.width() - 10.0f || text.boxX() >= list.x() + list.width() - 15.0f)) {
-            return false;
-        }
-        float nx = node.x();
-        float ny = node.y();
-        float rightBound = list.x() + list.width() - 15.0f;
-        return nx >= list.x() - 2.0f
-                && nx < rightBound
-                && ny >= list.y() - 0.5f
-                && ny < list.y() + list.height() - 0.5f;
+        List<UiAnimation> animations = scrollAnimation.create(document, list, direction);
+        if (!animations.isEmpty()) animateNodes(animations);
     }
 
     boolean dragSlider(Player player, String controlId) {
@@ -898,25 +869,11 @@ public final class UiScene implements UiHandle {
     private boolean changeControl(UiHit hit, double nextValue, boolean updateScene) {
         UiControl control = hit.control();
         if (control == null) return false;
+        UiControlStateStore.Change stateChange = controlStates.change(control, nextValue);
+        if (stateChange == null) return false;
 
-        double oldValue = switch (control) {
-            case UiButton ignored -> 0.0;
-            case UiCheckbox checkbox -> checkbox.checked() ? 1.0 : 0.0;
-            case UiSlider slider -> slider.value();
-            case UiScrollList scrollList -> scrollList.offset();
-        };
-
-        UiControl nextControl = switch (control) {
-            case UiButton button -> button;
-            case UiCheckbox checkbox -> checkbox.checked(nextValue > 0.5);
-            case UiSlider slider -> slider.withValue(nextValue);
-            case UiScrollList scrollList -> scrollList.withOffset((int) Math.round(nextValue));
-        };
-
-        if (control.equals(nextControl)) return false;
-
-        controlStates.put(control.id(), nextControl);
-        UiControlChange change = new UiControlChange(this, nextControl, hit.player(), oldValue, nextValue, hit.localX(), hit.localY(), hit.distance());
+        UiControlChange change = new UiControlChange(this, stateChange.control(), hit.player(),
+                stateChange.oldValue(), stateChange.newValue(), hit.localX(), hit.localY(), hit.distance());
         for (UiControlChangeHandler handler : controlChangeHandlers) {
             handler.onChange(change);
         }
@@ -927,18 +884,7 @@ public final class UiScene implements UiHandle {
     }
 
     private void updateControlStates(UiDocument next) {
-        next.controls().forEach(control -> {
-            UiControl existing = controlStates.get(control.id());
-            switch (existing) {
-                case UiSlider oldSlider when control instanceof UiSlider slider && sameControlLayout(oldSlider, slider) ->
-                        controlStates.put(control.id(), slider.withValue(oldSlider.value()));
-                case UiCheckbox oldCheckbox when control instanceof UiCheckbox checkbox && sameControlLayout(oldCheckbox, checkbox) ->
-                        controlStates.put(control.id(), checkbox.checked(oldCheckbox.checked()));
-                case UiScrollList oldList when control instanceof UiScrollList list && sameControlLayout(oldList, list) ->
-                        controlStates.put(control.id(), list);
-                case null, default -> controlStates.put(control.id(), control);
-            }
-        });
+        controlStates.synchronize(next);
     }
 
     private List<Display> spawnNode(UiNode node) {
@@ -1213,12 +1159,15 @@ public final class UiScene implements UiHandle {
         Quaternionf baseRotation = localRotation();
         Quaternionf backRotation = new Quaternionf(baseRotation).rotateY((float) Math.PI);
         float pixels = options.pixelsPerBlock();
-        // The back display must share the same logical anchor as the front
-        // display.  Moving aligned text to boxX + boxWidth shifts every
-        // back-side label by an entire text box after the 180-degree turn.
-        // Mirror only changes the world-side X axis; it must not change the
-        // text alignment anchor itself.
-        float targetX = mirrorSide ? -(node.x() + offsetX) : (node.x() + offsetX);
+        // TextDisplay rotates around its translation point. Aligned text is
+        // laid out from the left edge, so the back copy must start at the
+        // opposite edge before its 180-degree rotation. Without this offset,
+        // back-side labels drift away from their button backgrounds.
+        float targetX;
+        // Keep the same logical anchor as the front copy. TextDisplay's own
+        // alignment handles the text box; shifting to boxX + width here moves
+        // centered/left-aligned labels away from their mirrored controls.
+        targetX = mirrorSide ? -(node.x() + offsetX) : (node.x() + offsetX);
         float extraBackOffset = (node instanceof ItemNode || node instanceof UiIconNode) ? 0.026f : 0.022f;
         float backDepth = -(node.depth() + extraBackOffset + offsetZ);
         Vector3f translation = new Vector3f(targetX / pixels,
@@ -1256,7 +1205,7 @@ public final class UiScene implements UiHandle {
         Vector3f translation = new Vector3f(
                 (node.x() + offsetX + centerShiftX) / pixels,
                 -(node.y() + node.height() + offsetY - centerShiftY) / pixels,
-                node.depth() + offsetZ - node.thickness() / pixels);
+                    node.depth() + offsetZ - node.thickness() / pixels);
         rotation.transform(translation);
         return new Transformation(
                 translation, rotation,
@@ -1310,11 +1259,12 @@ public final class UiScene implements UiHandle {
                 new Quaternionf()));
 
         if (doubleSided && asymmetric) {
-            float mirroredX = -(node.x() + node.width());
+            float mirroredX = mirrorSide ? -(node.x() + node.width()) : node.x();
+            float backOffsetX = mirrorSide ? -offsetX : offsetX;
             Vector3f backTranslation = new Vector3f(
-                    (mirroredX + offsetX + centerShiftX) / pixels,
+                    (mirroredX + backOffsetX + centerShiftX) / pixels,
                     -(node.y() + node.height() + offsetY - centerShiftY) / pixels,
-                    node.depth() + offsetZ - thickness / pixels);
+                    -(node.depth() + 0.022f + offsetZ));
             rotation.transform(backTranslation);
             list.add(new Transformation(
                     backTranslation, rotation,
@@ -1360,9 +1310,11 @@ public final class UiScene implements UiHandle {
         list.add(toTransformation(DisplayShapeMath.computeParallelogramTRS(p1, p2, p3)));
         if (doubleSided) {
             float backDepth = -(node.depth() + BACKGROUND_DEPTH_OFFSET) + offsetZ;
-            float leftX = mirrorSide ? -(node.x() + node.width() + offsetX)
-                    : node.x() + node.width() + offsetX;
-            float rightX = mirrorSide ? -(node.x() + offsetX) : node.x() + offsetX;
+            // The background is a depth-only backing surface. Keep its back
+            // face aligned with the front face when the content is mirrored;
+            // mirroring this second surface makes the panel visibly flip.
+            float leftX = node.x() + node.width() + offsetX;
+            float rightX = node.x() + offsetX;
             Vector3f p1b = new Vector3f(leftX / pixels,
                     -(node.y() + node.height() + offsetY) / pixels, backDepth);
             Vector3f p2b = new Vector3f(rightX / pixels,
@@ -1470,16 +1422,24 @@ public final class UiScene implements UiHandle {
         list.add(toTransformation(trs));
         if (doubleSided) {
             float backDepth = -(depth + 0.022f + offsetZ);
+            float backOffsetX = mirrorSide ? -offsetX : offsetX;
             float bx1 = mirrorSide ? -x1 : x1;
             float bx2 = mirrorSide ? -x2 : x2;
-            Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(y1 + offsetY) / pixels, backDepth);
-            Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(y2 + offsetY) / pixels, backDepth);
+            Vector3f p1b = new Vector3f((bx1 + backOffsetX) / pixels, -(y1 + offsetY) / pixels, backDepth);
+            Vector3f p2b = new Vector3f((bx2 + backOffsetX) / pixels, -(y2 + offsetY) / pixels, backDepth);
             if (scale != 1.0f) {
-                scaleAroundMidpoint(p1b, p2b, scale);
+                GeometryUtils.scaleAroundMidpoint(p1b, p2b, scale);
             }
             // Keep the back segment as a separate, reversed face.  Reversing the
             // endpoints makes the line's local winding deterministic at every angle.
-            TRSResult backTrs = DisplayShapeMath.computeLineTRS(p2b, p1b, thickness, -rollRad);
+            Vector3f backStart = p1b;
+            Vector3f backEnd = p2b;
+            if (GeometryUtils.lineFacingNormal(p1, p2)
+                    .dot(GeometryUtils.lineFacingNormal(p1b, p2b)) >= 0.0f) {
+                backStart = p2b;
+                backEnd = p1b;
+            }
+            TRSResult backTrs = DisplayShapeMath.computeLineTRS(backStart, backEnd, thickness, -rollRad);
             list.add(toTransformation(backTrs));
         }
         return list;
@@ -1495,7 +1455,7 @@ public final class UiScene implements UiHandle {
         Vector3f p2 = new Vector3f((node.x2() + offsetX) / pixels, -(node.y2() + offsetY) / pixels, depth + offsetZ);
         Vector3f p3 = new Vector3f((node.x3() + offsetX) / pixels, -(node.y3() + offsetY) / pixels, depth + offsetZ);
 
-        Vector3f[] front = normalizeParallelogramWinding(p1, p2, p3);
+        Vector3f[] front = GeometryUtils.normalizeParallelogramWinding(p1, p2, p3);
         p1 = front[0];
         p2 = front[1];
         p3 = front[2];
@@ -1512,16 +1472,18 @@ public final class UiScene implements UiHandle {
         list.add(toTransformation(trs));
         if (doubleSided) {
             float backDepth = -(depth + 0.022f + offsetZ);
+            float backOffsetX = mirrorSide ? -offsetX : offsetX;
             float bx1 = mirrorSide ? -node.x1() : node.x1();
             float bx2 = mirrorSide ? -node.x2() : node.x2();
             float bx3 = mirrorSide ? -node.x3() : node.x3();
-            Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(node.y1() + offsetY) / pixels, backDepth);
-            Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(node.y2() + offsetY) / pixels, backDepth);
-            Vector3f p3b = new Vector3f((bx3 + offsetX) / pixels, -(node.y3() + offsetY) / pixels, backDepth);
-            scaleAroundParallelogramCenter(p1b, p2b, p3b, scale);
+            Vector3f p1b = new Vector3f((bx1 + backOffsetX) / pixels, -(node.y1() + offsetY) / pixels, backDepth);
+            Vector3f p2b = new Vector3f((bx2 + backOffsetX) / pixels, -(node.y2() + offsetY) / pixels, backDepth);
+            Vector3f p3b = new Vector3f((bx3 + backOffsetX) / pixels, -(node.y3() + offsetY) / pixels, backDepth);
+            GeometryUtils.scaleAroundParallelogramCenter(p1b, p2b, p3b, scale);
             // Preserve the original width edge while reversing the surface winding.
-            Vector3f[] backSource = normalizeParallelogramWinding(p1b, p2b, p3b);
-            Vector3f[] back = reverseParallelogramWinding(backSource[0], backSource[1], backSource[2]);
+            Vector3f[] backSource = GeometryUtils.normalizeParallelogramWinding(p1b, p2b, p3b);
+            Vector3f[] back = GeometryUtils.reverseParallelogramWinding(
+                    backSource[0], backSource[1], backSource[2]);
             TRSResult backTrs = DisplayShapeMath.computeParallelogramTRS(back[0], back[1], back[2]);
             list.add(toTransformation(backTrs));
         }
@@ -1538,7 +1500,7 @@ public final class UiScene implements UiHandle {
         Vector3f p2 = new Vector3f((node.x2() + offsetX) / pixels, -(node.y2() + offsetY) / pixels, depth + offsetZ);
         Vector3f p3 = new Vector3f((node.x3() + offsetX) / pixels, -(node.y3() + offsetY) / pixels, depth + offsetZ);
 
-        Vector3f[] front = normalizeTriangleWinding(p1, p2, p3);
+        Vector3f[] front = GeometryUtils.normalizeTriangleWinding(p1, p2, p3);
         p1 = front[0];
         Vector3f frontP2 = front[1];
         Vector3f frontP3 = front[2];
@@ -1557,15 +1519,17 @@ public final class UiScene implements UiHandle {
         }
         if (doubleSided) {
             float backDepth = -(depth + 0.022f + offsetZ);
+            float backOffsetX = mirrorSide ? -offsetX : offsetX;
             float bx1 = mirrorSide ? -node.x1() : node.x1();
             float bx2 = mirrorSide ? -node.x2() : node.x2();
             float bx3 = mirrorSide ? -node.x3() : node.x3();
-            Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(node.y1() + offsetY) / pixels, backDepth);
-            Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(node.y2() + offsetY) / pixels, backDepth);
-            Vector3f p3b = new Vector3f((bx3 + offsetX) / pixels, -(node.y3() + offsetY) / pixels, backDepth);
-            scaleAroundCentroid(p1b, p2b, p3b, scale);
-            Vector3f[] backSource = normalizeTriangleWinding(p1b, p2b, p3b);
-            Vector3f[] back = reverseTriangleWinding(backSource[0], backSource[1], backSource[2]);
+            Vector3f p1b = new Vector3f((bx1 + backOffsetX) / pixels, -(node.y1() + offsetY) / pixels, backDepth);
+            Vector3f p2b = new Vector3f((bx2 + backOffsetX) / pixels, -(node.y2() + offsetY) / pixels, backDepth);
+            Vector3f p3b = new Vector3f((bx3 + backOffsetX) / pixels, -(node.y3() + offsetY) / pixels, backDepth);
+            GeometryUtils.scaleAroundCentroid(p1b, p2b, p3b, scale);
+            Vector3f[] backSource = GeometryUtils.normalizeTriangleWinding(p1b, p2b, p3b);
+            Vector3f[] back = GeometryUtils.reverseTriangleWinding(
+                    backSource[0], backSource[1], backSource[2]);
             List<TRSResult> backTrsResults = DisplayShapeMath.computeTriangleTRS(back[0], back[1], back[2]);
             for (TRSResult trs : backTrsResults) {
                 list.add(toTransformation(trs));
@@ -1606,66 +1570,29 @@ public final class UiScene implements UiHandle {
             list.add(toTransformation(trs));
             if (doubleSided) {
                 float backDepth = -(depth + 0.022f + offsetZ);
+                float backOffsetX = mirrorSide ? -offsetX : offsetX;
                 float bx1 = mirrorSide ? -ptA.x() : ptA.x();
                 float bx2 = mirrorSide ? -ptB.x() : ptB.x();
-                Vector3f p1b = new Vector3f((bx1 + offsetX) / pixels, -(ptA.y() + offsetY) / pixels, backDepth);
-                Vector3f p2b = new Vector3f((bx2 + offsetX) / pixels, -(ptB.y() + offsetY) / pixels, backDepth);
+                Vector3f p1b = new Vector3f((bx1 + backOffsetX) / pixels, -(ptA.y() + offsetY) / pixels, backDepth);
+                Vector3f p2b = new Vector3f((bx2 + backOffsetX) / pixels, -(ptB.y() + offsetY) / pixels, backDepth);
                 if (scale != 1.0f) {
-                    scaleAroundMidpoint(p1b, p2b, scale);
+                    GeometryUtils.scaleAroundMidpoint(p1b, p2b, scale);
                 }
-                // Polyline ordering is intentionally [front, back] per segment;
-                // syncSideVisibility relies on this stable one-to-one mapping.
-                TRSResult backTrs = DisplayShapeMath.computeLineTRS(p2b, p1b, thickness, 0.0f);
+                // Choose the endpoint order from the actual line normals.
+                // Mirroring and near-vertical lines do not always invert the
+                // same basis axis, so a mirrorSide boolean alone is unreliable.
+                Vector3f backStart = p1b;
+                Vector3f backEnd = p2b;
+                if (GeometryUtils.lineFacingNormal(p1, p2)
+                        .dot(GeometryUtils.lineFacingNormal(p1b, p2b)) >= 0.0f) {
+                    backStart = p2b;
+                    backEnd = p1b;
+                }
+                TRSResult backTrs = DisplayShapeMath.computeLineTRS(backStart, backEnd, thickness, 0.0f);
                 list.add(toTransformation(backTrs));
             }
         }
         return list;
-    }
-
-    private Vector3f[] normalizeTriangleWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
-        if (new Vector3f(p2).sub(p1).cross(new Vector3f(p3).sub(p1)).z < 0.0f) {
-            return new Vector3f[]{new Vector3f(p1), new Vector3f(p3), new Vector3f(p2)};
-        }
-        return new Vector3f[]{new Vector3f(p1), new Vector3f(p2), new Vector3f(p3)};
-    }
-
-    private Vector3f[] normalizeParallelogramWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
-        if (new Vector3f(p2).sub(p1).cross(new Vector3f(p3).sub(p1)).z < 0.0f) {
-            Vector3f widthEdge = new Vector3f(p2).sub(p1);
-            return new Vector3f[]{new Vector3f(p3), new Vector3f(p3).add(widthEdge), new Vector3f(p1)};
-        }
-        return new Vector3f[]{new Vector3f(p1), new Vector3f(p2), new Vector3f(p3)};
-    }
-
-    private Vector3f[] reverseTriangleWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
-        return new Vector3f[]{new Vector3f(p1), new Vector3f(p3), new Vector3f(p2)};
-    }
-
-    private Vector3f[] reverseParallelogramWinding(Vector3f p1, Vector3f p2, Vector3f p3) {
-        Vector3f widthEdge = new Vector3f(p2).sub(p1);
-        return new Vector3f[]{new Vector3f(p3), new Vector3f(p3).add(widthEdge), new Vector3f(p1)};
-    }
-
-    private void scaleAroundMidpoint(Vector3f p1, Vector3f p2, float scale) {
-        Vector3f center = new Vector3f(p1).add(p2).mul(0.5f);
-        p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
-        p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
-    }
-
-    private void scaleAroundCentroid(Vector3f p1, Vector3f p2, Vector3f p3, float scale) {
-        if (scale == 1.0f) return;
-        Vector3f center = new Vector3f(p1).add(p2).add(p3).div(3.0f);
-        p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
-        p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
-        p3.set(new Vector3f(center).add(new Vector3f(p3).sub(center).mul(scale)));
-    }
-
-    private void scaleAroundParallelogramCenter(Vector3f p1, Vector3f p2, Vector3f p3, float scale) {
-        if (scale == 1.0f) return;
-        Vector3f center = new Vector3f(p2).add(p3).mul(0.5f);
-        p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
-        p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
-        p3.set(new Vector3f(center).add(new Vector3f(p3).sub(center).mul(scale)));
     }
 
     private List<Transformation> getNodeTransformations(UiNode node, float scale,
@@ -1708,8 +1635,7 @@ public final class UiScene implements UiHandle {
         if (index >= nodeEntities.size() || index >= document.nodes().size()) return;
         double eased = current.easing().apply(progress);
         float scale = interpolate(current.fromScale(), current.toScale(), eased);
-        float opacity = Math.max(0.0f, Math.min(1.0f,
-                                                interpolate(current.fromOpacity(), current.toOpacity(), eased)));
+        float opacity = Math.clamp(interpolate(current.fromOpacity(), current.toOpacity(), eased), 0.0f, 1.0f);
         float offsetX = current.offsetX() * (1.0f - (float) eased);
         float offsetY = current.offsetY() * (1.0f - (float) eased);
         float offsetZ = current.offsetZ() * (1.0f - (float) eased);
@@ -1725,7 +1651,7 @@ public final class UiScene implements UiHandle {
             if (display instanceof TextDisplay textDisplay) {
                 if (node instanceof UiBackgroundNode background) {
                     textDisplay.setTextOpacity((byte) 0);
-                    textDisplay.setBackgroundColor(withAlpha(background.background(), opacity));
+                    textDisplay.setBackgroundColor(ColorUtils.withOpacity(background.background(), opacity));
                 } else {
                     textDisplay.setTextOpacity((byte) Math.round(opacity * 255.0f));
                 }
@@ -1734,13 +1660,17 @@ public final class UiScene implements UiHandle {
     }
 
     private void applyAnimationFrame(float progress) {
+        applyAnimationFrame(progress, ANIMATION_INTERPOLATION_TICKS);
+    }
+
+    private void applyAnimationFrame(float progress, int interpolationTicks) {
         if (animation == null) return;
-        float scale = animation.fromScale() + (animation.toScale() - animation.fromScale()) * progress;
+        float scale = MathUtils.lerp(animation.fromScale(), animation.toScale(), progress);
         float invProgress = 1.0f - progress;
         float offsetX = animation.offsetX() * invProgress;
         float offsetY = animation.offsetY() * invProgress;
         float offsetZ = animation.offsetZ() * invProgress;
-        float opacity = animation.fromOpacity() + (animation.toOpacity() - animation.fromOpacity()) * progress;
+        float opacity = MathUtils.lerp(animation.fromOpacity(), animation.toOpacity(), progress);
         byte opacityByte = (byte) Math.round(opacity * 255.0f);
 
         for (int i = 0; i < nodeEntities.size() && i < document.nodes().size(); i++) {
@@ -1753,12 +1683,12 @@ public final class UiScene implements UiHandle {
                 Display display = displays.get(j);
                 if (display == null || !display.isValid()) continue;
                 display.setInterpolationDelay(0);
-                display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+                display.setInterpolationDuration(interpolationTicks);
                 display.setTransformation(transforms.get(j));
                 if (display instanceof TextDisplay textDisplay) {
                     if (node instanceof UiBackgroundNode background) {
                         textDisplay.setTextOpacity((byte) 0);
-                        textDisplay.setBackgroundColor(withAlpha(background.background(), opacity));
+                        textDisplay.setBackgroundColor(ColorUtils.withOpacity(background.background(), opacity));
                     } else {
                         textDisplay.setTextOpacity(opacityByte);
                     }
@@ -1768,6 +1698,10 @@ public final class UiScene implements UiHandle {
     }
 
     private void applyNodeAnimationFrames() {
+        applyNodeAnimationFrames(ANIMATION_INTERPOLATION_TICKS);
+    }
+
+    private void applyNodeAnimationFrames(int interpolationTicks) {
         for (int i = 0; i < nodeAnimations.size() && i < document.nodes().size() && i < nodeEntities.size(); i++) {
             UiAnimation a = nodeAnimations.get(i);
             UiNode node = document.nodes().get(i);
@@ -1781,22 +1715,22 @@ public final class UiScene implements UiHandle {
             byte opacityByte = (byte) 255;
 
             if (a.durationTicks() > 0) {
-                int effectiveAge = nodeAnimationAges[i] - a.delayTicks();
+                double effectiveAge = nodeAnimationAgesTicks[i] - a.delayTicks();
                 float progress;
                 if (effectiveAge < 0) {
                     progress = 0.0f;
                 } else if (effectiveAge >= a.durationTicks()) {
                     progress = 1.0f;
                 } else {
-                    progress = (float) a.easing().apply((float) effectiveAge / (float) a.durationTicks());
+                    progress = (float) a.easing().apply(effectiveAge / a.durationTicks());
                 }
 
-                scale = a.fromScale() + (a.toScale() - a.fromScale()) * progress;
+                scale = MathUtils.lerp(a.fromScale(), a.toScale(), progress);
                 float invProgress = 1.0f - progress;
                 offsetX = a.offsetX() * invProgress;
                 offsetY = a.offsetY() * invProgress;
                 offsetZ = a.offsetZ() * invProgress;
-                float opacity = a.fromOpacity() + (a.toOpacity() - a.fromOpacity()) * progress;
+                float opacity = MathUtils.lerp(a.fromOpacity(), a.toOpacity(), progress);
                 opacityByte = (byte) Math.round(opacity * 255.0f);
             }
 
@@ -1805,7 +1739,7 @@ public final class UiScene implements UiHandle {
                 Display display = displays.get(j);
                 if (display == null || !display.isValid()) continue;
                 display.setInterpolationDelay(0);
-                display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
+                display.setInterpolationDuration(interpolationTicks);
                 display.setTransformation(transforms.get(j));
                 if (display instanceof TextDisplay textDisplay) {
                     textDisplay.setTextOpacity(opacityByte);
@@ -1835,6 +1769,30 @@ public final class UiScene implements UiHandle {
                     textDisplay.setTextOpacity((byte) 255);
                 }
             }
+        }
+    }
+
+    /** Re-evaluates the active frame after a side change without stale client interpolation. */
+    private void applyCurrentTransformsImmediately() {
+        applyCurrentTransforms(0);
+    }
+
+    private void applyCurrentTransforms(int interpolationTicks) {
+        if (animation != null) {
+            double effectiveAge = animationAgeTicks - animation.delayTicks();
+            float progress;
+            if (effectiveAge <= 0.0 || animation.durationTicks() <= 0) {
+                progress = 0.0f;
+            } else if (effectiveAge >= animation.durationTicks()) {
+                progress = 1.0f;
+            } else {
+                progress = (float) animation.easing().apply(effectiveAge / animation.durationTicks());
+            }
+            applyAnimationFrame(progress, interpolationTicks);
+        } else if (!nodeAnimations.isEmpty()) {
+            applyNodeAnimationFrames(interpolationTicks);
+        } else {
+            resetTransforms(interpolationTicks);
         }
     }
 
@@ -1898,8 +1856,14 @@ public final class UiScene implements UiHandle {
     }
 
     private void configureAnimationInterpolation() {
-        for (int i = 0; i < nodeEntities.size() && i < nodeAnimations.size(); i++) {
-            if (isStaticAnimation(nodeAnimations.get(i))) continue;
+        for (int i = 0; i < nodeEntities.size(); i++) {
+            // A scene animation applies to every node; node animations have
+            // one animation descriptor per node. Both paths need the same
+            // interpolation setup before their first frame is sent.
+            UiAnimation configured = animation != null
+                    ? animation
+                    : (i < nodeAnimations.size() ? nodeAnimations.get(i) : null);
+            if (configured == null || isStaticAnimation(configured)) continue;
             List<Display> displays = nodeEntities.get(i);
             if (displays == null) continue;
             for (Display display : displays) {
@@ -1915,12 +1879,6 @@ public final class UiScene implements UiHandle {
                 && animation.offsetZ() == 0.0f
                 && animation.fromScale() == 1.0f && animation.toScale() == 1.0f
                 && animation.fromOpacity() == 1.0f && animation.toOpacity() == 1.0f;
-    }
-
-    private Color withAlpha(Color color, float opacity) {
-        int alpha = Math.round(color.getAlpha()
-                                       * Math.max(0.0f, Math.min(1.0f, opacity)));
-        return Color.fromARGB(alpha, color.getRed(), color.getGreen(), color.getBlue());
     }
 
     private Transformation backgroundTransform(UiBackgroundNode node, float scale) {
@@ -1940,7 +1898,7 @@ public final class UiScene implements UiHandle {
     }
 
     private float interpolate(float from, float to, double progress) {
-        return (float) (from + (to - from) * progress);
+        return (float) MathUtils.lerp(from, to, progress);
     }
 
     private TextDisplay.TextAlignment screenAlignment(TextDisplay.TextAlignment alignment) {
@@ -1962,12 +1920,12 @@ public final class UiScene implements UiHandle {
 
     /** A mirrored side needs the same back-face display as double-sided mode. */
     private boolean isTwoSided() {
-        return options.doubleSided()
+        return doubleSided
                 || document.nodes().stream().anyMatch(UiNode::doubleSided);
     }
 
     private boolean isDoubleSided(UiNode node) {
-        return node.doubleSided() || options.doubleSided();
+        return node.doubleSided() || doubleSided;
     }
 
     private void syncItemBackfaces(Player player) {
@@ -2251,13 +2209,6 @@ public final class UiScene implements UiHandle {
         Vector up = normal.clone().crossProduct(right).normalize();
 
         return new PlaneBasis(normal, right, up);
-    }
-
-    private static boolean sameControlLayout(UiControl a, UiControl b) {
-        return Math.abs(a.x() - b.x()) < 0.01f
-                && Math.abs(a.y() - b.y()) < 0.01f
-                && Math.abs(a.width() - b.width()) < 0.01f
-                && Math.abs(a.height() - b.height()) < 0.01f;
     }
 
     private record PlaneBasis(Vector normal, Vector right, Vector up) {}

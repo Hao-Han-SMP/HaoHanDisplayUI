@@ -42,6 +42,13 @@ public final class TextStylesDemoPage extends BaseDemoPage {
                         .build());
     }
 
+    @Override
+    public void onTick(DemoContext context) {
+        // Rebuild the component so the animated gradient is sent to the
+        // existing display entities every server tick.
+        context.updateView();
+    }
+
     private void addTextSample(UiDocument.Builder builder, String label, float y,
                                Component sample) {
         addTextSample(builder, label, y, sample, UiTextOpticalPreset.PLAIN);

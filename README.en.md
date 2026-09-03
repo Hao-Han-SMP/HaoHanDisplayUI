@@ -333,6 +333,19 @@ UiOptions options = UiOptions.defaults()
     .withItemBackfaceCulling(false); // disable if UI needs to be seen from the back
 ```
 
+To render the whole UI from both sides, you do not need to call
+`withDoubleSided(true)` on every node. Configure it once at scene level:
+
+```java
+UiOptions options = UiOptions.defaults().withSides(true, true);
+UiHandle handle = ui.create("plugin:menu", location, document, options, audience);
+
+// Can also be changed at runtime without rebuilding every node:
+handle.sides(true, true); // double-sided + mirrored back side
+handle.doubleSided(false);
+handle.mirrorSide(false);
+```
+
 ---
 
 ## 3D Mob & Entity Model Display (2 Approaches)

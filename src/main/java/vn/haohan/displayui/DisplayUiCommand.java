@@ -26,14 +26,13 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.DisplayUiService;
 import vn.haohan.displayui.api.UiOptions;
-import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.animation.UiAnimation;
-import vn.haohan.displayui.api.animation.UiEasing;
+import vn.haohan.displayui.api.interaction.UiScrollAnimations;
+import vn.haohan.displayui.api.animation.Easings;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.demo.DemoContext;
 import vn.haohan.displayui.demo.DemoPage;
 import vn.haohan.displayui.demo.DemoUiRenderer;
-import vn.haohan.displayui.demo.mobgrid.MobGridShowcase;
 import vn.haohan.displayui.demo.pages.*;
 
 import java.util.ArrayList;
@@ -46,14 +45,13 @@ import java.util.UUID;
 
 final class DisplayUiCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBCOMMANDS = List.of(
-            "demo", "mobgrid", "clear", "stats", "page", "follow", "camera", "reload");
+            "demo", "clear", "stats", "page", "follow", "camera", "reload");
     private static final List<String> FOLLOW_OPTIONS = List.of("none", "smooth", "hard");
     private static final List<String> CAMERA_PRESETS = List.of("fixed", "face_player", "tilt_up", "tilt_down", "rotate_left", "rotate_right", "skew", "reset");
 
     private final HaoHanDisplayUIPlugin plugin;
     private final DisplayUiService service;
     private final Map<UUID, DemoContext> demos = new HashMap<>();
-    private final Map<UUID, MobGridShowcase.Session> mobGrids = new HashMap<>();
     private final List<DemoPage> pages;
 
     DisplayUiCommand(HaoHanDisplayUIPlugin plugin, DisplayUiService service) {
@@ -84,7 +82,6 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
         String sub = (args.length > 0) ? args[0].toLowerCase() : "demo";
         return switch (sub) {
             case "demo" -> startDemo(sender);
-            case "mobgrid" -> mobGrid(sender, args);
             case "clear" -> clear(sender);
             case "stats" -> stats(sender);
             case "page" -> setPage(sender, args);
@@ -92,7 +89,7 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
             case "camera" -> setCamera(sender, args);
             case "reload" -> reload(sender);
             default -> {
-                sender.sendMessage("§cUnknown subcommand. Use /hhdui <demo|mobgrid|clear|stats|page|follow|camera|reload>");
+                sender.sendMessage("§cUnknown subcommand. Use /hhdui <demo|clear|stats|page|follow|camera|reload>");
                 yield true;
             }
         };
@@ -119,10 +116,14 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 new UiOptions(80.0f, 12.0, false, 0.2f, "haohan_display_ui", context.cameraTransform()),
                 candidate -> candidate.getUniqueId().equals(player.getUniqueId())));
         context.handle().mirrorSide(context.mirrorSide());
+        context.handle().sides(context.doubleSided(), context.mirrorSide());
+        // Keep the showcase's original transition as an explicit demo choice.
+        // Library scenes remain animation-free until their owner opts in.
+        context.handle().scrollAnimation(UiScrollAnimations.slide());
 
         context.handle().onClick(click -> onDemoClick(context, click.button().id(), click.player()));
         context.handle().onControlChange(change -> onDemoControlChange(context, change));
-        context.handle().animate(UiAnimation.fadeIn(12, UiEasing.EASE_OUT));
+        context.handle().animate(UiAnimation.fadeIn(12, Easings.OutCubic));
         demos.put(player.getUniqueId(), context);
 
         sender.sendMessage("§aDemo UI created. Aim at a row to see its description, "
@@ -131,49 +132,10 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private boolean mobGrid(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("§cThis command must be run by a player.");
-            return true;
-        }
-
-        int targetPage = 0;
-        if (args.length > 1) {
-            try {
-                targetPage = Math.max(0, Integer.parseInt(args[1]) - 1);
-            } catch (NumberFormatException ignored) {}
-        }
-
-        cleanupExisting(player.getUniqueId());
-
-        Location origin = player.getEyeLocation()
-                .add(player.getEyeLocation().getDirection().multiply(4.0));
-        origin.setYaw(player.getLocation().getYaw() + 180.0f);
-        origin.setPitch(0.0f);
-
-        MobGridShowcase.Session session = new MobGridShowcase.Session(player.getUniqueId(), targetPage);
-        UiHandle handle = service.create(
-                "mobgrid:" + player.getUniqueId(),
-                origin,
-                MobGridShowcase.buildPage(session),
-                new UiOptions(80.0f, 12.0, false, 0.2f, "haohan_display_ui_mobgrid", session.cameraTransform()),
-                candidate -> candidate.getUniqueId().equals(player.getUniqueId()));
-
-        session.handle(handle);
-        handle.onClick(click -> MobGridShowcase.onClick(session, click.button().id(), click.player()));
-        handle.animate(UiAnimation.fadeIn(10, UiEasing.EASE_OUT));
-        mobGrids.put(player.getUniqueId(), session);
-
-        sender.sendMessage("§aOpened 3D Mob Grid showcase (Page " + (targetPage + 1) + ")");
-        return true;
-    }
-
     private void cleanupExisting(UUID playerId) {
         DemoContext oldDemo = demos.remove(playerId);
         if (oldDemo != null && oldDemo.handle() != null) oldDemo.handle().remove();
 
-        MobGridShowcase.Session oldGrid = mobGrids.remove(playerId);
-        if (oldGrid != null && oldGrid.handle() != null) oldGrid.handle().remove();
     }
 
     private void onDemoClick(DemoContext context, String buttonId, Player player) {
@@ -230,7 +192,7 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
         activePage.onShow(context);
         if (!(activePage instanceof PresetEffectGalleryDemoPage)) {
             context.handle().animate(UiAnimation.builder().durationTicks(10)
-                    .easing(UiEasing.CUBIC_OUT).opacity(0.0f, 1.0f)
+                    .easing(Easings.OutCubic).opacity(0.0f, 1.0f)
                     .offset(UiAnimation.Direction.RIGHT, 10.0f).build());
         }
     }
@@ -251,15 +213,6 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
             activePage.onTick(context);
         }
 
-        Iterator<MobGridShowcase.Session> gridIterator = mobGrids.values().iterator();
-        while (gridIterator.hasNext()) {
-            MobGridShowcase.Session session = gridIterator.next();
-            Player player = plugin.getServer().getPlayer(session.playerId());
-            if (player == null || session.handle() == null || !session.handle().isValid()) {
-                if (session.handle() != null && session.handle().isValid()) session.handle().remove();
-                gridIterator.remove();
-            }
-        }
     }
 
     private boolean clear(CommandSender sender) {
@@ -277,7 +230,6 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage("§6--- HaoHanDisplayUI Stats ---");
         sender.sendMessage("§7Active Scenes: §f" + service.active().size());
         sender.sendMessage("§7Active Demos: §f" + demos.size());
-        sender.sendMessage("§7Active Mob Grids: §f" + mobGrids.size());
         return true;
     }
 

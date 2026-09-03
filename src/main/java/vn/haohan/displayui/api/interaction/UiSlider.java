@@ -11,6 +11,7 @@
 package vn.haohan.displayui.api.interaction;
 
 import vn.haohan.displayui.api.layout.UiRect;
+import vn.haohan.displayui.utils.MathUtils;
 import net.kyori.adventure.text.Component;
 
 import java.util.Objects;
@@ -76,8 +77,7 @@ public record UiSlider(
 
     /** Converts a local X coordinate to the nearest valid slider value. */
     public double valueAt(float localX) {
-        double progress = Math.max(0.0, Math.min(1.0,
-                (localX - x) / (double) width));
+        double progress = MathUtils.clamp((localX - x) / (double) width, 0.0, 1.0);
         return snap(minimum + (maximum - minimum) * progress,
                 minimum, maximum, step);
     }
@@ -110,10 +110,10 @@ public record UiSlider(
     }
 
     private static double snap(double raw, double minimum, double maximum, double step) {
-        double bounded = Math.max(minimum, Math.min(maximum, raw));
+        double bounded = MathUtils.clamp(raw, minimum, maximum);
         if (step <= 0.0) return bounded;
-        double snapped = minimum + Math.round((bounded - minimum) / step) * step;
-        return Math.max(minimum, Math.min(maximum, snapped));
+        double snapped = minimum + MathUtils.roundToStep(bounded - minimum, step);
+        return MathUtils.clamp(snapped, minimum, maximum);
     }
 
     private static void validateId(String id) {

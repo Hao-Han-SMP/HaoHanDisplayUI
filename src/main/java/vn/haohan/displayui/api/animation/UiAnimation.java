@@ -21,7 +21,7 @@ import java.util.Objects;
 public record UiAnimation(
         int durationTicks,
         int delayTicks,
-        UiEasing easing,
+        Easings easing,
         float fromOpacity,
         float toOpacity,
         float fromScale,
@@ -52,29 +52,29 @@ public record UiAnimation(
     }
 
     public static UiAnimation fadeIn(int durationTicks) {
-        return fadeIn(durationTicks, UiEasing.EASE_OUT);
+        return fadeIn(durationTicks, Easings.OutCubic);
     }
 
-    public static UiAnimation fadeIn(int durationTicks, UiEasing easing) {
+    public static UiAnimation fadeIn(int durationTicks, Easings easing) {
         return builder().durationTicks(durationTicks).easing(easing)
                 .opacity(0.0f, 1.0f).build();
     }
 
     public static UiAnimation fadeOut(int durationTicks) {
-        return fadeOut(durationTicks, UiEasing.EASE_IN);
+        return fadeOut(durationTicks, Easings.InCubic);
     }
 
-    public static UiAnimation fadeOut(int durationTicks, UiEasing easing) {
+    public static UiAnimation fadeOut(int durationTicks, Easings easing) {
         return builder().durationTicks(durationTicks).easing(easing)
                 .opacity(1.0f, 0.0f).build();
     }
 
     public static UiAnimation slideIn(int durationTicks, Direction direction, float distance) {
-        return slideIn(durationTicks, direction, distance, UiEasing.EASE_OUT);
+        return slideIn(durationTicks, direction, distance, Easings.OutCubic);
     }
 
     public static UiAnimation slideIn(int durationTicks, Direction direction,
-                                      float distance, UiEasing easing) {
+                                      float distance, Easings easing) {
         Objects.requireNonNull(direction, "direction");
         if (!Float.isFinite(distance) || distance < 0.0f) {
             throw new IllegalArgumentException("distance must be finite and non-negative");
@@ -85,10 +85,10 @@ public record UiAnimation(
     }
 
     public static UiAnimation scaleIn(int durationTicks) {
-        return scaleIn(durationTicks, UiEasing.BACK_OUT);
+        return scaleIn(durationTicks, Easings.BackOut);
     }
 
-    public static UiAnimation scaleIn(int durationTicks, UiEasing easing) {
+    public static UiAnimation scaleIn(int durationTicks, Easings easing) {
         return builder().durationTicks(durationTicks).easing(easing)
                 .scale(0.0f, 1.0f).build();
     }
@@ -101,8 +101,12 @@ public record UiAnimation(
 
     /** Direction in the scene's logical screen coordinate system. */
     public enum Direction {
-        LEFT(-1, 0, 0), RIGHT(1, 0, 0), TOP(0, -1, 0), BOTTOM(0, 1, 0),
-        FRONT(0, 0, 1), BACK(0, 0, -1);
+        LEFT(-1, 0, 0),
+        RIGHT(1, 0, 0),
+        TOP(0, -1, 0),
+        BOTTOM(0, 1, 0),
+        FRONT(0, 0, 1),
+        BACK(0, 0, -1);
 
         private final float x;
         private final float y;
@@ -122,7 +126,7 @@ public record UiAnimation(
     public static final class Builder {
         private int durationTicks = 10;
         private int delayTicks;
-        private UiEasing easing = UiEasing.EASE_OUT;
+        private Easings easing = Easings.OutCubic;
         private float fromOpacity = 1.0f;
         private float toOpacity = 1.0f;
         private float fromScale = 1.0f;
@@ -141,7 +145,7 @@ public record UiAnimation(
             return this;
         }
 
-        public Builder easing(UiEasing value) {
+        public Builder easing(Easings value) {
             easing = Objects.requireNonNull(value, "easing");
             return this;
         }

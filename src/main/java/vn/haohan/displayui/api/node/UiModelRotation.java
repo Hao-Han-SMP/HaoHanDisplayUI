@@ -18,6 +18,7 @@
  */
 package vn.haohan.displayui.api.node;
 
+import vn.haohan.displayui.utils.MathUtils;
 import java.util.Objects;
 
 /**
@@ -199,23 +200,21 @@ public record UiModelRotation(
     public float clampYaw(float rawYaw) {
         if (lockYaw) return 0.0f;
         if (mode == Mode.AUTO_SPIN || mode == Mode.HOVER_SPIN || (minYaw <= -360.0f && maxYaw >= 360.0f)) {
-            float wrapped = (rawYaw % 360.0f + 360.0f) % 360.0f;
-            if (wrapped > 180.0f) wrapped -= 360.0f;
-            return applyStep(wrapped);
+            return applyStep(MathUtils.normalizeDegrees(rawYaw));
         }
-        float clamped = Math.max(minYaw, Math.min(maxYaw, rawYaw));
+        float clamped = MathUtils.clamp(rawYaw, minYaw, maxYaw);
         return applyStep(clamped);
     }
 
     public float clampPitch(float rawPitch) {
         if (lockPitch) return 0.0f;
-        float clamped = Math.max(minPitch, Math.min(maxPitch, rawPitch));
+        float clamped = MathUtils.clamp(rawPitch, minPitch, maxPitch);
         return applyStep(clamped);
     }
 
     public float clampRoll(float rawRoll) {
         if (lockRoll) return 0.0f;
-        float clamped = Math.max(minRoll, Math.min(maxRoll, rawRoll));
+        float clamped = MathUtils.clamp(rawRoll, minRoll, maxRoll);
         return applyStep(clamped);
     }
 

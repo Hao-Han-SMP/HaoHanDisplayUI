@@ -1,4 +1,4 @@
-<div align=\"center\">
+<div align="center">
 
 # HaoHan Display UI
 
@@ -171,37 +171,6 @@ phẳng:
 | `api.icon` | Đăng ký icon tái sử dụng. |
 | `api.view` | Chính sách audience/viewer. |
 
-Ví dụ, consumer thông thường bắt đầu với các import tập trung sau:
-
-```java
-import vn.haohan.displayui.api.DisplayUiService;
-import vn.haohan.displayui.api.UiDocument;
-import vn.haohan.displayui.api.UiHandle;
-import vn.haohan.displayui.api.UiOptions;
-import vn.haohan.displayui.api.interaction.UiButton;
-import vn.haohan.displayui.api.interaction.UiButtonAction;
-import vn.haohan.displayui.api.layout.UiRect;
-import vn.haohan.displayui.api.node.AlignedTextNode;
-import vn.haohan.displayui.api.node.BlockNode;
-import vn.haohan.displayui.api.node.EntityModelNode;
-import vn.haohan.displayui.api.node.MobEntityNode;
-import vn.haohan.displayui.api.node.TriangleNode;
-import vn.haohan.displayui.api.node.ParallelogramNode;
-import vn.haohan.displayui.api.node.LineNode;
-import vn.haohan.displayui.api.node.PolylineNode;
-import vn.haohan.displayui.api.node.UiIconNode;
-import vn.haohan.displayui.api.text.UiTextAlignment;
-```
-
-Lấy service từ Bukkit `ServicesManager`:
-
-```java
-DisplayUiService ui = Bukkit.getServicesManager().load(DisplayUiService.class);
-if (ui == null) {
-    throw new IllegalStateException("HaoHanDisplayUI is not installed");
-}
-```
-
 Tạo document và scene:
 
 ```java
@@ -333,6 +302,19 @@ culling theo từng player và áp dụng cho scene fixed:
 ```java
 UiOptions options = UiOptions.defaults()
     .withItemBackfaceCulling(false); // tắt nếu UI cần hiển thị từ mặt sau
+```
+
+Để hiển thị toàn bộ UI ở cả hai mặt, không cần gọi `withDoubleSided(true)`
+trên từng node. Cấu hình một lần ở scene:
+
+```java
+UiOptions options = UiOptions.defaults().withSides(true, true);
+UiHandle handle = ui.create("plugin:menu", location, document, options, audience);
+
+// Có thể bật/tắt động mà không rebuild từng node:
+handle.sides(true, true); // double-sided + mirror mặt sau
+handle.doubleSided(false);
+handle.mirrorSide(false);
 ```
 
 ---
@@ -770,57 +752,6 @@ customIcon.setItemMeta(meta);
 
 ui.icons().register(plugin, iconKey, customIcon);
 UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
-```
-
-## Tối ưu hiệu năng & Cập nhật
-
-`handle.update(document)` tự kiểm tra layout:
-
-- Nếu chỉ Adventure Component đổi, engine cập nhật đúng `TextDisplay` liên quan.
-- Nếu chỉ slider value hoặc transformation đổi, engine cập nhật tại chỗ không respawn.
-- Nếu geometry, node type hoặc button đổi, engine respawn scene.
-- Animation text không respawn panel/icon và không gây nhấp nháy toàn UI.
-- Visibility được cache; `showEntity/hideEntity` chỉ gửi gói tin khi trạng thái đổi.
-
-Display Entity nhẹ hơn mob thông thường vì không có AI/pathfinding, nhưng vẫn là entity được
-server quản lý và client track. Một scene khoảng 10–30 display thường nhẹ. Nên tránh
-hàng nghìn display cùng tồn tại hoặc animation metadata tần suất quá cao.
-
-Khuyến nghị:
-
-- Chỉ tạo scene khi cần.
-- Dùng audience và `maxDistance` hợp lý.
-- Gọi `remove()` khi menu/machine bị xóa.
-- Ưu tiên text-only update cho animation.
-- Không rebuild document mỗi tick nếu nội dung không đổi.
-- Gom icon + text vào một button row thay vì tạo nhiều hitbox chồng nhau.
-
-## Cấu trúc dự án
-
-```text
-HaoHanDisplayUI/
-├── src/main/java/vn/haohan/displayui/
-│   ├── api/                  Public API cho plugin consumer (Document, Handle, Service, Options, Pager)
-│   │   ├── animation/         UiAnimation, UiEasing, UiEffects
-│   │   ├── icon/              UiIconRegistry
-│   │   ├── interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
-│   │   │   └── event/          UiButtonClickEvent, UiControlChangeEvent
-│   │   ├── layout/            UiRect, UiAnchor, UiCameraTransform
-│   │   ├── node/              MobEntityNode, EntityModelNode, TriangleNode, ParallelogramNode, LineNode, PolylineNode, AlignedTextNode, TextNode, UiIconNode, ItemNode, BlockNode
-│   │   ├── shape/             DisplayShapeMath, TRSResult
-│   │   ├── text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
-│   │   └── view/              UiAudience
-│   ├── runtime/              Scene, raycast, packet visibility, model rotation & interaction runtime
-│   ├── DisplayUiCommand.java Lệnh quản trị (/hhdui demo, info, clear)
-│   └── HaoHanDisplayUIPlugin.java Entry point plugin
-├── src/main/resources/
-│   └── plugin.yml
-├── src/test/java/           Bộ test JUnit 5 (DisplayShapeTest, Model, Pager, Raycast, MobEntity, v.v.)
-├── media/
-│   ├── Demo.gif              Demo hiển thị trực tiếp trên GitHub
-│   └── Demo.mp4              Video chất lượng cao có âm thanh
-├── build.gradle
-└── settings.gradle
 ```
 
 ## Ghi chú vận hành

@@ -16,16 +16,29 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package vn.haohan.displayui.api.view;
+package vn.haohan.displayui.runtime;
 
-/**
- * Camera and player tracking modes for displaying interactive floating HUD interfaces.
- */
-public enum UiFollowMode {
-    /** Stationary world-anchored UI (no follow). */
-    NONE,
-    /** Fast HUD follow using a short client-side interpolation window. */
-    HARD,
-    /** Smooth interpolated / damped follow with subtle trailing inertia. */
-    SMOOTH
+/** Monotonic clock that exposes elapsed time in Minecraft ticks. */
+final class UiAnimationClock {
+    private static final double NANOS_PER_TICK = 50_000_000.0;
+    private long lastNanos;
+
+    void reset() {
+        lastNanos = System.nanoTime();
+    }
+
+    void clear() {
+        lastNanos = 0L;
+    }
+
+    double advance() {
+        long now = System.nanoTime();
+        if (lastNanos == 0L) {
+            lastNanos = now;
+            return 0.0;
+        }
+        double ticks = Math.max(0.0, (now - lastNanos) / NANOS_PER_TICK);
+        lastNanos = now;
+        return ticks;
+    }
 }

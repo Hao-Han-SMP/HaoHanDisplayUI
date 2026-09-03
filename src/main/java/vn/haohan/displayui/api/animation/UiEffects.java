@@ -19,61 +19,61 @@ public final class UiEffects {
     private UiEffects() { }
 
     public static UiAnimation fadeIn() {
-        return UiAnimation.fadeIn(12, UiEasing.EASE_OUT);
+        return UiAnimation.fadeIn(12, Easings.OutCubic);
     }
 
     public static UiAnimation fadeIn(int durationTicks) {
-        return UiAnimation.fadeIn(durationTicks, UiEasing.EASE_OUT);
+        return UiAnimation.fadeIn(durationTicks, Easings.OutCubic);
     }
 
     public static UiAnimation slideInFromLeft() {
-        return UiAnimation.slideIn(16, UiAnimation.Direction.LEFT, 28, UiEasing.CUBIC_OUT);
+        return UiAnimation.slideIn(16, UiAnimation.Direction.LEFT, 28, Easings.OutCubic);
     }
 
     public static UiAnimation slideInFromRight() {
-        return UiAnimation.slideIn(16, UiAnimation.Direction.RIGHT, 28, UiEasing.CUBIC_OUT);
+        return UiAnimation.slideIn(16, UiAnimation.Direction.RIGHT, 28, Easings.OutCubic);
     }
 
     public static UiAnimation slideInFromTop() {
-        return UiAnimation.slideIn(16, UiAnimation.Direction.TOP, 22, UiEasing.CUBIC_OUT);
+        return UiAnimation.slideIn(16, UiAnimation.Direction.TOP, 22, Easings.OutCubic);
     }
 
     public static UiAnimation slideInFromBottom() {
-        return UiAnimation.slideIn(16, UiAnimation.Direction.BOTTOM, 22, UiEasing.CUBIC_OUT);
+        return UiAnimation.slideIn(16, UiAnimation.Direction.BOTTOM, 22, Easings.OutCubic);
     }
 
     public static UiAnimation popIn() {
-        return UiAnimation.builder().durationTicks(18).easing(UiEasing.BACK_OUT)
+        return UiAnimation.builder().durationTicks(18).easing(Easings.BackOut)
                 .opacity(0.0f, 1.0f).scale(0.72f, 1.0f).build();
     }
 
     public static UiAnimation scaleIn() {
-        return scaleIn(0.55f, UiEasing.EASE_OUT);
+        return scaleIn(0.55f, Easings.OutCubic);
     }
 
-    public static UiAnimation scaleIn(float fromScale, UiEasing easing) {
+    public static UiAnimation scaleIn(float fromScale, Easings easing) {
         return UiAnimation.builder().durationTicks(16).easing(easing)
                 .opacity(0.0f, 1.0f).scale(fromScale, 1.0f).build();
     }
 
     public static UiAnimation scaleOut() {
-        return UiAnimation.builder().durationTicks(14).easing(UiEasing.EASE_IN)
+        return UiAnimation.builder().durationTicks(14).easing(Easings.InCubic)
                 .opacity(1.0f, 0.0f).scale(1.0f, 0.75f).build();
     }
 
     public static UiAnimation bounceIn() {
-        return UiAnimation.builder().durationTicks(22).easing(UiEasing.BOUNCE_OUT)
+        return UiAnimation.builder().durationTicks(22).easing(Easings.BounceOut)
                 .opacity(0.0f, 1.0f).scale(0.8f, 1.0f)
                 .offset(UiAnimation.Direction.TOP, 26).build();
     }
 
     public static UiAnimation dropIn() {
-        return UiAnimation.builder().durationTicks(20).easing(UiEasing.BOUNCE_OUT)
+        return UiAnimation.builder().durationTicks(20).easing(Easings.BounceOut)
                 .opacity(0.0f, 1.0f).offset(UiAnimation.Direction.TOP, 30).build();
     }
 
     public static UiAnimation softRise() {
-        return UiAnimation.builder().durationTicks(18).easing(UiEasing.QUAD_OUT)
+        return UiAnimation.builder().durationTicks(18).easing(Easings.OutQuad)
                 .opacity(0.0f, 1.0f).offset(UiAnimation.Direction.BOTTOM, 14).build();
     }
 

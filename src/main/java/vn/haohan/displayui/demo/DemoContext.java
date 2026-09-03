@@ -59,7 +59,10 @@ public final class DemoContext {
     public List<AppEntry> appEntries() { return appEntries; }
 
     public boolean doubleSided() { return doubleSided; }
-    public void doubleSided(boolean doubleSided) { this.doubleSided = doubleSided; }
+    public void doubleSided(boolean doubleSided) {
+        this.doubleSided = doubleSided;
+        if (handle != null && handle.isValid()) handle.doubleSided(doubleSided);
+    }
 
     public boolean mirrorSide() { return mirrorSide; }
     public void mirrorSide(boolean mirrorSide) { this.mirrorSide = mirrorSide; }

@@ -19,11 +19,11 @@
 package vn.haohan.displayui.api;
 
 import vn.haohan.displayui.api.interaction.UiButton;
-import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiControl;
 import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.interaction.UiScrollList;
+import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.api.node.MobEntityNode;
@@ -110,6 +110,17 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons,
                                        UiButtonAction action) {
             add(text);
             button(UiButton.forText(id, text)
+                    .describedBy(description)
+                    .withAction(action));
+            return this;
+        }
+
+        /** Adds any renderable node and automatically creates its hit zone. */
+        public Builder interactive(String id, UiNode node,
+                                   net.kyori.adventure.text.Component description,
+                                   UiButtonAction action) {
+            add(node);
+            button(UiButton.forNode(id, node)
                     .describedBy(description)
                     .withAction(action));
             return this;

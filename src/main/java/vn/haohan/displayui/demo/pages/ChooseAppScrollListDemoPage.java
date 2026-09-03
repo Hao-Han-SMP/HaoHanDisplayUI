@@ -8,7 +8,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.animation.UiAnimation;
-import vn.haohan.displayui.api.animation.UiEasing;
+import vn.haohan.displayui.api.animation.Easings;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.interaction.UiScrollList;
@@ -127,7 +127,7 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
                 int row = (i - 2) / 5;
                 int delay = Math.max(0, row * 2);
                 list.add(UiAnimation.slideIn(10, UiAnimation.Direction.TOP, 12.0f,
-                        UiEasing.CUBIC_OUT).delay(delay));
+                        Easings.OutCubic).delay(delay));
             }
         }
         context.handle().animateNodes(list);

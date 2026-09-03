@@ -9,7 +9,7 @@ website: https://haohansmp.dev
 commands:
   hhdui:
     description: HaoHan Display UI engine commands
-    usage: /hhdui <info|demo|mobgrid|testallmobs|clear> [page]
+    usage: /hhdui <demo|clear|stats|page|follow|camera|reload> [page]
     aliases: [displayui]
     permission: haohansmp.displayui.admin
 
