@@ -25,6 +25,7 @@ import vn.haohan.displayui.api.interaction.UiScrollAnimation;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.view.UiAudience;
 import vn.haohan.displayui.api.view.UiFollowMode;
+import vn.haohan.displayui.api.view.UiFollowOptions;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -74,14 +75,19 @@ public interface UiHandle {
         scrollAnimation(UiScrollAnimation.none());
     }
 
-    /** Configures player camera follow mode with default distance and smoothing. */
-    void follow(Player player, UiFollowMode mode);
+    /** Starts the unified player follow with default parameters. */
+    void follow(Player player);
 
-    /** Configures player camera follow mode with custom distance. */
-    void follow(Player player, UiFollowMode mode, double distance);
+    /** Starts or updates player follow with caller-controlled parameters. */
+    void follow(Player player, UiFollowOptions options);
 
-    /** Configures player camera follow mode with custom distance and smooth damping factor (0.0 to 1.0). */
-    void follow(Player player, UiFollowMode mode, double distance, float damping);
+    /** Convenience overload using one damping value for position and rotation. */
+    default void follow(Player player, double distance, float damping, int interpolationTicks) {
+        follow(player, UiFollowOptions.of(distance, damping, interpolationTicks));
+    }
+
+    /** Returns the active follow parameters, or defaults when follow is disabled. */
+    UiFollowOptions followOptions();
 
     /** Disables player follow mode and leaves the UI at its current world position. */
     void stopFollow();

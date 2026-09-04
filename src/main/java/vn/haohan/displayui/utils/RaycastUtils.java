@@ -16,14 +16,14 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package vn.haohan.displayui.runtime;
+package vn.haohan.displayui.utils;
 
 import org.bukkit.util.Vector;
 
-final class UiRaycaster {
-    private UiRaycaster() {}
+public final class RaycastUtils {
+    private RaycastUtils() {}
 
-    static Projection project(Vector eye, Vector rayDirection, Vector planeOrigin,
+    public static Projection project(Vector eye, Vector rayDirection, Vector planeOrigin,
                               Vector planeNormal, float pixelsPerBlock,
                               double maxDistance) {
         Vector normal = planeNormal.clone().setY(0.0);
@@ -34,7 +34,7 @@ final class UiRaycaster {
                 new Vector(0, 1, 0), pixelsPerBlock, maxDistance);
     }
 
-    static Projection project(Vector eye, Vector rayDirection, Vector planeOrigin,
+    public static Projection project(Vector eye, Vector rayDirection, Vector planeOrigin,
                               Vector planeNormal, Vector planeRight, Vector planeUp,
                               float pixelsPerBlock, double maxDistance) {
         Vector normal = planeNormal.clone();
@@ -58,5 +58,5 @@ final class UiRaycaster {
         return new Projection(localX, localY, distance);
     }
 
-    record Projection(float localX, float localY, double distance) {}
+    public record Projection(float localX, float localY, double distance) {}
 }

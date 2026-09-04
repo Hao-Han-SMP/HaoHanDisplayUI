@@ -16,22 +16,22 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package vn.haohan.displayui.runtime;
+package vn.haohan.displayui.utils;
 
 /** Monotonic clock that exposes elapsed time in Minecraft ticks. */
-final class UiAnimationClock {
+public final class TimerUtils {
     private static final double NANOS_PER_TICK = 50_000_000.0;
     private long lastNanos;
 
-    void reset() {
+    public void reset() {
         lastNanos = System.nanoTime();
     }
 
-    void clear() {
+    public void clear() {
         lastNanos = 0L;
     }
 
-    double advance() {
+    public double advance() {
         long now = System.nanoTime();
         if (lastNanos == 0L) {
             lastNanos = now;

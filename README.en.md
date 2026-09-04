@@ -461,6 +461,27 @@ Factory presets:
 - `UiModelRotation.autoSpin(speed)`: Continuously spins at `speed` degrees/tick.
 - `UiModelRotation.hoverSpin(speed)`: Spins on hover at `speed` degrees/tick.
 
+## Player follow and smoothness
+
+Player follow now uses one unified implementation. Rigid, smooth, and HUD-like
+behaviour are presets made from damping and client interpolation settings:
+
+```java
+import vn.haohan.displayui.api.view.UiFollowOptions;
+
+handle.follow(player);
+handle.follow(player, UiFollowOptions.defaults()
+    .distance(3.0)
+    .positionDamping(0.35f)
+    .rotationDamping(0.25f)
+    .interpolationTicks(8));
+handle.follow(player, 3.0, 1.0f, 6);
+handle.stopFollow();
+```
+
+`interpolationTicks` is the Display Entity client-side blending window. Higher
+values generally look smoother but add perceived follow latency.
+
 ## Animations and easing
 
 Animations are configured on the handle and run on every node in the scene:

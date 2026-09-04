@@ -20,14 +20,15 @@ package vn.haohan.displayui.runtime;
 
 import org.bukkit.util.Vector;
 import org.junit.jupiter.api.Test;
+import vn.haohan.displayui.utils.RaycastUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-class UiRaycasterTest {
+class RaycastUtilsTest {
     @Test
     void projectsCameraRayIntoLogicalPixelCoordinates() {
-        var hit = UiRaycaster.project(
+        var hit = RaycastUtils.project(
                 new Vector(0, 0, 4),
                 new Vector(1, -0.5, -4),
                 new Vector(0, 0, 0),
@@ -44,15 +45,15 @@ class UiRaycasterTest {
         Vector eye = new Vector(0, 0, 4);
         Vector origin = new Vector(0, 0, 0);
         Vector normal = new Vector(0, 0, 1);
-        assertNull(UiRaycaster.project(eye, new Vector(1, 0, 0), origin, normal, 40, 8));
-        assertNull(UiRaycaster.project(eye, new Vector(0, 0, 1), origin, normal, 40, 8));
-        assertNull(UiRaycaster.project(eye, new Vector(0, 0, -1), origin, normal, 40, 3));
+        assertNull(RaycastUtils.project(eye, new Vector(1, 0, 0), origin, normal, 40, 8));
+        assertNull(RaycastUtils.project(eye, new Vector(0, 0, 1), origin, normal, 40, 8));
+        assertNull(RaycastUtils.project(eye, new Vector(0, 0, -1), origin, normal, 40, 3));
     }
 
     @Test
     void supportsAnExplicitTiltedPlaneBasis() {
         double inverseRootTwo = 1.0 / Math.sqrt(2.0);
-        var hit = UiRaycaster.project(
+        var hit = RaycastUtils.project(
                 new Vector(0, 2, 4), new Vector(0, -2, -4),
                 new Vector(0, 0, 0),
                 new Vector(0, inverseRootTwo, inverseRootTwo),

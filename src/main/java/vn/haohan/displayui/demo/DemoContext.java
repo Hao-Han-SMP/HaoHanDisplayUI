@@ -5,6 +5,7 @@ import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.UiHandle;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.view.UiFollowMode;
+import vn.haohan.displayui.api.view.UiFollowOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +24,7 @@ public final class DemoContext {
     private final List<AppEntry> appEntries = new ArrayList<>(AppEntry.defaultApps());
     private UiCameraTransform cameraTransform = UiCameraTransform.fixed();
     private UiFollowMode followMode = UiFollowMode.NONE;
+    private UiFollowOptions followOptions = UiFollowOptions.defaults();
     private boolean doubleSided = false;
     private boolean mirrorSide = true;
     private Consumer<DemoContext> pageUpdater;
@@ -84,10 +86,16 @@ public final class DemoContext {
                 if (followMode == UiFollowMode.NONE) {
                     handle.stopFollow();
                 } else {
-                    handle.follow(p, followMode, 3.0, 0.22f);
+                    handle.follow(p, followOptions);
                 }
             }
         }
+    }
+
+    public UiFollowOptions followOptions() { return followOptions; }
+    public void followOptions(UiFollowOptions options) {
+        this.followOptions = options;
+        if (followMode == UiFollowMode.FOLLOW) followMode(UiFollowMode.FOLLOW);
     }
 
     public void setPageUpdater(Consumer<DemoContext> updater) {

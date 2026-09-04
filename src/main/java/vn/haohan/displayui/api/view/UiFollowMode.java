@@ -24,8 +24,6 @@ package vn.haohan.displayui.api.view;
 public enum UiFollowMode {
     /** Stationary world-anchored UI (no follow). */
     NONE,
-    /** Fast HUD follow using a short client-side interpolation window. */
-    HARD,
-    /** Smooth interpolated / damped follow with subtle trailing inertia. */
-    SMOOTH
+    /** Player follow; speed, damping and interpolation are configured separately. */
+    FOLLOW
 }

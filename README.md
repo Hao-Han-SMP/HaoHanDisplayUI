@@ -432,6 +432,27 @@ Các preset tạo nhanh:
 - `UiModelRotation.autoSpin(speed)`: Tự quay liên tục với tốc độ `speed` độ/tick.
 - `UiModelRotation.hoverSpin(speed)`: Tự quay khi hover với tốc độ `speed` độ/tick.
 
+## Player follow và độ mượt
+
+Player follow chỉ còn một cơ chế thống nhất. Các trạng thái kiểu rigid, smooth
+hay HUD được tạo bằng cùng một API, thông qua damping và số tick interpolation:
+
+```java
+import vn.haohan.displayui.api.view.UiFollowOptions;
+
+handle.follow(player);
+handle.follow(player, UiFollowOptions.defaults()
+    .distance(3.0)
+    .positionDamping(0.35f)
+    .rotationDamping(0.25f)
+    .interpolationTicks(8));
+handle.follow(player, 3.0, 1.0f, 6);
+handle.stopFollow();
+```
+
+`interpolationTicks` là cửa sổ nội suy của Display Entity ở phía client, không
+tạo thêm server tick. Giá trị lớn hơn thường mượt hơn nhưng tăng độ trễ cảm nhận.
+
 ## Animation và easing
 
 Animation được cài đặt trực tiếp trên `UiHandle`, chạy mỗi tick và kết hợp

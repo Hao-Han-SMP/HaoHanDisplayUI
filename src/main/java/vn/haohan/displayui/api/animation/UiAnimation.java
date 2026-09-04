@@ -99,6 +99,13 @@ public record UiAnimation(
                 fromScale, toScale, offsetX, offsetY, offsetZ);
     }
 
+    /** Returns whether this animation leaves scale, opacity, and position unchanged. */
+    public boolean isStatic() {
+        return offsetX == 0.0f && offsetY == 0.0f && offsetZ == 0.0f
+                && fromScale == 1.0f && toScale == 1.0f
+                && fromOpacity == 1.0f && toOpacity == 1.0f;
+    }
+
     /** Direction in the scene's logical screen coordinate system. */
     public enum Direction {
         LEFT(-1, 0, 0),

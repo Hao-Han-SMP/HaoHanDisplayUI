@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package vn.haohan.displayui.runtime;
+package vn.haohan.displayui.runtime.scene.state;
 
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.interaction.UiButton;
@@ -30,10 +30,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Keeps interactive control values stable while immutable documents are rebuilt. */
-final class UiControlStateStore {
+public final class UiControlStateStore {
     private final Map<String, UiControl> values = new LinkedHashMap<>();
 
-    void synchronize(UiDocument document) {
+    public UiControlStateStore() {}
+
+    public void synchronize(UiDocument document) {
         document.controls().forEach(control -> {
             UiControl old = values.get(control.id());
             if (old instanceof UiSlider oldSlider && control instanceof UiSlider slider
@@ -48,13 +50,13 @@ final class UiControlStateStore {
         });
     }
 
-    UiControl get(String id) { return values.get(id); }
-    Collection<UiControl> values() { return values.values(); }
-    Map<String, UiControl> snapshot() { return new LinkedHashMap<>(values); }
-    boolean isEmpty() { return values.isEmpty(); }
-    void clear() { values.clear(); }
+    public UiControl get(String id) { return values.get(id); }
+    public Collection<UiControl> values() { return values.values(); }
+    public Map<String, UiControl> snapshot() { return new LinkedHashMap<>(values); }
+    public boolean isEmpty() { return values.isEmpty(); }
+    public void clear() { values.clear(); }
 
-    Change change(UiControl control, double nextValue) {
+    public Change change(UiControl control, double nextValue) {
         if (control == null) return null;
         double oldValue = valueOf(control);
         UiControl next = withValue(control, nextValue);
@@ -88,5 +90,5 @@ final class UiControlStateStore {
                 && Math.abs(first.height() - second.height()) < 0.01f;
     }
 
-    record Change(UiControl control, double oldValue, double newValue) {}
+    public record Change(UiControl control, double oldValue, double newValue) {}
 }

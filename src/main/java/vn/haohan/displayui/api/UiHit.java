@@ -16,13 +16,14 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package vn.haohan.displayui.runtime;
+package vn.haohan.displayui.api;
 
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiControl;
 import org.bukkit.entity.Player;
+import vn.haohan.displayui.runtime.scene.UiScene;
 
-record UiHit(
+public record UiHit(
         UiScene scene,
         UiButton button,
         UiControl control,

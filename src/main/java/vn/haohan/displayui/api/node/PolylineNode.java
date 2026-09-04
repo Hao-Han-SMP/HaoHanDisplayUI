@@ -80,8 +80,8 @@ public record PolylineNode(
             lines.add(new LineNode(p1.x(), p1.y(), p2.x(), p2.y(), thickness, depth, color, doubleSided, 0.0f));
         }
         if (closed && points.size() > 2) {
-            Point p1 = points.get(points.size() - 1);
-            Point p2 = points.get(0);
+            Point p1 = points.getLast();
+            Point p2 = points.getFirst();
             lines.add(new LineNode(p1.x(), p1.y(), p2.x(), p2.y(), thickness, depth, color, doubleSided, 0.0f));
         }
         return lines;

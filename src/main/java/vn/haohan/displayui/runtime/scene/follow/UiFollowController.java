@@ -16,73 +16,64 @@
  * You should have received a copy of the GNU General Public License
  * along with HaoHanDisplayUI. If not, see <https://www.gnu.org/licenses/>.
  */
-package vn.haohan.displayui.runtime;
+package vn.haohan.displayui.runtime.scene.follow;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 import vn.haohan.displayui.api.view.UiFollowMode;
+import vn.haohan.displayui.api.view.UiFollowOptions;
 import vn.haohan.displayui.utils.MathUtils;
 
 import java.util.Objects;
 
 /** Owns follow configuration and calculates the next scene anchor. */
-final class UiFollowController {
-    static final int HARD_INTERPOLATION_TICKS = 2;
-    static final int SMOOTH_INTERPOLATION_TICKS = 3;
-
+public final class UiFollowController {
+    public UiFollowController() {}
     private UiFollowMode mode = UiFollowMode.NONE;
     private Player target;
-    private double distance = 3.0;
-    private float pitchOffset;
-    private double positionDamping = 0.18;
-    private double rotationDamping = 0.20;
+    private UiFollowOptions options = UiFollowOptions.defaults();
 
-    void configure(Player target, UiFollowMode mode, double distance, float pitchOffset) {
+    public void configure(Player target, UiFollowOptions options) {
         this.target = Objects.requireNonNull(target, "target");
-        this.mode = Objects.requireNonNull(mode, "mode");
-        if (distance <= 0.0) throw new IllegalArgumentException("distance must be positive");
-        this.distance = distance;
-        this.pitchOffset = pitchOffset;
+        this.options = Objects.requireNonNull(options, "options");
+        this.mode = UiFollowMode.FOLLOW;
     }
 
-    void stop() {
+    public void stop() {
         mode = UiFollowMode.NONE;
         target = null;
     }
 
-    UiFollowMode mode() {
+    public UiFollowMode mode() {
         return mode;
     }
 
-    Player target() {
+    public Player target() {
         return target;
     }
 
-    int interpolationTicks() {
-        return mode == UiFollowMode.HARD
-                ? HARD_INTERPOLATION_TICKS : SMOOTH_INTERPOLATION_TICKS;
-    }
+    public UiFollowOptions options() { return options; }
 
-    Location next(Location current) {
+    public int interpolationTicks() { return options.interpolationTicks(); }
+
+    public Location next(Location current) {
         if (mode == UiFollowMode.NONE || target == null || !target.isOnline()) return null;
         if (target.getWorld() != current.getWorld()) return null;
 
         Location eye = target.getEyeLocation();
         Vector direction = eye.getDirection().normalize();
-        Location targetLocation = eye.clone().add(direction.multiply(distance));
-        targetLocation.setPitch(eye.getPitch() + pitchOffset);
+        Location targetLocation = eye.clone().add(direction.multiply(options.distance()));
+        targetLocation.setPitch(eye.getPitch());
         targetLocation.setYaw(eye.getYaw() + 180.0f);
-        if (mode == UiFollowMode.HARD) return targetLocation;
-
         Location next = current.clone();
-        next.setX(MathUtils.lerp(current.getX(), targetLocation.getX(), positionDamping));
-        next.setY(MathUtils.lerp(current.getY(), targetLocation.getY(), positionDamping));
-        next.setZ(MathUtils.lerp(current.getZ(), targetLocation.getZ(), positionDamping));
+        next.setX(MathUtils.lerp(current.getX(), targetLocation.getX(), options.positionDamping()));
+        next.setY(MathUtils.lerp(current.getY(), targetLocation.getY(), options.positionDamping()));
+        next.setZ(MathUtils.lerp(current.getZ(), targetLocation.getZ(), options.positionDamping()));
         float yawDiff = MathUtils.signedAngleDifference(targetLocation.getYaw(), current.getYaw());
-        next.setYaw(current.getYaw() + yawDiff * (float) rotationDamping);
+        next.setYaw(current.getYaw() + yawDiff * options.rotationDamping());
         float pitchDiff = targetLocation.getPitch() - current.getPitch();
-        next.setPitch(current.getPitch() + pitchDiff * (float) rotationDamping);
+        next.setPitch(current.getPitch() + pitchDiff * options.rotationDamping());
         return next;
     }
 }

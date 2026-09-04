@@ -12,6 +12,7 @@ import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.view.UiFollowMode;
+import vn.haohan.displayui.api.view.UiFollowOptions;
 import vn.haohan.displayui.demo.BaseDemoPage;
 import vn.haohan.displayui.demo.DemoContext;
 
@@ -52,21 +53,25 @@ public final class CameraAxisLockDemoPage extends BaseDemoPage {
                 -86, 9, 172, 8, UiTextAlignment.CENTER).fontSize(4.5f));
 
         UiFollowMode currentMode = context.followMode();
-        addFollowButton(builder, "follow_off", -86, 18, 52, "FOLLOW: OFF",
+        addFollowButton(builder, "follow_off", -86, 18, 38, "OFF",
                 "Detach HUD and anchor at current world location",
                 currentMode == UiFollowMode.NONE);
-        addFollowButton(builder, "follow_hard", -26, 18, 52, "HARD LOCK",
-                "Rigid 1:1 camera lock without delay",
-                currentMode == UiFollowMode.HARD);
-        addFollowButton(builder, "follow_smooth", 34, 18, 52, "SMOOTH LERP",
+        addFollowButton(builder, "follow_hard", -42, 18, 38, "RIGID",
+                "Unified follow with damping 1.0 and short interpolation",
+                currentMode == UiFollowMode.FOLLOW && context.followOptions().positionDamping() == 1.0f);
+        addFollowButton(builder, "follow_smooth", 2, 18, 38, "SMOOTH",
                 "Damped smooth camera follow with trailing inertia",
-                currentMode == UiFollowMode.SMOOTH);
+                currentMode == UiFollowMode.FOLLOW && context.followOptions().positionDamping() < 1.0f);
+        addFollowButton(builder, "follow_hud", 46, 18, 38, "FAST",
+                "Unified follow with minimal interpolation delay",
+                currentMode == UiFollowMode.FOLLOW && context.followOptions().interpolationTicks() == 1);
 
         // Row 4: Follow Mode status subtitle
         String statusText = switch (currentMode) {
             case NONE -> "HUD Status: Stationary (World Anchored)";
-            case HARD -> "HUD Status: Hard Locked (Exact View Lock)";
-            case SMOOTH -> "HUD Status: Smooth Lerp (Damping: 0.22, Delay on Move/Rotate)";
+            case FOLLOW -> "Follow: distance %.1f, damping %.2f, interpolation %d ticks"
+                    .formatted(context.followOptions().distance(), context.followOptions().positionDamping(),
+                            context.followOptions().interpolationTicks());
         };
         builder.add(new AlignedTextNode(Component.text(statusText,
                         currentMode == UiFollowMode.NONE ? NamedTextColor.DARK_GRAY : NamedTextColor.GREEN),
@@ -108,11 +113,18 @@ public final class CameraAxisLockDemoPage extends BaseDemoPage {
                 context.updateView();
             }
             case "follow_hard" -> {
-                context.followMode(UiFollowMode.HARD);
+                context.followOptions(UiFollowOptions.defaults().damping(1.0f).interpolationTicks(2));
+                context.followMode(UiFollowMode.FOLLOW);
                 context.updateView();
             }
             case "follow_smooth" -> {
-                context.followMode(UiFollowMode.SMOOTH);
+                context.followOptions(UiFollowOptions.defaults());
+                context.followMode(UiFollowMode.FOLLOW);
+                context.updateView();
+            }
+            case "follow_hud" -> {
+                context.followOptions(UiFollowOptions.defaults().damping(1.0f).interpolationTicks(1));
+                context.followMode(UiFollowMode.FOLLOW);
                 context.updateView();
             }
             default -> { return false; }

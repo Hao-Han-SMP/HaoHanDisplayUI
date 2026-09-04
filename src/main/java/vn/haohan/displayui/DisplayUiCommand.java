@@ -46,7 +46,7 @@ import java.util.UUID;
 final class DisplayUiCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBCOMMANDS = List.of(
             "demo", "clear", "stats", "page", "follow", "camera", "reload");
-    private static final List<String> FOLLOW_OPTIONS = List.of("none", "smooth", "hard");
+    private static final List<String> FOLLOW_OPTIONS = List.of("none", "follow");
     private static final List<String> CAMERA_PRESETS = List.of("fixed", "face_player", "tilt_up", "tilt_down", "rotate_left", "rotate_right", "skew", "reset");
 
     private final HaoHanDisplayUIPlugin plugin;
@@ -279,20 +279,19 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length < 2) {
-            sender.sendMessage("§cUsage: /hhdui follow <none|smooth|hard>");
+            sender.sendMessage("§cUsage: /hhdui follow <none|follow>");
             return true;
         }
 
         String modeStr = args[1].toLowerCase();
         vn.haohan.displayui.api.view.UiFollowMode mode = switch (modeStr) {
-            case "smooth" -> vn.haohan.displayui.api.view.UiFollowMode.SMOOTH;
-            case "hard" -> vn.haohan.displayui.api.view.UiFollowMode.HARD;
+            case "follow" -> vn.haohan.displayui.api.view.UiFollowMode.FOLLOW;
             case "none" -> vn.haohan.displayui.api.view.UiFollowMode.NONE;
             default -> null;
         };
 
         if (mode == null) {
-            sender.sendMessage("§cInvalid follow mode. Choose from: none, smooth, hard");
+            sender.sendMessage("§cInvalid follow mode. Choose from: none, follow");
             return true;
         }
 
