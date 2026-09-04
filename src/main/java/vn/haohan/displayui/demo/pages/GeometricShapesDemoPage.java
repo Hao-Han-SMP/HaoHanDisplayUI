@@ -98,9 +98,9 @@ public final class GeometricShapesDemoPage extends BaseDemoPage {
                 -20, -8, 44, 8, UiTextAlignment.CENTER).fontSize(4).atDepth(0.003f));
 
         // Rolled line beams with roll angles
-        builder.add(new LineNode(-20, 12, 22, 12, 2.0f, 0.002f, Color.fromRGB(114, 9, 183), true, 180.0f));
-        builder.add(new LineNode(-20, 20, 22, 20, 2.5f, 0.002f, Color.fromRGB(76, 201, 240), true, 225.0f));
-        builder.add(new LineNode(-20, 28, 22, 28, 3.0f, 0.002f, Color.fromRGB(67, 97, 238), true, 270.0f));
+        builder.add(new LineNode(-20, 12, 22, 12, 2.0f, 0.002f, Color.fromRGB(114, 9, 183), true, 0.0f));
+        builder.add(new LineNode(-20, 20, 22, 20, 2.5f, 0.002f, Color.fromRGB(76, 201, 240), true, 45.0f));
+        builder.add(new LineNode(-20, 28, 22, 28, 3.0f, 0.002f, Color.fromRGB(67, 97, 238), true, 90.0f));
 
         builder.add(new AlignedTextNode(
                 Component.text("Roll: 0° / 45° / 90°", NamedTextColor.GRAY),
