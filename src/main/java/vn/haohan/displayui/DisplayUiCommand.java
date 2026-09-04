@@ -25,6 +25,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.DisplayUiService;
+import vn.haohan.displayui.runtime.DisplayUiServiceImpl;
 import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.interaction.UiScrollAnimations;
@@ -107,7 +108,6 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 .add(player.getEyeLocation().getDirection().multiply(3.0));
         origin.setYaw(player.getLocation().getYaw() + 180.0f);
         origin.setPitch(0.0f);
-
         DemoContext context = new DemoContext(player.getUniqueId());
         context.setPageUpdater(ctx -> ctx.handle().update(DemoUiRenderer.render(pages, ctx)));
 
@@ -117,8 +117,6 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 candidate -> candidate.getUniqueId().equals(player.getUniqueId())));
         context.handle().mirrorSide(context.mirrorSide());
         context.handle().sides(context.doubleSided(), context.mirrorSide());
-        // Keep the showcase's original transition as an explicit demo choice.
-        // Library scenes remain animation-free until their owner opts in.
         context.handle().scrollAnimation(UiScrollAnimations.slide());
 
         context.handle().onClick(click -> onDemoClick(context, click.button().id(), click.player()));
@@ -134,8 +132,8 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
 
     private void cleanupExisting(UUID playerId) {
         DemoContext oldDemo = demos.remove(playerId);
+        Player player = plugin.getServer().getPlayer(playerId);
         if (oldDemo != null && oldDemo.handle() != null) oldDemo.handle().remove();
-
     }
 
     private void onDemoClick(DemoContext context, String buttonId, Player player) {
@@ -165,8 +163,8 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 context.handle().mirrorSide(context.mirrorSide());
                 context.updateView();
                 player.sendMessage(context.mirrorSide()
-                        ? "§b✦ Mirror Side: §aENABLED (True mirrored layout and bidirectional controls)"
-                        : "§b✦ Mirror Side: §cDISABLED (Standard 3D rotation)");
+                        ? "§b✧ Mirror Side: §aENABLED (True mirrored layout and bidirectional controls)"
+                        : "§b✧ Mirror Side: §cDISABLED (Standard 3D rotation)");
                 return;
             }
             default -> {}

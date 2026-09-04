@@ -19,7 +19,6 @@
 package vn.haohan.displayui.api;
 
 import net.kyori.adventure.text.Component;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.EntityType;
 import org.junit.jupiter.api.Test;
 import vn.haohan.displayui.api.interaction.UiButton;
@@ -29,11 +28,6 @@ import vn.haohan.displayui.api.node.UiModelRotation;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class MobEntityNodeTest {
-
-    @Test
-    void testAttribute() {
-        assertNotNull(Attribute.GENERIC_SCALE);
-    }
 
     @Test
     void testMobEntityNodeCreation() {
@@ -87,7 +81,7 @@ public class MobEntityNodeTest {
 
         assertEquals(1, doc.nodes().size());
         assertEquals(1, doc.buttons().size());
-        assertSame(node, doc.nodes().get(0));
-        assertEquals("allay_btn", doc.buttons().get(0).id());
+        assertSame(node, doc.nodes().getFirst());
+        assertEquals("allay_btn", doc.buttons().getFirst().id());
     }
 }

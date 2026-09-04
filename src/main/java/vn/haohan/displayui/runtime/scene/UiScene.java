@@ -436,8 +436,12 @@ public final class UiScene implements UiHandle {
     }
 
     private void updateInteractionHitbox() {
+        if (document.buttons().isEmpty() && controlStates.isEmpty()) {
+            if (interactionEntity != null && interactionEntity.isValid()) interactionEntity.remove();
+            interactionEntity = null;
+            return;
+        }
         if (interactionEntity == null || !interactionEntity.isValid()) return;
-        if (document.buttons().isEmpty() && controlStates.isEmpty()) return;
 
         UiInteractionBounds.Bounds bounds = UiInteractionBounds.calculate(
                 document, controlStates.values(), origin, options.pixelsPerBlock(), cameraTransform);
@@ -446,7 +450,6 @@ public final class UiScene implements UiHandle {
             interactionEntity.teleport(bounds.center());
             interactionEntity.setInteractionWidth((float) bounds.width());
             interactionEntity.setInteractionHeight((float) bounds.height());
-            return;
         }
 
     }
@@ -683,45 +686,9 @@ public final class UiScene implements UiHandle {
 
     private void spawnInteraction() {
         if (document.buttons().isEmpty() && controlStates.isEmpty()) return;
-        List<UiControl> controls = List.copyOf(controlStates.values());
-        float minX = document.buttons().stream().map(button -> button.x() - button.hitSlop())
-                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
-        minX = Math.min(minX, controls.stream().map(control -> control.x() - control.hitSlop())
-                .min(Float::compare).orElse(0.0f));
-        float maxX = document.buttons().stream()
-                .map(button -> button.x() + button.width() + button.hitSlop())
-                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
-        maxX = Math.max(maxX, controls.stream()
-                .map(control -> control.x() + control.width() + control.hitSlop())
-                .max(Float::compare).orElse(0.0f));
-        float minY = document.buttons().stream()
-                .map(button -> button.y() - button.hitSlop())
-                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
-        minY = Math.min(minY, controls.stream()
-                .map(control -> control.y() - control.hitSlop())
-                .min(Float::compare).orElse(0.0f));
-        float maxY = document.buttons().stream()
-                .map(button -> button.y() + button.height() + button.hitSlop())
-                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
-        maxY = Math.max(maxY, controls.stream()
-                .map(control -> control.y() + control.height() + control.hitSlop())
-                .max(Float::compare).orElse(0.0f));
-        float pixels = options.pixelsPerBlock();
-
-        Vector normal = origin.getDirection().setY(0.0);
-        if (normal.lengthSquared() < 0.0001) normal.setZ(1.0);
-        normal.normalize();
-        Vector right = new Vector(normal.getZ(), 0.0, -normal.getX());
-        double centerX = (minX + maxX) * 0.5 / pixels;
-        Location hitboxLocation = origin.clone()
-                .add(right.multiply(centerX))
-                .add(0.0, -maxY / pixels, 0.0);
-        final float hitboxWidth = maxX - minX;
-        final float hitboxHeight = maxY - minY;
-
-        interactionEntity = origin.getWorld().spawn(hitboxLocation, Interaction.class, interaction -> {
-            interaction.setInteractionWidth(Math.max(0.2f, hitboxWidth / pixels));
-            interaction.setInteractionHeight(Math.max(0.2f, hitboxHeight / pixels));
+        interactionEntity = origin.getWorld().spawn(origin, Interaction.class, interaction -> {
+            interaction.setInteractionWidth(0.2f);
+            interaction.setInteractionHeight(0.2f);
             interaction.setResponsive(true);
             interaction.setPersistent(false);
             interaction.setInvulnerable(true);

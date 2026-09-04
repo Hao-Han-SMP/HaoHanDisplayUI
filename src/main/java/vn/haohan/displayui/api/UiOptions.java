@@ -134,7 +134,7 @@ public record UiOptions(
     }
 
     public static UiOptions defaults() {
-        return new UiOptions(40.0f, 8.0, true, 0.15f, "haohan_display_ui",
+        return new UiOptions(40.0f, 12.0, true, 0.15f, "haohan_display_ui",
                 UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);
     }
 }

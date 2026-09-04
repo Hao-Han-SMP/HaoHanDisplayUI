@@ -46,7 +46,12 @@ public final class TextStylesDemoPage extends BaseDemoPage {
     public void onTick(DemoContext context) {
         // Rebuild the component so the animated gradient is sent to the
         // existing display entities every server tick.
-        context.updateView();
+        // A scene animation owns the display transforms while it is running.
+        // Pause the rainbow rebuild during that window so it cannot fight the
+        // animation's interpolated frame targets.
+        if (context.handle() == null || !context.handle().isAnimating()) {
+            context.updateView();
+        }
     }
 
     private void addTextSample(UiDocument.Builder builder, String label, float y,

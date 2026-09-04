@@ -56,6 +56,10 @@ public final class HaoHanDisplayUIPlugin extends JavaPlugin {
         Bukkit.getServicesManager().unregisterAll(this);
     }
 
+    public DisplayUiServiceImpl service() {
+        return service;
+    }
+
     private void removeOrphanedDisplays() {
         NamespacedKey sceneKey = new NamespacedKey(this, "scene_id");
         int removed = 0;

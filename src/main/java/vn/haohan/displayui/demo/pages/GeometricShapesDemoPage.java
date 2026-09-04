@@ -98,9 +98,9 @@ public final class GeometricShapesDemoPage extends BaseDemoPage {
                 -20, -8, 44, 8, UiTextAlignment.CENTER).fontSize(4).atDepth(0.003f));
 
         // Rolled line beams with roll angles
-        builder.add(new LineNode(-20, 12, 22, 12, 2.0f, 0.002f, Color.fromRGB(114, 9, 183), true, 0.0f));
-        builder.add(new LineNode(-20, 20, 22, 20, 2.5f, 0.002f, Color.fromRGB(76, 201, 240), true, 45.0f));
-        builder.add(new LineNode(-20, 28, 22, 28, 3.0f, 0.002f, Color.fromRGB(67, 97, 238), true, 90.0f));
+        builder.add(new LineNode(-20, 12, 22, 12, 2.0f, 0.002f, Color.fromRGB(114, 9, 183), true, 180.0f));
+        builder.add(new LineNode(-20, 20, 22, 20, 2.5f, 0.002f, Color.fromRGB(76, 201, 240), true, 225.0f));
+        builder.add(new LineNode(-20, 28, 22, 28, 3.0f, 0.002f, Color.fromRGB(67, 97, 238), true, 270.0f));
 
         builder.add(new AlignedTextNode(
                 Component.text("Roll: 0° / 45° / 90°", NamedTextColor.GRAY),
@@ -126,8 +126,9 @@ public final class GeometricShapesDemoPage extends BaseDemoPage {
         for (int i = 0; i < starPoints.length; i++) {
             float[] start = starPoints[i];
             float[] end = starPoints[(i + 1) % starPoints.length];
+            float roll = end[0] < start[0] ? 180.0f : 0.0f;
             builder.add(new LineNode(start[0], start[1], end[0], end[1],
-                    1.8f, 0.002f, Color.fromRGB(255, 200, 0), true, 0.0f));
+                                     1.8f, 0.002f, Color.fromRGB(255, 200, 0), true, roll));
         }
 
         // Heart / Pulse waveform below star
@@ -142,7 +143,7 @@ public final class GeometricShapesDemoPage extends BaseDemoPage {
                 .thickness(1.5f)
                 .color(Color.fromRGB(0, 255, 136))
                 .depth(0.002f)
-                .doubleSided(false)
+                .doubleSided(true)
                 .closed(false)
                 .build();
         builder.add(pulse);

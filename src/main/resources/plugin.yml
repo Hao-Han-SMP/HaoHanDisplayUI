@@ -2,6 +2,7 @@ name: HaoHanDisplayUI
 version: '${project.version}'
 main: vn.haohan.displayui.HaoHanDisplayUIPlugin
 api-version: '1.21'
+depend: [packetevents]
 description: Reusable in-world Display UI engine for HaoHanSMP plugins
 authors: [ HaoHanSMP ]
 website: https://haohansmp.dev
@@ -9,7 +10,7 @@ website: https://haohansmp.dev
 commands:
   hhdui:
     description: HaoHan Display UI engine commands
-    usage: /hhdui <demo|clear|stats|page|follow|camera|reload> [page]
+    usage: /hhdui <demo|screen2d|clear|stats|page|follow|camera|reload> [page]
     aliases: [displayui]
     permission: haohansmp.displayui.admin
 

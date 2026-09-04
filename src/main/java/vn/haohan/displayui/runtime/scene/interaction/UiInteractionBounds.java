@@ -20,6 +20,7 @@ import java.util.Collection;
 
 /** Calculates the world-space interaction AABB for a rotated UI page. */
 public final class UiInteractionBounds {
+
     private UiInteractionBounds() {}
 
     public static Bounds calculate(UiDocument document, Collection<UiControl> controls,

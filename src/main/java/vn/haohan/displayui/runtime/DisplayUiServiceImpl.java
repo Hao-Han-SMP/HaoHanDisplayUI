@@ -118,7 +118,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
             int modelIndex = scene.findModelNodeAt(proj.localX(), proj.localY());
             if (modelIndex >= 0) {
                 dragging.put(player.getUniqueId(), new ModelDragSession(scene, modelIndex, proj.localX(), proj.localY()));
-                player.sendActionBar(Component.text("✥ 3D Drag Mode · Move cursor to spin · Left-click to release", NamedTextColor.GOLD));
+                player.sendActionBar(Component.text("✧ 3D Drag Mode · Move cursor to spin · Left-click to release", NamedTextColor.GOLD));
                 return true;
             }
         }
