@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HaoHan Display UI — Visual Builder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div id="header-left">
+        <span id="logo">HaoHan Display UI</span>
+        <span id="logo-sub">Visual Builder</span>
+      </div>
+      <div id="header-center">
+        <label>Canvas size:
+          <input type="number" id="canvas-w" value="256" min="64" max="1024" step="8" />
+          ×
+          <input type="number" id="canvas-h" value="192" min="64" max="1024" step="8" />
+          px
+        </label>
+        <label>Zoom:
+          <input type="range" id="zoom-range" min="0.5" max="4" step="0.1" value="2" />
+          <span id="zoom-label">2×</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="grid-toggle" checked /> Grid
+        </label>
+      </div>
+      <div id="header-right">
+        <button id="btn-clear" class="btn-danger">Clear</button>
+        <button id="btn-import" class="btn-secondary">Import JSON</button>
+        <button id="btn-export" class="btn-primary">Export JSON</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" />
+      </div>
+    </header>
+
+    <!-- Main layout -->
+    <main id="main">
+      <!-- Toolbar -->
+      <aside id="toolbar">
+        <div class="toolbar-title">Add Node</div>
+        <button class="tool-btn" data-type="background" title="Colored background panel">Background</button>
+        <button class="tool-btn" data-type="text" title="Aligned text with box">Text</button>
+        <button class="tool-btn" data-type="item" title="Minecraft item icon">Item</button>
+        <button class="tool-btn" data-type="block" title="Block model display">Block</button>
+        <button class="tool-btn" data-type="line" title="Line segment">Line</button>
+
+        <div class="toolbar-title" style="margin-top:18px">Document</div>
+        <button class="tool-btn" id="btn-layers" title="Manage node layers">Layers</button>
+      </aside>
+
+      <!-- Canvas area -->
+      <div id="canvas-wrapper">
+        <div id="canvas-scroll">
+          <canvas id="canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Properties panel -->
+      <aside id="props">
+        <div id="props-title">Properties</div>
+        <div id="props-body">
+          <div class="no-selection">Select a node to edit its properties.</div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Layer panel (overlay) -->
+    <div id="layers-panel" class="hidden">
+      <div id="layers-header">
+        <span>Layers</span>
+        <button id="layers-close">✕</button>
+      </div>
+      <ul id="layers-list"></ul>
+    </div>
+  </div>
+
+  <script src="nodes.js"></script>
+  <script src="serializer.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>
