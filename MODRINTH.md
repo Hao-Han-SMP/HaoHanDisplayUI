@@ -24,7 +24,7 @@ It can be used to build machine panels, guide boards, item lists, paginated menu
 
 ## Compatibility
 
-- Minecraft `1.21.11`
+- Minecraft `1.20+` (1.20.4 – 1.21.x+)
 - Paper and Purpur
 - Java 21 or newer
 - Server-side only

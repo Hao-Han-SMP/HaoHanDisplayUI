@@ -1,8 +1,7 @@
 name: HaoHanDisplayUI
 version: '${project.version}'
 main: vn.haohan.displayui.HaoHanDisplayUIPlugin
-api-version: '1.21'
-depend: [packetevents]
+api-version: '1.20'
 description: Reusable in-world Display UI engine for HaoHanSMP plugins
 authors: [ HaoHanSMP ]
 website: https://haohansmp.dev

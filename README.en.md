@@ -4,7 +4,7 @@
 
 A standalone engine plugin for building interactive, pixel-precise in-world UIs in Minecraft using Display Entities — for plugin developers targeting Paper, Purpur, Folia, Pufferfish, and Leaves.
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
 [![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)
 [![Purpur](https://img.shields.io/badge/Purpur-Compatible-8A4FFF?style=for-the-badge)](https://purpurmc.org/)
 [![Folia](https://img.shields.io/badge/Folia-Supported-00B4D8?style=for-the-badge)](https://github.com/PaperMC/Folia)
@@ -58,11 +58,10 @@ The video demonstrates `/hhdui demo` across its 11 built-in test pages:
 | **Language** | Java 21 |
 | **Build tool** | Gradle 8.x (`java-library`, `maven-publish` plugins) |
 | **Server API** | Paper API `1.21.1-R0.1-SNAPSHOT` |
-| **Packet library** | PacketEvents (spigot) `2.13.0` |
 | **Rich text** | Adventure API (bundled with Paper) |
 | **3D math** | JOML — quaternions and TRS transformations |
 | **Test framework** | JUnit 5 `5.10.2` + Mockito `5.11.0` |
-| **Compatible servers** | Paper · Purpur · Folia · Pufferfish · Leaves (`1.21.1+`) |
+| **Compatible servers** | Paper · Purpur · Folia · Pufferfish · Leaves (`1.20+` / 1.20.4 – 1.21.x+) |
 
 > **Folia note:** The engine uses `GlobalRegionScheduler` to remain compatible with multi-threaded region servers.
 
@@ -100,7 +99,7 @@ HaoHan Display UI deliberately **does not**:
 - Act as a general GUI library for inventory/chest menus — it is exclusively for **world-space Display Entity UIs**.
 - Bundle a resource pack. Consumers that need custom fonts or `item_model` definitions must supply their own.
 - Replace chunk-persistent NPC or hologram plugins for static, always-visible text.
-- Support Minecraft versions below `1.21.1`.
+- Support Minecraft versions below `1.20` (Display Entities require 1.19.4+).
 
 ---
 
@@ -143,8 +142,7 @@ HaoHanDisplayUI/
 |---|---|
 | Java (JDK) | **21** |
 | Gradle | **8.x** (Gradle wrapper included — use `./gradlew`) |
-| Minecraft server | Paper / Purpur / Folia / Pufferfish / Leaves **1.21.1+** |
-| PacketEvents plugin | **2.13.0** (must be installed alongside this plugin) |
+| Minecraft server | Paper / Purpur / Folia / Pufferfish / Leaves **1.20+** (1.20.4 – 1.21.x+) |
 
 > A resource pack is **optional**. It is only needed if your consumer plugin uses custom fonts or `item_model` definitions.
 

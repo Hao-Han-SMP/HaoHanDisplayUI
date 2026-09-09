@@ -4,7 +4,7 @@
 
 Plugin engine độc lập để dựng UI tương tác trong thế giới Minecraft bằng Display Entity.
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
 [![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)
 [![Purpur](https://img.shields.io/badge/Purpur-Compatible-8A4FFF?style=for-the-badge)](https://purpurmc.org/)
 [![Folia](https://img.shields.io/badge/Folia-Supported-00B4D8?style=for-the-badge)](https://github.com/PaperMC/Folia)
@@ -85,7 +85,7 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 
 ## Yêu cầu
 
-- Minecraft server chạy **Paper**, **Purpur**, **Folia**, **Pufferfish** hoặc **Leaves** `1.21.1+`.
+- Minecraft server chạy **Paper**, **Purpur**, **Folia**, **Pufferfish** hoặc **Leaves** `1.20+` (hỗ trợ từ 1.20.4 đến 1.21.x+).
 - Java 21 trở lên.
 - Gradle 8.x nếu build trực tiếp từ source.
 - Plugin consumer phải khai báo phụ thuộc vào `HaoHanDisplayUI`.
