@@ -6,6 +6,7 @@ depend: [packetevents]
 description: Reusable in-world Display UI engine for HaoHanSMP plugins
 authors: [ HaoHanSMP ]
 website: https://haohansmp.dev
+folia-supported: true
 
 commands:
   hhdui:

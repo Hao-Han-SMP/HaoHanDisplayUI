@@ -5,8 +5,11 @@
 A standalone engine plugin for building interactive in-world Minecraft UIs with Display Entities.
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
-[![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)\
+[![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)
 [![Purpur](https://img.shields.io/badge/Purpur-Compatible-8A4FFF?style=for-the-badge)](https://purpurmc.org/)
+[![Folia](https://img.shields.io/badge/Folia-Supported-00B4D8?style=for-the-badge)](https://github.com/PaperMC/Folia)
+[![Pufferfish](https://img.shields.io/badge/Pufferfish-Compatible-F4A261?style=for-the-badge)](https://github.com/pufferfish-gg/Pufferfish)
+[![Leaves](https://img.shields.io/badge/Leaves-Compatible-52B788?style=for-the-badge)](https://leavesmc.org/)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Gradle](https://img.shields.io/badge/Gradle-Build-02303A?style=for-the-badge&logo=gradle&logoColor=white)](https://gradle.org/)
 [![Adventure](https://img.shields.io/badge/Adventure-Components-6F42C1?style=for-the-badge)](https://docs.advntr.dev/)
@@ -72,6 +75,9 @@ The video demonstrates `/hhdui demo` and its test pages:
 | --- | --- |
 | Paper API | Server API and Display Entity support. |
 | Purpur | Compatible and recommended server runtime. |
+| Folia | Multi-threaded region support (uses `GlobalRegionScheduler`). |
+| Pufferfish | Paper fork, fully API-compatible. |
+| Leaves | Paper fork, fully API-compatible. |
 | Java 21 | Main language and runtime. |
 | Gradle | Dependency management, tests, builds, and API publishing. |
 | Adventure | Rich text, RGB, hover, and clickable chat components. |
@@ -80,7 +86,7 @@ The video demonstrates `/hhdui demo` and its test pages:
 
 ## Requirements
 
-- A Paper or Purpur `1.21.1+` (or `1.21.11`) Minecraft server.
+- A **Paper**, **Purpur**, **Folia**, **Pufferfish**, or **Leaves** `1.21.1+` Minecraft server.
 - Java 21 or newer.
 - Gradle 8.x when building the current source tree directly.
 - Consumer plugins must declare a dependency on `HaoHanDisplayUI`.

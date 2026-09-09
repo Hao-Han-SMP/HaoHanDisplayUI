@@ -7,6 +7,9 @@ Plugin engine độc lập để dựng UI tương tác trong thế giới Minec
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1+-62B47A?style=for-the-badge&logo=minecraft&logoColor=white)](https://www.minecraft.net/)
 [![Paper](https://img.shields.io/badge/Paper-API-222222?style=for-the-badge&logo=paper&logoColor=white)](https://papermc.io/)
 [![Purpur](https://img.shields.io/badge/Purpur-Compatible-8A4FFF?style=for-the-badge)](https://purpurmc.org/)
+[![Folia](https://img.shields.io/badge/Folia-Supported-00B4D8?style=for-the-badge)](https://github.com/PaperMC/Folia)
+[![Pufferfish](https://img.shields.io/badge/Pufferfish-Compatible-F4A261?style=for-the-badge)](https://github.com/pufferfish-gg/Pufferfish)
+[![Leaves](https://img.shields.io/badge/Leaves-Compatible-52B788?style=for-the-badge)](https://leavesmc.org/)
 [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Gradle](https://img.shields.io/badge/Gradle-Build-02303A?style=for-the-badge&logo=gradle&logoColor=white)](https://gradle.org/)
 [![Adventure](https://img.shields.io/badge/Adventure-Components-6F42C1?style=for-the-badge)](https://docs.advntr.dev/)
@@ -71,6 +74,9 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 | --- | --- |
 | Paper API | API server và Display Entity. |
 | Purpur | Môi trường server tương thích/khuyến nghị. |
+| Folia | Hỗ trợ multi-threaded region (dùng `GlobalRegionScheduler`). |
+| Pufferfish | Fork của Paper, tương thích hoàn toàn về API. |
+| Leaves | Fork của Paper, tương thích hoàn toàn về API. |
 | Java 21 | Ngôn ngữ và runtime của plugin. |
 | Gradle | Dependency, test, build và publish API. |
 | Adventure | Rich text, RGB, hover và clickable chat component. |
@@ -79,7 +85,7 @@ Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 
 ## Yêu cầu
 
-- Minecraft server chạy Paper hoặc Purpur `1.21.1+` (hoặc `1.21.11`).
+- Minecraft server chạy **Paper**, **Purpur**, **Folia**, **Pufferfish** hoặc **Leaves** `1.21.1+`.
 - Java 21 trở lên.
 - Gradle 8.x nếu build trực tiếp từ source.
 - Plugin consumer phải khai báo phụ thuộc vào `HaoHanDisplayUI`.
