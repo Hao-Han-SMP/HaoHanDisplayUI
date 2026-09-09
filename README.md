@@ -560,7 +560,7 @@ Ví dụ panel `180 × 116 px` với `pixelsPerBlock = 40` có kích thước kh
 | `ItemNode` | ItemDisplay cấp thấp với scale và transform riêng. |
 | `BlockNode` | Nền/panel/block-model layer. |
 
-`UiDocument` là immutable snapshot. Node render theo thứ tự `depth` tăng dần.
+`UiDocument` là **immutable snapshot**. Node render theo thứ tự `depth` tăng dần.
 
 ## Rectangle, anchor và layout theo panel
 
@@ -783,24 +783,23 @@ UiIconNode node = ui.icons().createNode(iconKey, new UiRect(10, 10, 32, 32));
 
 ## Ghi chú vận hành
 
-- Không dùng `/reload` trên production nếu plugin consumer giữ `UiHandle` trong
+- **Không dùng `/reload`** trên production nếu plugin consumer giữ `UiHandle` trong
   state phức tạp; ưu tiên restart sạch.
 - Engine tự xóa orphan display có persistent scene key khi enable.
-- `ownerKey` phải có namespace, ví dụ `haohanmetallurgy:forge_panel`.
-- Command action chạy với permission của player; thiếu quyền thì command tự thất
-  bại theo Bukkit.
-- Console command có toàn quyền server và chỉ nên đến từ cấu hình đáng tin cậy.
+- `ownerKey` phải có namespace, ví dụ `myplugin:my_panel`.
+- `openUrl` luôn hiện hộp thoại xác nhận phía client — Minecraft không cho phép server tự ép mở URL.
+- `consoleCommand` chạy với toàn quyền server; chỉ dùng với input tĩnh, đáng tin cậy — không bao giờ đưa input thô của người chơi vào.
 - URL chỉ chấp nhận scheme `http` hoặc `https`.
 - Custom font cần tự hiệu chỉnh `contentWidth`/optical offset nếu metric khác font
   Minecraft mặc định.
 
 ## License
 
-HaoHan Display UI được phát hành theo giấy phép GNU General Public License v3.0 (GPLv3).
+HaoHan Display UI được phát hành theo giấy phép **GNU General Public License v3.0 (GPLv3)**.
 Xem chi tiết tại [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
-Phát triển bởi đội ngũ <b>HaoHan SMP</b>.
+Phát triển với ❤️ bởi đội ngũ <b>HaoHan SMP</b>
 </div>
