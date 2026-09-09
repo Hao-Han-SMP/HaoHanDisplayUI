@@ -1,8 +1,9 @@
 /**
- * editor.js — Main canvas editor: rendering loop, selection, drag, properties panel.
+ * editor.js — Main editor: canvas, selection, drag-resize, undo, Pickr color pickers,
+ *             drag-drop layer reordering, context-sensitive cursor, preview canvas.
  */
 
-/* ── State ─────────────────────────────────────────────── */
+/* ── State ────────────────────────────────────────────────── */
 const state = {
   nodes: [],
   selectedIdx: -1,
@@ -13,438 +14,495 @@ const state = {
   name: 'untitled',
   dragging: false,
   dragOffX: 0, dragOffY: 0,
-  dragType: null,  // 'move' | 'resize-br' | 'line-p2'
+  dragType: null,           // 'move' | 'resize-se' | 'resize-nw' | ... | 'line-p1' | 'line-p2'
+  dragStartMx: 0, dragStartMy: 0, // canvas-space mouse at drag start
+  dragStartNode: null,      // deep-copy of node values at drag start
 };
 
-/* ── DOM refs ───────────────────────────────────────────── */
-const canvas   = document.getElementById('canvas');
-const ctx      = canvas.getContext('2d');
-const propsBody = document.getElementById('props-body');
+/* ── Undo stack ──────────────────────────────────────────── */
+const _undoStack = [];
+function pushUndo() {
+  _undoStack.push(JSON.stringify(state.nodes));
+  if (_undoStack.length > 80) _undoStack.shift();
+}
+function undo() {
+  if (!_undoStack.length) return;
+  state.nodes = JSON.parse(_undoStack.pop());
+  state.selectedIdx = -1;
+  buildPropsPanel(); render(); updateLayersList();
+}
 
-/* ── Initialise canvas ──────────────────────────────────── */
+/* ── localStorage persistence ────────────────────────────── */
+const STORAGE_KEY = 'hhdui_builder_v1';
+let _saveTimer = null;
+
+function scheduleSave() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_persistState, 800);
+  _showSaveIndicator('pending');
+}
+
+function _persistState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      v: 1,
+      nodes:   state.nodes,
+      canvasW: state.canvasW,
+      canvasH: state.canvasH,
+      name:    state.name,
+      zoom:    state.zoom,
+      grid:    state.grid,
+    }));
+    _showSaveIndicator('saved');
+  } catch (e) {
+    console.warn('[HaoHan Builder] localStorage write failed', e);
+  }
+}
+
+function _restoreState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (!s || s.v !== 1) return false;
+    state.nodes   = s.nodes   ?? [];
+    state.canvasW = s.canvasW ?? 256;
+    state.canvasH = s.canvasH ?? 192;
+    state.name    = s.name    ?? 'untitled';
+    state.zoom    = s.zoom    ?? 2;
+    state.grid    = s.grid    ?? true;
+    return true;
+  } catch { return false; }
+}
+
+function _showSaveIndicator(state) {
+  const el = document.getElementById('save-indicator');
+  if (!el) return;
+  el.dataset.state = state;
+  el.title = state === 'saved' ? 'All changes saved' : 'Saving…';
+}
+
+/* ── DOM refs ────────────────────────────────────────────── */
+const canvas     = document.getElementById('canvas');
+const ctx        = canvas.getContext('2d');
+const propsBody  = document.getElementById('props-body');
+const prevCanvas = document.getElementById('preview-canvas');
+const prevCtx    = prevCanvas.getContext('2d');
+
+/* Expose render to nodes.js texture loader */
+window.__renderFrame = () => render();
+
+/* ── Canvas sizing ───────────────────────────────────────── */
 function resizeCanvas() {
   canvas.width  = state.canvasW * state.zoom;
   canvas.height = state.canvasH * state.zoom;
   canvas.style.width  = canvas.width + 'px';
   canvas.style.height = canvas.height + 'px';
+  document.getElementById('canvas-dims').textContent = `${state.canvasW}×${state.canvasH}`;
   render();
 }
 
-/* ── Render loop ────────────────────────────────────────── */
+/* ── Render ──────────────────────────────────────────────── */
 function render() {
   const z = state.zoom;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Canvas background (dark)
-  ctx.fillStyle = '#111520';
+  // Canvas background
+  ctx.fillStyle = '#0a0e18';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Grid
   if (state.grid) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.lineWidth = 1;
     const step = 8 * z;
-    for (let x = 0; x <= canvas.width; x += step) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-    }
-    for (let y = 0; y <= canvas.height; y += step) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-    }
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= canvas.width; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+    for (let y = 0; y <= canvas.height; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
     ctx.restore();
   }
 
-  // Nodes in order (bottom → top)
+  // Nodes (back to front)
   state.nodes.forEach((n, i) => {
-    const def = NodeDefs[n.type];
-    if (def) def.render(ctx, n, z);
-
-    // Selection highlight
-    if (i === state.selectedIdx) drawSelection(n);
+    NodeDefs[n.type]?.render(ctx, n, z);
+    if (i === state.selectedIdx) renderSelection(n);
   });
+
+  updatePreview();
+  scheduleSave();
 }
 
-function drawSelection(n) {
+/* ── Resize helpers ──────────────────────────────────── */
+
+const HANDLE_CURSORS = {
+  nw: 'nw-resize', n: 'n-resize', ne: 'ne-resize',
+  e:  'e-resize',  se: 'se-resize',
+  s:  's-resize',  sw: 'sw-resize', w: 'w-resize',
+};
+
+/** Get bounding rect {x,y,w,h} for rect-type nodes (canvas coords). */
+function getNodeRect(n) {
+  if (n.type === 'background' || n.type === 'block') return { x: n.x, y: n.y, w: n.width, h: n.height };
+  if (n.type === 'text') return { x: n.boxX, y: n.boxY, w: n.width, h: n.height };
+  return null;
+}
+
+/** Write bounding rect back onto the node. */
+function setNodeRect(n, x, y, w, h) {
+  if (n.type === 'background' || n.type === 'block') { n.x = x; n.y = y; n.width = w; n.height = h; }
+  else if (n.type === 'text') { n.boxX = x; n.boxY = y; n.width = w; n.height = h; }
+}
+
+/** Return [{x,y,type}] handle array in canvas-pixels. */
+function getNodeHandles(n) {
+  const z = state.zoom;
+  const r = getNodeRect(n);
+  if (!r) return [];
+  const x1 = r.x * z, y1 = r.y * z;
+  const x2 = (r.x + r.w) * z, y2 = (r.y + r.h) * z;
+  const mx = (x1 + x2) / 2,   my = (y1 + y2) / 2;
+  return [
+    { x: x1, y: y1, type: 'nw' },
+    { x: mx, y: y1, type: 'n'  },
+    { x: x2, y: y1, type: 'ne' },
+    { x: x2, y: my, type: 'e'  },
+    { x: x2, y: y2, type: 'se' },
+    { x: mx, y: y2, type: 's'  },
+    { x: x1, y: y2, type: 'sw' },
+    { x: x1, y: my, type: 'w'  },
+  ];
+}
+
+/**
+ * Recompute node rect from drag-start snapshot + current mouse delta.
+ * @param {object} orig  - deep-copy of the node at drag-start
+ * @param {string} handle - 'nw'|'n'|'ne'|'e'|'se'|'s'|'sw'|'w'
+ * @param {number} dx     - node-space delta X
+ * @param {number} dy     - node-space delta Y
+ * @returns {{x,y,w,h}}
+ */
+function calcResizeRect(orig, handle, dx, dy) {
+  const r = getNodeRect(orig);
+  if (!r) return null;
+  const MIN_W = orig.type === 'text' ? 20 : 8;
+  const MIN_H = 8;
+  let { x, y, w, h } = r;
+
+  if (handle.includes('e')) { w = Math.max(MIN_W, w + dx); }
+  if (handle.includes('s')) { h = Math.max(MIN_H, h + dy); }
+  if (handle.includes('w')) {
+    const nw = Math.max(MIN_W, w - dx);
+    x = x + w - nw; w = nw;
+  }
+  if (handle.includes('n')) {
+    const nh = Math.max(MIN_H, h - dy);
+    y = y + h - nh; h = nh;
+  }
+  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+}
+
+/* ── Selection overlay ────────────────────────────────────── */
+function renderSelection(n) {
   const z = state.zoom;
   ctx.save();
-  ctx.strokeStyle = '#4f8ef7';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 3]);
 
-  if (n.type === 'text') {
-    ctx.strokeRect(n.boxX * z - 1, n.boxY * z - 1, n.width * z + 2, n.height * z + 2);
-    drawHandle((n.boxX + n.width) * z, (n.boxY + n.height) * z);
-  } else if (n.type === 'background') {
-    ctx.strokeRect(n.x * z - 1, n.y * z - 1, n.width * z + 2, n.height * z + 2);
-    drawHandle((n.x + n.width) * z, (n.y + n.height) * z);
-  } else if (n.type === 'block') {
-    ctx.strokeRect(n.x * z - 1, n.y * z - 1, n.width * z + 2, n.height * z + 2);
-    drawHandle((n.x + n.width) * z, (n.y + n.height) * z);
+  const drawHandleAt = (hx, hy, corner) => {
+    const hs = corner ? 5 : 4; // corners slightly larger
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#4f8ef7';
+    ctx.strokeStyle = 'rgba(255,255,255,.65)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(hx - hs, hy - hs, hs * 2, hs * 2);
+    ctx.strokeRect(hx - hs, hy - hs, hs * 2, hs * 2);
+  };
+
+  const handles = getNodeHandles(n);
+  if (handles.length) {
+    const r = getNodeRect(n);
+    // Dashed bounding box
+    ctx.strokeStyle = '#4f8ef7';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(r.x * z - 1, r.y * z - 1, r.w * z + 2, r.h * z + 2);
+    // Handles
+    const CORNERS = new Set(['nw','ne','se','sw']);
+    handles.forEach(h => drawHandleAt(h.x, h.y, CORNERS.has(h.type)));
   } else if (n.type === 'item') {
-    const sz = 16 * n.scale * z;
-    ctx.strokeRect(n.x * z - sz/2 - 2, n.y * z - sz/2 - 2, sz + 4, sz + 4);
+    const hs = 8 * n.scale * z;
+    ctx.strokeStyle = '#4f8ef7';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(n.x * z - hs - 2, n.y * z - hs - 2, hs * 2 + 4, hs * 2 + 4);
   } else if (n.type === 'line') {
+    ctx.strokeStyle = '#4f8ef7';
+    ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(n.x1 * z, n.y1 * z);
     ctx.lineTo(n.x2 * z, n.y2 * z);
     ctx.stroke();
-    drawHandle(n.x1 * z, n.y1 * z);
-    drawHandle(n.x2 * z, n.y2 * z);
+    // Round endpoint handles
+    [[n.x1 * z, n.y1 * z], [n.x2 * z, n.y2 * z]].forEach(([hx, hy]) => {
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#4f8ef7';
+      ctx.strokeStyle = 'rgba(255,255,255,.65)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    });
   }
   ctx.restore();
 }
 
-function drawHandle(px, py) {
-  ctx.setLineDash([]);
-  ctx.fillStyle = '#4f8ef7';
-  ctx.fillRect(px - 4, py - 4, 8, 8);
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(px - 4, py - 4, 8, 8);
+/* ── Preview canvas ──────────────────────────────────────── */
+function updatePreview() {
+  const parent = prevCanvas.parentElement;
+  const maxW = parent.clientWidth - 20;
+  const ratio = state.canvasH / state.canvasW;
+  const pw = Math.min(maxW, 230);
+  const ph = Math.round(pw * ratio);
+  if (prevCanvas.width !== pw || prevCanvas.height !== ph) {
+    prevCanvas.width = pw;
+    prevCanvas.height = ph;
+  }
+  const pz = pw / state.canvasW;
+  prevCtx.fillStyle = '#0a0e18';
+  prevCtx.fillRect(0, 0, pw, ph);
+  state.nodes.forEach(n => NodeDefs[n.type]?.render(prevCtx, n, pz));
 }
 
-/* ── Hit testing ────────────────────────────────────────── */
+/* ── Hit testing ─────────────────────────────────────────── */
+const SLOP = 5;
+
 function hitTest(mx, my) {
   const z = state.zoom;
-  // Test in reverse order (top node first)
   for (let i = state.nodes.length - 1; i >= 0; i--) {
-    const n = state.nodes[i];
-    if (hitsNode(n, mx / z, my / z)) return i;
+    if (hitsNode(state.nodes[i], mx / z, my / z)) return i;
   }
   return -1;
 }
 
 function hitsNode(n, px, py) {
-  const slop = 4;
   switch (n.type) {
     case 'background':
-      return px >= n.x - slop && px <= n.x + n.width + slop &&
-             py >= n.y - slop && py <= n.y + n.height + slop;
+      return inRect(px, py, n.x, n.y, n.width, n.height);
     case 'text':
-      return px >= n.boxX - slop && px <= n.boxX + n.width + slop &&
-             py >= n.boxY - slop && py <= n.boxY + n.height + slop;
+      return inRect(px, py, n.boxX, n.boxY, n.width, n.height);
     case 'block':
-      return px >= n.x - slop && px <= n.x + n.width + slop &&
-             py >= n.y - slop && py <= n.y + n.height + slop;
+      return inRect(px, py, n.x, n.y, n.width, n.height);
     case 'item': {
       const hs = 8 * n.scale;
-      return px >= n.x - hs - slop && px <= n.x + hs + slop &&
-             py >= n.y - hs - slop && py <= n.y + hs + slop;
+      return Math.abs(px - n.x) <= hs + SLOP && Math.abs(py - n.y) <= hs + SLOP;
     }
     case 'line': {
-      // Distance from point to line segment
       const dx = n.x2 - n.x1, dy = n.y2 - n.y1;
-      const len2 = dx*dx + dy*dy;
-      if (len2 === 0) return dist(px, py, n.x1, n.y1) <= slop;
-      let t = ((px - n.x1)*dx + (py - n.y1)*dy) / len2;
-      t = Math.max(0, Math.min(1, t));
-      return dist(px, py, n.x1 + t*dx, n.y1 + t*dy) <= (n.thickness / 2 + slop);
+      const len2 = dx * dx + dy * dy;
+      if (len2 === 0) return dist2(px, py, n.x1, n.y1) <= SLOP;
+      const t = Math.max(0, Math.min(1, ((px - n.x1) * dx + (py - n.y1) * dy) / len2));
+      return dist2(px, py, n.x1 + t * dx, n.y1 + t * dy) <= n.thickness / 2 + SLOP;
     }
     default: return false;
   }
 }
 
-function dist(ax, ay, bx, by) { return Math.sqrt((ax-bx)**2 + (ay-by)**2); }
+function inRect(px, py, rx, ry, rw, rh) {
+  return px >= rx - SLOP && px <= rx + rw + SLOP && py >= ry - SLOP && py <= ry + rh + SLOP;
+}
+function dist2(ax, ay, bx, by) { return Math.sqrt((ax - bx) ** 2 + (ay - by) ** 2); }
 
-/** Check if click hits the resize handle (bottom-right corner) */
 function hitsResizeHandle(n, mx, my) {
-  const z = state.zoom;
-  let hx, hy;
-  if (n.type === 'background' || n.type === 'block') { hx = (n.x + n.width) * z; hy = (n.y + n.height) * z; }
-  else if (n.type === 'text') { hx = (n.boxX + n.width) * z; hy = (n.boxY + n.height) * z; }
-  else return false;
-  return Math.abs(mx - hx) <= 6 && Math.abs(my - hy) <= 6;
+  const handles = getNodeHandles(n);
+  for (const h of handles) {
+    if (Math.abs(mx - h.x) <= 8 && Math.abs(my - h.y) <= 8) return h.type;
+  }
+  return null;
 }
 
-/** Check if click hits line endpoint 2 */
-function hitsLineP2(n, mx, my) {
+function hitsLineEndpoint(n, mx, my, ep /* 1 or 2 */) {
+  if (n.type !== 'line') return false;
   const z = state.zoom;
-  return n.type === 'line' && Math.abs(mx - n.x2 * z) <= 7 && Math.abs(my - n.y2 * z) <= 7;
+  const ex = (ep === 1 ? n.x1 : n.x2) * z;
+  const ey = (ep === 1 ? n.y1 : n.y2) * z;
+  return Math.abs(mx - ex) <= 8 && Math.abs(my - ey) <= 8;
 }
 
-/* ── Mouse events ───────────────────────────────────────── */
-canvas.addEventListener('mousedown', e => {
+/* ── Context-sensitive cursor ──────────────────────────────── */
+function updateCursor(mx, my) {
+  if (state.dragging) return;
+  const sel = state.nodes[state.selectedIdx];
+  if (sel) {
+    const handle = hitsResizeHandle(sel, mx, my);
+    if (handle) { canvas.style.cursor = HANDLE_CURSORS[handle]; return; }
+    if (hitsLineEndpoint(sel, mx, my, 1) || hitsLineEndpoint(sel, mx, my, 2)) { canvas.style.cursor = 'crosshair'; return; }
+  }
+  const idx = hitTest(mx, my);
+  canvas.style.cursor = idx !== -1 ? 'move' : 'default';
+}
+
+/* ── Mouse events ────────────────────────────────────────── */
+canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
   const mx = e.clientX - r.left, my = e.clientY - r.top;
   const z = state.zoom;
 
+  // Cursor position display
+  document.getElementById('cursor-pos').textContent = `${Math.round(mx / z)}, ${Math.round(my / z)}`;
+
+  if (state.dragging) {
+    const n = state.nodes[state.selectedIdx];
+    if (!n) return;
+
+    if (state.dragType === 'move') {
+      const nx = snap(mx / z - state.dragOffX);
+      const ny = snap(my / z - state.dragOffY);
+      if (n.type === 'text') { n.boxX = nx; n.boxY = ny; }
+      else if (n.type === 'line') {
+        const ddx = nx - n.x1, ddy = ny - n.y1;
+        n.x1 = nx; n.y1 = ny; n.x2 += ddx; n.y2 += ddy;
+      } else { n.x = nx; n.y = ny; }
+
+    } else if (state.dragType.startsWith('resize-')) {
+      const handle = state.dragType.slice(7); // 'se', 'nw', etc.
+      const dx = snap((mx - state.dragStartMx) / z);
+      const dy = snap((my - state.dragStartMy) / z);
+      const res = calcResizeRect(state.dragStartNode, handle, dx, dy);
+      if (res) setNodeRect(n, res.x, res.y, res.w, res.h);
+
+    } else if (state.dragType === 'line-p1') {
+      n.x1 = snap(mx / z); n.y1 = snap(my / z);
+    } else if (state.dragType === 'line-p2') {
+      n.x2 = snap(mx / z); n.y2 = snap(my / z);
+    }
+    refreshPropsInputs(n);
+    render(); updateLayersList();
+    return;
+  }
+
+  updateCursor(mx, my);
+});
+
+canvas.addEventListener('mousedown', e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const z = state.zoom;
   const sel = state.nodes[state.selectedIdx];
 
   if (sel) {
-    if (hitsResizeHandle(sel, mx, my)) {
+    const handleType = hitsResizeHandle(sel, mx, my);
+    if (handleType) {
+      pushUndo();
       state.dragging = true;
-      state.dragType = 'resize-br';
-      state.dragOffX = mx; state.dragOffY = my;
+      state.dragType = `resize-${handleType}`;
+      state.dragStartMx = mx; state.dragStartMy = my;
+      state.dragStartNode = JSON.parse(JSON.stringify(sel));
+      canvas.style.cursor = HANDLE_CURSORS[handleType];
       return;
     }
-    if (hitsLineP2(sel, mx, my)) {
-      state.dragging = true;
-      state.dragType = 'line-p2';
+    if (hitsLineEndpoint(sel, mx, my, 1)) {
+      pushUndo();
+      state.dragging = true; state.dragType = 'line-p1';
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
+    if (hitsLineEndpoint(sel, mx, my, 2)) {
+      pushUndo();
+      state.dragging = true; state.dragType = 'line-p2';
+      canvas.style.cursor = 'grabbing';
       return;
     }
   }
 
   const idx = hitTest(mx, my);
   if (idx !== -1) {
-    state.selectedIdx = idx;
-    state.dragging = true;
-    state.dragType = 'move';
+    if (idx !== state.selectedIdx) {
+      state.selectedIdx = idx;
+      buildPropsPanel();
+    }
     const n = state.nodes[idx];
     const ox = n.type === 'text' ? n.boxX : (n.type === 'line' ? n.x1 : n.x);
     const oy = n.type === 'text' ? n.boxY : (n.type === 'line' ? n.y1 : n.y);
-    state.dragOffX = mx / z - ox;
-    state.dragOffY = my / z - oy;
-    buildPropsPanel();
-    render();
+    pushUndo();
+    state.dragging = true; state.dragType = 'move';
+    state.dragOffX = mx / z - ox; state.dragOffY = my / z - oy;
+    canvas.style.cursor = 'grabbing';
+    render(); updateLayersList();
   } else {
     state.selectedIdx = -1;
-    buildPropsPanel();
-    render();
+    buildPropsPanel(); render(); updateLayersList();
   }
 });
 
-window.addEventListener('mousemove', e => {
-  if (!state.dragging) return;
+window.addEventListener('mouseup', () => {
+  state.dragging = false;
   const r = canvas.getBoundingClientRect();
-  const mx = e.clientX - r.left, my = e.clientY - r.top;
-  const z = state.zoom;
-  const n = state.nodes[state.selectedIdx];
-  if (!n) return;
-
-  if (state.dragType === 'move') {
-    const nx = snap(mx / z - state.dragOffX);
-    const ny = snap(my / z - state.dragOffY);
-    if (n.type === 'text') { n.boxX = nx; n.boxY = ny; }
-    else if (n.type === 'line') {
-      const dx = nx - n.x1, dy = ny - n.y1;
-      n.x1 = nx; n.y1 = ny; n.x2 += dx; n.y2 += dy;
-    } else { n.x = nx; n.y = ny; }
-  } else if (state.dragType === 'resize-br') {
-    if (n.type === 'background' || n.type === 'block') {
-      n.width  = Math.max(8, snap(mx / z) - n.x);
-      n.height = Math.max(8, snap(my / z) - n.y);
-    } else if (n.type === 'text') {
-      n.width  = Math.max(20, snap(mx / z) - n.boxX);
-      n.height = Math.max(8,  snap(my / z) - n.boxY);
-    }
-  } else if (state.dragType === 'line-p2') {
-    n.x2 = snap(mx / z); n.y2 = snap(my / z);
-  }
-
-  refreshPropsValues(n);
-  render();
+  // Reset cursor via position check
+  canvas.style.cursor = 'default';
 });
-
-window.addEventListener('mouseup', () => { state.dragging = false; });
 
 function snap(v) { return Math.round(v / 2) * 2; }
 
-/* ── Keyboard shortcuts ─────────────────────────────────── */
+/* ── Keyboard shortcuts ──────────────────────────────────── */
 window.addEventListener('keydown', e => {
-  if (e.target !== document.body) return;
-  if (e.key === 'Delete' || e.key === 'Backspace') {
-    deleteSelected();
-  }
-  if (e.key === 'ArrowUp')    nudge(0, -1, e.shiftKey ? 8 : 1);
-  if (e.key === 'ArrowDown')  nudge(0,  1, e.shiftKey ? 8 : 1);
-  if (e.key === 'ArrowLeft')  nudge(-1, 0, e.shiftKey ? 8 : 1);
-  if (e.key === 'ArrowRight') nudge( 1, 0, e.shiftKey ? 8 : 1);
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') undo();
-  if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); duplicateSelected(); }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'd') { e.preventDefault(); duplicateSelected(); return; }
+
+  if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); return; }
+
+  // Nudge with arrow keys
+  const step = e.shiftKey ? 8 : 1;
+  if (e.key === 'ArrowUp')    { nudge( 0, -step); e.preventDefault(); }
+  if (e.key === 'ArrowDown')  { nudge( 0,  step); e.preventDefault(); }
+  if (e.key === 'ArrowLeft')  { nudge(-step, 0);  e.preventDefault(); }
+  if (e.key === 'ArrowRight') { nudge( step, 0);  e.preventDefault(); }
+
+  // Layer reordering: Ctrl+[ / Ctrl+]
+  if ((e.ctrlKey || e.metaKey) && e.key === '[') { moveNode(state.selectedIdx, -1); e.preventDefault(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === ']') { moveNode(state.selectedIdx,  1); e.preventDefault(); }
 });
 
-function nudge(dx, dy, step) {
+function nudge(dx, dy) {
   const n = state.nodes[state.selectedIdx];
   if (!n) return;
-  if (n.type === 'text') { n.boxX += dx*step; n.boxY += dy*step; }
-  else if (n.type === 'line') { n.x1 += dx*step; n.y1 += dy*step; n.x2 += dx*step; n.y2 += dy*step; }
-  else { n.x += dx*step; n.y += dy*step; }
-  refreshPropsValues(n);
-  render();
+  if (n.type === 'text') { n.boxX += dx; n.boxY += dy; }
+  else if (n.type === 'line') { n.x1 += dx; n.y1 += dy; n.x2 += dx; n.y2 += dy; }
+  else { n.x += dx; n.y += dy; }
+  refreshPropsInputs(n); render();
 }
 
-/* ── Undo stack ─────────────────────────────────────────── */
-const undoStack = [];
-function pushUndo() { undoStack.push(JSON.stringify(state.nodes)); if (undoStack.length > 50) undoStack.shift(); }
-function undo() {
-  if (!undoStack.length) return;
-  state.nodes = JSON.parse(undoStack.pop());
-  state.selectedIdx = -1;
-  buildPropsPanel(); render(); updateLayersList();
-}
-
-function duplicateSelected() {
-  const n = state.nodes[state.selectedIdx];
-  if (!n) return;
-  pushUndo();
-  const copy = JSON.parse(JSON.stringify(n));
-  copy.id = copy.id + '_copy';
-  if (copy.type !== 'line') { copy.x = (copy.x ?? copy.boxX) + 8; copy.y = (copy.y ?? copy.boxY) + 8; }
-  if (copy.boxX !== undefined) { copy.boxX += 8; copy.boxY += 8; }
-  state.nodes.push(copy);
-  state.selectedIdx = state.nodes.length - 1;
-  buildPropsPanel(); render(); updateLayersList();
-}
-
-/* ── Toolbar: add nodes ─────────────────────────────────── */
+/* ── Add nodes ───────────────────────────────────────────── */
 document.querySelectorAll('.tool-btn[data-type]').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.type;
-    const def = NodeDefs[type];
-    if (!def) return;
+    const def = NodeDefs[type]; if (!def) return;
     pushUndo();
     const node = def.defaults();
-    // Centre in visible canvas area
-    if (node.type === 'text') { node.boxX = Math.round(state.canvasW/2 - 60); node.boxY = Math.round(state.canvasH/2 - 10); }
-    else if (node.type === 'line') { node.x1 = Math.round(state.canvasW/4); node.y1 = Math.round(state.canvasH/2); node.x2 = Math.round(3*state.canvasW/4); node.y2 = node.y1; }
-    else { node.x = Math.round(state.canvasW/2 - 30); node.y = Math.round(state.canvasH/2 - 20); }
+    // Place roughly centred
+    const cx = Math.round(state.canvasW / 2);
+    const cy = Math.round(state.canvasH / 2);
+    if (type === 'text') { node.boxX = cx - 60; node.boxY = cy - 10; }
+    else if (type === 'line') { node.x1 = cx - 40; node.y1 = cy; node.x2 = cx + 40; node.y2 = cy; }
+    else { node.x = cx - (node.width ?? 16) / 2; node.y = cy - (node.height ?? 16) / 2; }
     state.nodes.push(node);
     state.selectedIdx = state.nodes.length - 1;
     buildPropsPanel(); render(); updateLayersList();
   });
 });
 
-/* ── Properties panel ───────────────────────────────────── */
-function buildPropsPanel() {
-  const n = state.nodes[state.selectedIdx];
-  if (!n) { propsBody.innerHTML = '<div class="no-selection">Select a node to edit its properties.</div>'; return; }
-
-  const def = NodeDefs[n.type];
-  let html = `<div class="prop-group"><div class="prop-group-title">${n.type.toUpperCase()}</div>`;
-
-  // Generic props
-  html += propRow('id', 'text', n.id, 'ID');
-  def.props.filter(p => p !== 'id').forEach(p => {
-    html += buildPropRow(p, n);
-  });
-  html += '</div>';
-
-  // Action section
-  html += buildActionSection(n);
-
-  html += `<button class="prop-delete" id="prop-delete-btn">Delete node</button>`;
-  propsBody.innerHTML = html;
-
-  // Wire up all inputs
-  propsBody.querySelectorAll('input, select, textarea').forEach(el => {
-    el.addEventListener('input', () => { applyPropChange(el, n); });
-  });
-  document.getElementById('prop-delete-btn')?.addEventListener('click', deleteSelected);
-  wireActionSection(n);
+/* ── Duplicate & delete ──────────────────────────────────── */
+function duplicateSelected() {
+  if (state.selectedIdx < 0) return;
+  pushUndo();
+  const copy = JSON.parse(JSON.stringify(state.nodes[state.selectedIdx]));
+  copy.id = copy.id + '_copy';
+  if (copy.type === 'line') { copy.x1 += 8; copy.y1 += 8; copy.x2 += 8; copy.y2 += 8; }
+  else if (copy.type === 'text') { copy.boxX += 8; copy.boxY += 8; }
+  else { copy.x += 8; copy.y += 8; }
+  state.nodes.push(copy);
+  state.selectedIdx = state.nodes.length - 1;
+  buildPropsPanel(); render(); updateLayersList();
 }
 
-function buildPropRow(p, n) {
-  const v = n[p];
-  if (p === 'color') return propRow(p, 'color', v || '#ffffff', 'Color');
-  if (p === 'alpha') return propRow(p, 'number', v ?? 210, 'Alpha', '0','255','1');
-  if (p === 'doubleSided' || p === 'shadow' || p === 'seeThrough') return propCheckRow(p, v, label(p));
-  if (p === 'alignment') return propSelectRow(p, v, ['LEFT','CENTER','RIGHT'], 'Align H');
-  if (p === 'verticalAlignment') return propSelectRow(p, v, ['TOP','MIDDLE','BOTTOM'], 'Align V');
-  if (p === 'transform') return propSelectRow(p, v, ['FIXED','HEAD','GUI','GROUND'], 'Transform');
-  if (p === 'text') return propTextareaRow(p, v, 'Text');
-  // Number fields
-  if (typeof v === 'number') {
-    const isInt = Number.isInteger(v);
-    return propRow(p, 'number', v, label(p), null, null, isInt ? '1' : '0.5');
-  }
-  return propRow(p, 'text', v ?? '', label(p));
-}
-
-function propRow(key, type, val, lbl, min, max, step) {
-  const mAttr = min != null ? `min="${min}"` : '';
-  const xAttr = max != null ? `max="${max}"` : '';
-  const sAttr = step != null ? `step="${step}"` : '';
-  return `<div class="prop-row"><label>${lbl}</label><input type="${type}" data-key="${key}" value="${val}" ${mAttr} ${xAttr} ${sAttr} /></div>`;
-}
-function propCheckRow(key, val, lbl) {
-  const chk = val ? 'checked' : '';
-  return `<div class="prop-row"><label>${lbl}</label><input type="checkbox" data-key="${key}" ${chk} /></div>`;
-}
-function propSelectRow(key, val, opts, lbl) {
-  const options = opts.map(o => `<option value="${o}" ${o===val?'selected':''}>${o}</option>`).join('');
-  return `<div class="prop-row"><label>${lbl}</label><select data-key="${key}">${options}</select></div>`;
-}
-function propTextareaRow(key, val, lbl) {
-  return `<div class="prop-row" style="align-items:flex-start"><label style="padding-top:4px">${lbl}</label><textarea data-key="${key}" rows="3">${val}</textarea></div>`;
-}
-
-function label(p) {
-  const map = { x:'X', y:'Y', x1:'X1', y1:'Y1', x2:'X2', y2:'Y2',
-    width:'Width', height:'Height', depth:'Depth', scale:'Scale',
-    boxX:'Box X', boxY:'Box Y', fontSize:'Font Sz', contentWidth:'Content W',
-    leftOffset:'Off L', rightOffset:'Off R', verticalOffset:'Off V',
-    thickness:'Thickness', material:'Material', alpha:'Alpha',
-    shadow:'Shadow', seeThrough:'See-thru', doubleSided:'2-sided' };
-  return map[p] ?? p;
-}
-
-function applyPropChange(el, n) {
-  const key = el.dataset.key;
-  let val = el.type === 'checkbox' ? el.checked : el.value;
-  if (el.type === 'number' || el.type === 'range') val = parseFloat(val);
-  n[key] = val;
-  render();
-  updateLayersList();
-}
-
-function refreshPropsValues(n) {
-  propsBody.querySelectorAll('[data-key]').forEach(el => {
-    const v = n[el.dataset.key];
-    if (el.type === 'checkbox') el.checked = !!v;
-    else el.value = v ?? '';
-  });
-}
-
-/* ── Action section ─────────────────────────────────────── */
-function buildActionSection(n) {
-  const btn = n._button || {};
-  const actionType = btn.action?.type || 'NONE';
-  const actionVal  = btn.action?.value || '';
-  const desc = btn.description || '';
-  const needsValue = actionType !== 'NONE';
-
-  return `
-  <div class="prop-group action-section">
-    <div class="prop-group-title">Button Action</div>
-    ${propRow('_desc', 'text', desc, 'Tooltip')}
-    <div class="prop-row">
-      <label>Action</label>
-      <select id="action-type-sel">
-        <option value="NONE" ${actionType==='NONE'?'selected':''}>None</option>
-        <option value="OPEN_URL" ${actionType==='OPEN_URL'?'selected':''}>Open URL</option>
-        <option value="PLAYER_COMMAND" ${actionType==='PLAYER_COMMAND'?'selected':''}>Player Command</option>
-        <option value="CONSOLE_COMMAND" ${actionType==='CONSOLE_COMMAND'?'selected':''}>Console Command</option>
-        <option value="SUGGEST_COMMAND" ${actionType==='SUGGEST_COMMAND'?'selected':''}>Suggest Command</option>
-      </select>
-    </div>
-    <div class="prop-row" id="action-value-row" style="display:${needsValue?'flex':'none'}">
-      <label>Value</label>
-      <input type="text" id="action-val-input" value="${actionVal}" placeholder="URL or command..." />
-    </div>
-  </div>`;
-}
-
-function wireActionSection(n) {
-  const sel = document.getElementById('action-type-sel');
-  const valRow = document.getElementById('action-value-row');
-  const valInput = document.getElementById('action-val-input');
-  const descInput = propsBody.querySelector('[data-key="_desc"]');
-
-  const sync = () => {
-    const type = sel.value;
-    valRow.style.display = type !== 'NONE' ? 'flex' : 'none';
-    if (!n._button) n._button = { id: n.id + '_btn', nodeId: n.id, description: '', action: { type: 'NONE', value: '' } };
-    n._button.action = { type, value: valInput?.value || '' };
-    n._button.description = descInput?.value || '';
-  };
-
-  sel?.addEventListener('change', sync);
-  valInput?.addEventListener('input', sync);
-  descInput?.addEventListener('input', sync);
-}
-
-/* ── Delete ─────────────────────────────────────────────── */
 function deleteSelected() {
   if (state.selectedIdx < 0) return;
   pushUndo();
@@ -453,60 +511,390 @@ function deleteSelected() {
   buildPropsPanel(); render(); updateLayersList();
 }
 
-/* ── Layers panel ───────────────────────────────────────── */
-const layersPanel = document.getElementById('layers-panel');
-document.getElementById('btn-layers').addEventListener('click', () => layersPanel.classList.toggle('hidden'));
-document.getElementById('layers-close').addEventListener('click', () => layersPanel.classList.add('hidden'));
+function moveNode(idx, dir) {
+  const to = idx + dir;
+  if (to < 0 || to >= state.nodes.length) return;
+  pushUndo();
+  [state.nodes[idx], state.nodes[to]] = [state.nodes[to], state.nodes[idx]];
+  state.selectedIdx = to;
+  render(); updateLayersList();
+}
+
+function reorderNodes(fromIdx, toIdx) {
+  if (fromIdx === toIdx) return;
+  pushUndo();
+  const node = state.nodes.splice(fromIdx, 1)[0];
+  const adj = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  state.nodes.splice(adj, 0, node);
+  if (state.selectedIdx === fromIdx) state.selectedIdx = adj;
+  render(); updateLayersList();
+}
+
+/* ── Pickr color picker management ──────────────────────── */
+let _activePickrs = [];
+
+function destroyPickrs() {
+  _activePickrs.forEach(p => { try { p.destroyAndRemove(); } catch (_) {} });
+  _activePickrs = [];
+}
+
+function initColorPicker(mountEl, initialHex, alpha, onChangeHex, onChangeAlpha) {
+  const hasAlpha = onChangeAlpha != null;
+  const defaultVal = hexWithAlpha(initialHex, hasAlpha ? (alpha ?? 255) : 255);
+
+  const pickr = Pickr.create({
+    el: mountEl,
+    theme: 'nano',
+    default: defaultVal,
+    components: {
+      preview: true,
+      opacity: hasAlpha,
+      hue: true,
+      interaction: { hex: true, rgba: true, input: true, save: true },
+    },
+  });
+
+  pickr.on('change', color => {
+    const rgba = color.toRGBA();
+    const hex = '#' + [rgba[0], rgba[1], rgba[2]]
+      .map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+    onChangeHex(hex);
+    if (hasAlpha) onChangeAlpha(Math.round(rgba[3] * 255));
+    render();
+  });
+
+  _activePickrs.push(pickr);
+}
+
+/* ── Properties panel ────────────────────────────────────── */
+const PROP_LABELS = {
+  x: 'X', y: 'Y', x1: 'X1', y1: 'Y1', x2: 'X2', y2: 'Y2',
+  boxX: 'Box X', boxY: 'Box Y', width: 'Width', height: 'Height',
+  depth: 'Depth', scale: 'Scale', fontSize: 'Font size',
+  contentWidth: 'Content W', leftOffset: 'Offset L', rightOffset: 'Offset R',
+  verticalOffset: 'Offset V', thickness: 'Thickness', material: 'Material',
+  transform: 'Transform', alignment: 'Align H', verticalAlignment: 'Align V',
+  shadow: 'Shadow', seeThrough: 'See-through', doubleSided: 'Double sided',
+};
+
+function buildPropsPanel() {
+  destroyPickrs();
+  const n = state.nodes[state.selectedIdx];
+
+  // Update header
+  const icon = document.getElementById('props-type-icon');
+  const title = document.getElementById('props-title-text');
+  const idBadge = document.getElementById('props-node-id-badge');
+
+  if (!n) {
+    icon.textContent = '';
+    title.textContent = 'Properties';
+    idBadge.textContent = '';
+    propsBody.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".35"><circle cx="20" cy="20" r="16"/><path d="M20 13v7l5 3"/></svg></div><div>Select a node to edit its properties</div></div>';
+    return;
+  }
+
+  const def = NodeDefs[n.type];
+  icon.textContent = def.icon ?? '';
+  title.textContent = n.type.toUpperCase();
+  idBadge.textContent = n.id;
+
+  // Build HTML
+  let html = '';
+
+  // Node-specific props
+  html += `<div class="prop-section"><div class="prop-section-title">Layout</div>`;
+  def.props.forEach(p => { html += buildPropRowHtml(p, n); });
+  html += `</div>`;
+
+  // Button/Action section
+  html += buildActionHtml(n);
+
+  html += `<button class="prop-delete" id="prop-del-btn">Delete node</button>`;
+
+  propsBody.innerHTML = html;
+
+  // Wire up regular inputs
+  propsBody.querySelectorAll('[data-key]').forEach(el => {
+    el.addEventListener('input', () => applyInput(el, n));
+    el.addEventListener('change', () => applyInput(el, n));
+  });
+
+  // Init Pickr on color mounts
+  propsBody.querySelectorAll('.pickr-mount').forEach(el => {
+    const key = el.dataset.key;
+    const alphaKey = el.dataset.alphaKey || null;
+    initColorPicker(
+      el,
+      n[key] || '#000000',
+      alphaKey ? (n[alphaKey] ?? 255) : 255,
+      hex => { n[key] = hex; },
+      alphaKey ? a => { n[alphaKey] = a; } : null,
+    );
+  });
+
+  // Wire material picker button
+  propsBody.querySelector('.material-pick-btn')?.addEventListener('click', () => {
+    ItemPicker.open(n.material, (namespace) => {
+      n.material = namespace;
+      const inp = propsBody.querySelector('[data-key="material"]');
+      if (inp) inp.value = namespace;
+      const thumb = propsBody.querySelector('.material-thumb');
+      if (thumb) { thumb.src = _matThumbUrl(namespace); thumb.style.opacity = '1'; }
+      render();
+    });
+  });
+
+  // Action wiring
+  wireAction(n);
+
+  document.getElementById('prop-del-btn')?.addEventListener('click', deleteSelected);
+}
+
+function buildPropRowHtml(p, n) {
+  // Virtual props for color pickers
+  if (p === '_colorAlpha') {
+    return `<div class="prop-row prop-color-row"><label>Color</label>
+      <div class="pickr-wrap"><div class="pickr-mount" data-key="color" data-alpha-key="alpha"></div></div></div>`;
+  }
+  if (p === '_color') {
+    return `<div class="prop-row prop-color-row"><label>Color</label>
+      <div class="pickr-wrap"><div class="pickr-mount" data-key="color"></div></div></div>`;
+  }
+  if (p === 'material') return _buildMaterialRow(n);
+
+  const v = n[p];
+  const lbl = PROP_LABELS[p] ?? p;
+
+  // Pair x/y and x1/y1 x2/y2
+  if (p === 'x' && n.y !== undefined && n.type !== 'line') return propPairRow('x', 'y', n, 'X', 'Y');
+  if (p === 'y' && n.x !== undefined && n.type !== 'line') return '';
+  if (p === 'boxX') return propPairRow('boxX', 'boxY', n, 'X', 'Y');
+  if (p === 'boxY') return '';
+  if (p === 'x1') return propPairRow('x1', 'y1', n, 'X1', 'Y1');
+  if (p === 'y1') return '';
+  if (p === 'x2') return propPairRow('x2', 'y2', n, 'X2', 'Y2');
+  if (p === 'y2') return '';
+  if (p === 'width' && n.height !== undefined) return propPairRow('width', 'height', n, 'W', 'H');
+  if (p === 'height' && n.width !== undefined) return '';
+
+  if (p === 'alignment') return propSelectRow(p, v, ['LEFT', 'CENTER', 'RIGHT'], lbl);
+  if (p === 'verticalAlignment') return propSelectRow(p, v, ['TOP', 'MIDDLE', 'BOTTOM'], lbl);
+  if (p === 'transform') return propSelectRow(p, v, ['FIXED', 'HEAD', 'GUI', 'GROUND'], lbl);
+
+  if (typeof v === 'boolean') return propCheckRow(p, v, lbl);
+
+  if (p === 'text') return `<div class="prop-row prop-row-top"><label>${lbl}</label><textarea data-key="${p}" rows="3">${escHtml(v)}</textarea></div>`;
+
+  const step = Number.isInteger(v) ? 1 : 0.5;
+  return propInputRow(p, 'number', v, lbl, step);
+}
+
+function propInputRow(key, type, val, lbl, step) {
+  const s = step != null ? `step="${step}"` : '';
+  return `<div class="prop-row"><label>${lbl}</label><input type="${type}" data-key="${key}" value="${escHtml(String(val ?? ''))}" ${s} /></div>`;
+}
+function propCheckRow(key, val, lbl) {
+  return `<div class="prop-row"><label>${lbl}</label><input type="checkbox" data-key="${key}" ${val ? 'checked' : ''} /></div>`;
+}
+function propSelectRow(key, val, opts, lbl) {
+  const options = opts.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('');
+  return `<div class="prop-row"><label>${lbl}</label><select data-key="${key}">${options}</select></div>`;
+}
+function propPairRow(k1, k2, n, l1, l2) {
+  const v1 = n[k1] ?? 0, v2 = n[k2] ?? 0;
+  return `
+    <div class="prop-pair-row">
+      <div class="prop-pair-field">
+        <span class="pair-key">${l1}</span>
+        <input type="number" data-key="${k1}" value="${v1}" step="1" />
+      </div>
+      <div class="prop-pair-field">
+        <span class="pair-key">${l2}</span>
+        <input type="number" data-key="${k2}" value="${v2}" step="1" />
+      </div>
+    </div>`;
+}
+
+function _matThumbUrl(ns) {
+  const name = (ns || '').replace('minecraft:', '');
+  return `https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.21.4/assets/minecraft/textures/item/${name}.png`;
+}
+
+function _buildMaterialRow(n) {
+  const ns = n.material || '';
+  const thumbUrl = _matThumbUrl(ns);
+  return `
+    <div class="prop-row material-picker-row">
+      <label>Material</label>
+      <div class="material-input-wrap">
+        <img class="material-thumb" src="${thumbUrl}"
+             onerror="this.src='https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets/1.21.4/assets/minecraft/textures/block/${(ns||'').replace('minecraft:','')+'.png'}';this.onerror=function(){this.style.opacity='.15'}" />
+        <input type="text" data-key="material" value="${ns}" placeholder="minecraft:stone" class="material-text-input" />
+        <button class="material-pick-btn" title="Browse all items">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+      </div>
+    </div>`;
+}
+
+function buildActionHtml(n) {
+  const btn = n._button || {};
+  const t = btn.action?.type || 'NONE';
+  const v = btn.action?.value || '';
+  const desc = btn.description || '';
+  const needsValue = t !== 'NONE';
+  return `<div class="prop-section"><div class="prop-section-title">Button Action</div>
+    ${propInputRow('_desc', 'text', desc, 'Tooltip')}
+    <div class="prop-row"><label>Action</label><select id="action-type-sel">
+      <option value="NONE" ${t === 'NONE' ? 'selected' : ''}>None</option>
+      <option value="OPEN_URL" ${t === 'OPEN_URL' ? 'selected' : ''}>Open URL</option>
+      <option value="PLAYER_COMMAND" ${t === 'PLAYER_COMMAND' ? 'selected' : ''}>Player Command</option>
+      <option value="CONSOLE_COMMAND" ${t === 'CONSOLE_COMMAND' ? 'selected' : ''}>Console Command</option>
+      <option value="SUGGEST_COMMAND" ${t === 'SUGGEST_COMMAND' ? 'selected' : ''}>Suggest Command</option>
+    </select></div>
+    <div class="prop-row action-row-value ${needsValue ? 'visible' : ''}" id="action-val-row">
+      <label>Value</label><input type="text" id="action-val-input" value="${escHtml(v)}" placeholder="URL or /command…" />
+    </div>
+  </div>`;
+}
+
+function wireAction(n) {
+  const typeSel = document.getElementById('action-type-sel');
+  const valRow  = document.getElementById('action-val-row');
+  const valInp  = document.getElementById('action-val-input');
+  const descInp = propsBody.querySelector('[data-key="_desc"]');
+
+  const sync = () => {
+    const type = typeSel.value;
+    valRow.classList.toggle('visible', type !== 'NONE');
+    if (!n._button) n._button = { id: n.id + '_btn', nodeId: n.id, description: '', action: { type: 'NONE', value: '' } };
+    n._button.action = { type, value: valInp?.value || '' };
+    n._button.description = descInp?.value || '';
+  };
+
+  typeSel?.addEventListener('change', sync);
+  valInp?.addEventListener('input', sync);
+  descInp?.addEventListener('input', sync);
+}
+
+function applyInput(el, n) {
+  const key = el.dataset.key;
+  if (!key || key === '_desc') return;
+  let val = el.type === 'checkbox' ? el.checked : el.value;
+  if (el.type === 'number') val = parseFloat(val);
+  n[key] = val;
+  render(); updateLayersList();
+}
+
+function refreshPropsInputs(n) {
+  propsBody.querySelectorAll('[data-key]').forEach(el => {
+    const key = el.dataset.key;
+    if (!key || key === '_desc' || !el.matches('input, select, textarea')) return;
+    if (el.type === 'checkbox') el.checked = !!n[key];
+    else if (n[key] !== undefined) el.value = n[key];
+  });
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── Layers list ─────────────────────────────────────────── */
+let _dragFromIdx = -1;
 
 function updateLayersList() {
   const list = document.getElementById('layers-list');
+  const empty = document.getElementById('layers-empty');
+  const count = document.getElementById('layer-count');
+  count.textContent = state.nodes.length;
+  empty.style.display = state.nodes.length ? 'none' : 'block';
+
   list.innerHTML = '';
   [...state.nodes].reverse().forEach((n, ri) => {
-    const i = state.nodes.length - 1 - ri;
+    const realIdx = state.nodes.length - 1 - ri;
+    const def = NodeDefs[n.type];
     const li = document.createElement('li');
-    li.className = 'layer-item' + (i === state.selectedIdx ? ' selected' : '');
-    li.innerHTML = `<span>${NodeDefs[n.type]?.label(n) ?? n.type}</span>
-      <span class="layer-type">${n.type}</span>
-      <button class="layer-up" title="Move up">↑</button>
-      <button class="layer-down" title="Move down">↓</button>
-      <button class="layer-del" title="Delete">✕</button>`;
+    li.className = 'layer-item' + (realIdx === state.selectedIdx ? ' selected' : '');
+    li.draggable = true;
+    li.dataset.realIdx = realIdx;
+
+    li.innerHTML = `
+      <span class="layer-drag" title="Drag to reorder">⠿</span>
+      <span class="layer-icon">${def?.icon ?? '?'}</span>
+      <span class="layer-name">${def?.label(n) ?? n.type}</span>
+      <div class="layer-actions">
+        <button class="layer-act" data-act="up"  title="Move up (Ctrl+])">↑</button>
+        <button class="layer-act" data-act="down" title="Move down (Ctrl+[)">↓</button>
+        <button class="layer-act del" data-act="del" title="Delete">✕</button>
+      </div>`;
+
+    // Select on click (not on action buttons)
     li.addEventListener('click', e => {
-      if (e.target.tagName === 'BUTTON') return;
-      state.selectedIdx = i; buildPropsPanel(); render(); updateLayersList();
+      if (e.target.closest('.layer-actions') || e.target.classList.contains('layer-drag')) return;
+      state.selectedIdx = realIdx;
+      buildPropsPanel(); render(); updateLayersList();
     });
-    li.querySelector('.layer-up').addEventListener('click', () => moveNode(i, 1));
-    li.querySelector('.layer-down').addEventListener('click', () => moveNode(i, -1));
-    li.querySelector('.layer-del').addEventListener('click', () => { state.selectedIdx = i; deleteSelected(); });
+
+    // Action buttons
+    li.querySelectorAll('.layer-act').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        if (act === 'up')  moveNode(realIdx, 1);
+        if (act === 'down') moveNode(realIdx, -1);
+        if (act === 'del') { state.selectedIdx = realIdx; deleteSelected(); }
+      });
+    });
+
+    // ── Drag-and-drop reorder ──────────────────────────────
+    li.addEventListener('dragstart', e => {
+      _dragFromIdx = realIdx;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', realIdx);
+      setTimeout(() => li.classList.add('dragging'), 0);
+    });
+    li.addEventListener('dragend', () => {
+      li.classList.remove('dragging');
+      list.querySelectorAll('.drop-above, .drop-below').forEach(el => el.classList.remove('drop-above', 'drop-below'));
+    });
+    li.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      list.querySelectorAll('.drop-above, .drop-below').forEach(el => el.classList.remove('drop-above', 'drop-below'));
+      const rect = li.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      li.classList.add(e.clientY < mid ? 'drop-above' : 'drop-below');
+    });
+    li.addEventListener('dragleave', () => li.classList.remove('drop-above', 'drop-below'));
+    li.addEventListener('drop', e => {
+      e.preventDefault();
+      li.classList.remove('drop-above', 'drop-below');
+      const from = _dragFromIdx;
+      const to   = realIdx;
+      if (from !== to && from >= 0) reorderNodes(from, to);
+    });
+
     list.appendChild(li);
   });
 }
 
-function moveNode(idx, dir) {
-  const t = idx + dir;
-  if (t < 0 || t >= state.nodes.length) return;
-  pushUndo();
-  [state.nodes[idx], state.nodes[t]] = [state.nodes[t], state.nodes[idx]];
-  state.selectedIdx = t;
-  render(); updateLayersList();
-}
-
-/* ── Toolbar controls ───────────────────────────────────── */
-const canvasWInput = document.getElementById('canvas-w');
-const canvasHInput = document.getElementById('canvas-h');
-const zoomRange = document.getElementById('zoom-range');
-const zoomLabel = document.getElementById('zoom-label');
+/* ── Toolbar controls ────────────────────────────────────── */
+const cwInput    = document.getElementById('canvas-w');
+const chInput    = document.getElementById('canvas-h');
+const zoomRange  = document.getElementById('zoom-range');
+const zoomLabel  = document.getElementById('zoom-label');
 const gridToggle = document.getElementById('grid-toggle');
 
-canvasWInput.addEventListener('change', () => { state.canvasW = parseInt(canvasWInput.value); resizeCanvas(); });
-canvasHInput.addEventListener('change', () => { state.canvasH = parseInt(canvasHInput.value); resizeCanvas(); });
+cwInput.addEventListener('change', () => { state.canvasW = Math.max(64, parseInt(cwInput.value)); resizeCanvas(); });
+chInput.addEventListener('change', () => { state.canvasH = Math.max(64, parseInt(chInput.value)); resizeCanvas(); });
 zoomRange.addEventListener('input', () => {
   state.zoom = parseFloat(zoomRange.value);
   zoomLabel.textContent = state.zoom.toFixed(1) + '×';
   resizeCanvas();
 });
 gridToggle.addEventListener('change', () => { state.grid = gridToggle.checked; render(); });
+document.getElementById('btn-undo').addEventListener('click', undo);
 
-/* ── Export ─────────────────────────────────────────────── */
+/* ── Export ──────────────────────────────────────────────── */
 document.getElementById('btn-export').addEventListener('click', () => {
   const json = Serializer.toJson({ ...state });
   const blob = new Blob([json], { type: 'application/json' });
@@ -516,30 +904,24 @@ document.getElementById('btn-export').addEventListener('click', () => {
   a.click();
 });
 
-/* ── Import ─────────────────────────────────────────────── */
-document.getElementById('btn-import').addEventListener('click', () => {
-  document.getElementById('import-file').click();
-});
+/* ── Import ──────────────────────────────────────────────── */
+document.getElementById('btn-import').addEventListener('click', () => document.getElementById('import-file').click());
 document.getElementById('import-file').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
     try {
       const s = Serializer.fromJson(ev.target.result);
-      state.nodes = s.nodes;
-      state.canvasW = s.canvasW; state.canvasH = s.canvasH;
-      state.name = s.name;
-      state.selectedIdx = -1;
-      canvasWInput.value = s.canvasW;
-      canvasHInput.value = s.canvasH;
+      Object.assign(state, { nodes: s.nodes, canvasW: s.canvasW, canvasH: s.canvasH, name: s.name, selectedIdx: -1 });
+      cwInput.value = s.canvasW; chInput.value = s.canvasH;
       resizeCanvas(); buildPropsPanel(); updateLayersList();
-    } catch(err) { alert('Import failed: ' + err.message); }
+    } catch (err) { alert('Import failed: ' + err.message); }
   };
   reader.readAsText(file);
   e.target.value = '';
 });
 
-/* ── Clear ──────────────────────────────────────────────── */
+/* ── Clear ───────────────────────────────────────────────── */
 document.getElementById('btn-clear').addEventListener('click', () => {
   if (!state.nodes.length || confirm('Clear all nodes?')) {
     pushUndo(); state.nodes = []; state.selectedIdx = -1;
@@ -547,7 +929,20 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   }
 });
 
-/* ── Boot ───────────────────────────────────────────────── */
+/* ── Boot ────────────────────────────────────────────────── */
+const _hadSaved = _restoreState();
+
+// Sync controls with restored state
+zoomRange.value = state.zoom;
+zoomLabel.textContent = state.zoom.toFixed(1) + '×';
+cwInput.value = state.canvasW;
+chInput.value = state.canvasH;
+gridToggle.checked = state.grid;
+
 resizeCanvas();
 buildPropsPanel();
 updateLayersList();
+
+if (_hadSaved && state.nodes.length) {
+  _showSaveIndicator('saved');
+}

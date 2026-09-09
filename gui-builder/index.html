@@ -4,52 +4,114 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HaoHan Display UI — Visual Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.9.1/dist/themes/nano.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
-    <!-- Header -->
+
+    <!-- ── Header ─────────────────────────────────── -->
     <header id="header">
       <div id="header-left">
-        <span id="logo">HaoHan Display UI</span>
-        <span id="logo-sub">Visual Builder</span>
+        <div id="logo-mark">HH</div>
+        <div id="logo-text">
+          <span id="logo-name">HaoHan Display UI</span>
+          <span id="logo-sub">Visual Builder</span>
+        </div>
       </div>
+
       <div id="header-center">
-        <label>Canvas size:
+        <div class="ctrl-group">
+          <span class="ctrl-label">W</span>
           <input type="number" id="canvas-w" value="256" min="64" max="1024" step="8" />
-          ×
+          <span class="ctrl-sep">×</span>
           <input type="number" id="canvas-h" value="192" min="64" max="1024" step="8" />
-          px
-        </label>
-        <label>Zoom:
+          <span class="ctrl-label">px</span>
+        </div>
+        <div class="ctrl-group">
+          <span class="ctrl-label">Zoom</span>
           <input type="range" id="zoom-range" min="0.5" max="4" step="0.1" value="2" />
-          <span id="zoom-label">2×</span>
-        </label>
-        <label class="toggle-row">
-          <input type="checkbox" id="grid-toggle" checked /> Grid
+          <span id="zoom-label">2.0×</span>
+        </div>
+        <label class="toggle-label">
+          <input type="checkbox" id="grid-toggle" checked />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-text">Grid</span>
         </label>
       </div>
+
       <div id="header-right">
-        <button id="btn-clear" class="btn-danger">Clear</button>
-        <button id="btn-import" class="btn-secondary">Import JSON</button>
-        <button id="btn-export" class="btn-primary">Export JSON</button>
+        <span id="save-indicator" data-state="" title="">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="save-text">Saved</span>
+        </span>
+        <button id="btn-undo" class="btn btn-ghost" title="Undo (Ctrl+Z)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 7v6h6"/><path d="M3 13A9 9 0 1 0 6 6.3L3 9"/></svg>
+        </button>
+        <div class="header-sep"></div>
+        <button id="btn-clear" class="btn btn-ghost">Clear</button>
+        <button id="btn-import" class="btn btn-secondary">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Import
+        </button>
+        <button id="btn-export" class="btn btn-primary">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Export JSON
+        </button>
         <input type="file" id="import-file" accept=".json" style="display:none" />
       </div>
     </header>
 
-    <!-- Main layout -->
+    <!-- ── Main layout ────────────────────────────── -->
     <main id="main">
-      <!-- Toolbar -->
-      <aside id="toolbar">
-        <div class="toolbar-title">Add Node</div>
-        <button class="tool-btn" data-type="background" title="Colored background panel">Background</button>
-        <button class="tool-btn" data-type="text" title="Aligned text with box">Text</button>
-        <button class="tool-btn" data-type="item" title="Minecraft item icon">Item</button>
-        <button class="tool-btn" data-type="block" title="Block model display">Block</button>
-        <button class="tool-btn" data-type="line" title="Line segment">Line</button>
 
-        <div class="toolbar-title" style="margin-top:18px">Document</div>
-        <button class="tool-btn" id="btn-layers" title="Manage node layers">Layers</button>
+      <!-- Left sidebar: tools + layers -->
+      <aside id="left-panel">
+        <section class="panel-section">
+          <div class="section-title">Add Node</div>
+          <div class="tool-grid">
+            <button class="tool-btn" data-type="background" title="Colored background panel">
+              <span class="tool-icon">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="16" height="12" rx="2"/></svg>
+              </span>
+              <span>Background</span>
+            </button>
+            <button class="tool-btn" data-type="text" title="Aligned text node">
+              <span class="tool-icon tool-icon-text">T</span>
+              <span>Text</span>
+            </button>
+            <button class="tool-btn" data-type="item" title="Minecraft item icon">
+              <span class="tool-icon">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="10,2 18,7 18,13 10,18 2,13 2,7"/></svg>
+              </span>
+              <span>Item</span>
+            </button>
+            <button class="tool-btn" data-type="block" title="Block model display">
+              <span class="tool-icon">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="14" height="11" rx="1"/><polyline points="3,6 10,2 17,6"/><line x1="10" y1="2" x2="10" y2="17"/></svg>
+              </span>
+              <span>Block</span>
+            </button>
+            <button class="tool-btn" data-type="line" title="Line segment">
+              <span class="tool-icon">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="17" x2="17" y2="3"/></svg>
+              </span>
+              <span>Line</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="panel-section layers-section">
+          <div class="section-title">
+            Layers
+            <span id="layer-count" class="badge">0</span>
+          </div>
+          <ul id="layers-list"></ul>
+          <div id="layers-empty" class="layers-empty">No nodes yet.<br/>Add one above.</div>
+        </section>
       </aside>
 
       <!-- Canvas area -->
@@ -57,29 +119,39 @@
         <div id="canvas-scroll">
           <canvas id="canvas"></canvas>
         </div>
+        <div id="canvas-status">
+          <span id="cursor-pos">0, 0</span>
+          <span id="canvas-dims"></span>
+        </div>
       </div>
 
       <!-- Properties panel -->
       <aside id="props">
-        <div id="props-title">Properties</div>
+        <div id="props-header">
+          <span id="props-type-icon"></span>
+          <span id="props-title-text">Properties</span>
+          <span id="props-node-id-badge"></span>
+        </div>
         <div id="props-body">
-          <div class="no-selection">Select a node to edit its properties.</div>
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".35"><circle cx="20" cy="20" r="16"/><path d="M20 13v7l5 3"/></svg>
+            </div>
+            <div>Select a node to edit its properties</div>
+          </div>
+        </div>
+        <div id="preview-section">
+          <div class="section-title">Preview</div>
+          <canvas id="preview-canvas"></canvas>
         </div>
       </aside>
     </main>
-
-    <!-- Layer panel (overlay) -->
-    <div id="layers-panel" class="hidden">
-      <div id="layers-header">
-        <span>Layers</span>
-        <button id="layers-close">✕</button>
-      </div>
-      <ul id="layers-list"></ul>
-    </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.9.1/dist/pickr.min.js"></script>
   <script src="nodes.js"></script>
   <script src="serializer.js"></script>
+  <script src="item-picker.js"></script>
   <script src="editor.js"></script>
 </body>
 </html>
