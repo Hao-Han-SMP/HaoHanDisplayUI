@@ -38,23 +38,24 @@ link tài liệu, 3D custom entity/item model, Vanilla living mob tương tác, 
 
 Video trình bày lệnh `/hhdui demo` và các trang thử nghiệm:
 
-1. Text thường, bold, italic, gradient động, obfuscated và mixed RGB.
-2. Text list, icon list và icon đi kèm text.
-3. Hover description và các hàng icon + text có thể click.
-4. Camera billboard, khóa trục X/Y/Z và góc xoay 45°.
-5. URL, player command, console command và command permission test.
-6. Slider, checkbox và control callback.
-7. **Geometric Shapes**: Ghép tam giác 3 mảnh (`TriangleNode`), thẻ vát Cyberpunk (`ParallelogramNode`), chùm tia xoay trục (`LineNode` roll) và ngôi sao/sóng tim khép kín (`PolylineNode`).
-8. Shape, icon và text chạy random animation theo từng node.
-9. Scroll list điều hướng danh sách ứng dụng (Choose App).
-10. **Lưới 3D Mobs & Items thu nhỏ (8 ô)**: Trộn lẫn các mob nhỏ xinh (Bò con, Heo con, Allay, Zombie bé) cùng các item 3D (Kiếm, Nón, Đinh ba, Totem) trong các ô slot kính viền xám, hỗ trợ hover spin, auto spin, 3D tilt và snap góc.
-11. **3D Entity Showcase & Inspector**: Trình diễn các model lớn (Bò lớn, Đầu rồng Ender 360°, Zombie Hiệp sĩ full giáp).
+1. Text thường, bold, italic, gradient động, obfuscated và mixed RGB (`TextStylesDemoPage`).
+2. Text list, icon list và icon đi kèm text (`ListLayoutsDemoPage`).
+3. Slider, checkbox và live control callback (`LiveControlsDemoPage`).
+4. **Geometric Shapes**: Ghép tam giác 3 mảnh (`TriangleNode`), thẻ vát Cyberpunk (`ParallelogramNode`), chùm tia xoay trục (`LineNode` roll) và đa tuyến khép kín (`PolylineNode`).
+5. Preset effect gallery, animation và easing curves theo từng node (`PresetEffectGalleryDemoPage`).
+6. **Lưới 3D Mobs & Items thu nhỏ (8 ô)**: Trộn lẫn các mob nhỏ xinh (Bò con, Heo con, Allay, Zombie bé) cùng các item 3D (Kiếm, Nón, Đinh ba, Totem), hỗ trợ hover-spin, auto-spin, 3D tilt và snap góc (`MixedGrid3DDemoPage`).
+7. **3D Entity Showcase & Inspector**: Trình diễn model lớn và Living Entity vanilla (`MobShowcase3DDemoPage`).
+8. Scroll list điều hướng danh sách ứng dụng qua lăn chuột / hotbar (`ChooseAppScrollListDemoPage`).
+9. URL an toàn, player command, console command và permission test (`ActionsLinkCommandDemoPage`).
+10. Camera billboard, khóa từng trục X/Y/Z và góc xoay 45° (`CameraAxisLockDemoPage`).
+11. **Gradient Backgrounds**: Trình diễn panel nền dải màu gradient đa hướng (Horizontal, Vertical, Diagonal, Center Slant, Radial Corner), chia ma trận lát cắt mượt mà, click để áp dụng gradient vào root background (`GradientBackgroundDemoPage`).
 
 ## Tính năng
 
 | Nhóm | Khả năng |
 | --- | --- |
 | Render | `TextDisplay`, `ItemDisplay`, `BlockDisplay`, shape 2D/3D và panel nhiều layer. |
+| Background & Gradients | Nền đơn sắc (`UiBackgroundNode`) và nền gradient dải màu (`UiGradientBackgroundNode`) với 9 điểm neo định hướng, presets (ngang, dọc, chéo), nội suy toán học 2D mượt mà và tùy biến ma trận lát cắt (slices grid). |
 | Shapes & Geometry | Ghép tam giác giải tích (`TriangleNode`), hình bình hành/thẻ vát (`ParallelogramNode`), đa tuyến khép kín (`PolylineNode`), đoạn thẳng xoay trục (`LineNode.roll`). |
 | 3D Custom Models | Hiển thị 3D item/mob model (`EntityModelNode`) với scale 3 trục, transform (HEAD/FIXED/GUI) và góc Euler (Yaw, Pitch, Roll). |
 | Vanilla Living Mobs | Hiển thị Mob thực tế (`MobEntityNode`) như Bò, Zombie, Allay... với `NoAI`, `Silent`, `Invulnerable`, custom scale (`GENERIC_SCALE`), customizer consumer (baby, trang bị, hiệu ứng) mà không cần resource pack. |
@@ -169,7 +170,8 @@ phẳng:
 | --- | --- |
 | `api` | Service, document, handle và tùy chọn của scene. |
 | `api.layout` | Rectangle, anchor và camera transform. |
-| `api.node` | Các node text, item, icon, block, shape (Triangle, Parallelogram, Line, Polyline), 3D entity model và vanilla mob entity. |
+| `api.gradient` | Khái niệm Gradient, điểm neo chuẩn hóa (`UiGradientPosition`), điểm mút (`UiGradientEndpoint`) và dải màu 2D (`UiGradient`). |
+| `api.node` | Các node text, item, icon, block, nền đơn sắc/gradient (`UiBackgroundNode`, `UiGradientBackgroundNode`), shape hình học và 3D mob/model. |
 | `api.shape` | Phép biến đổi TRS và hình học giải tích cho Display Entity. |
 | `api.text` | Builder rich text và helper căn chỉnh text. |
 | `api.interaction` | Button, action và click callback. |
@@ -530,6 +532,109 @@ UiRect thumb = slider.thumbRect(10, 18);
 UiRect indicator = checkbox.indicatorRect();
 ```
 
+## Background và Nền Gradient (`UiGradientBackgroundNode`, `UiBackgroundNode`)
+
+Display UI hỗ trợ 2 dạng background panel phẳng bằng `TextDisplay` tối ưu mà không cần glyph chữ:
+1. **Nền đơn sắc (`UiBackgroundNode`)**: Panel một màu đồng nhất, hỗ trợ độ trong suốt RGBA (`Color.fromARGB`) và hiển thị 2 mặt (`doubleSided`).
+2. **Nền Gradient đa hướng (`UiGradientBackgroundNode`)**: Dải chuyển màu mượt mà theo vector giải tích 2D giữa 2 điểm mút (start/end endpoints). Engine tự động chia panel thành ma trận lát cắt (`slices grid`) TextDisplay ghép khít, nội suy màu toán học chính xác theo từng phân vùng $(u, v) \in [0, 1] \times [0, 1]$.
+
+### 1. Tạo nền gradient cơ bản qua Preset
+
+```java
+import vn.haohan.displayui.api.gradient.UiGradient;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
+import org.bukkit.Color;
+
+// Gradient ngang (trái -> phải)
+UiGradientBackgroundNode horizontalBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradient.horizontal(Color.fromRGB(220, 20, 60), Color.fromRGB(25, 25, 112))
+);
+
+// Gradient dọc (trên -> dưới)
+UiGradientBackgroundNode verticalBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradient.vertical(Color.fromRGB(46, 204, 113), Color.fromRGB(22, 160, 133))
+);
+
+// Gradient chéo góc (Top-Left -> Bottom-Right)
+UiGradientBackgroundNode diagonalBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradient.diagonal(Color.fromRGB(155, 89, 182), Color.fromRGB(241, 196, 15))
+);
+```
+
+### 2. Các Preset có sẵn của `UiGradient`
+
+| Preset | Hướng chuyển màu |
+| --- | --- |
+| `UiGradient.horizontal(left, right)` | `CENTER_LEFT` → `CENTER_RIGHT` |
+| `UiGradient.horizontalReverse(right, left)` | `CENTER_RIGHT` → `CENTER_LEFT` |
+| `UiGradient.vertical(top, bottom)` | `CENTER_TOP` → `CENTER_BOTTOM` |
+| `UiGradient.verticalReverse(bottom, top)` | `CENTER_BOTTOM` → `CENTER_TOP` |
+| `UiGradient.diagonal(topLeft, bottomRight)` | `TOP_LEFT` → `BOTTOM_RIGHT` |
+| `UiGradient.diagonalBottomLeftToTopRight(bl, tr)` | `BOTTOM_LEFT` → `TOP_RIGHT` |
+| `UiGradient.diagonalTopRightToBottomLeft(tr, bl)` | `TOP_RIGHT` → `BOTTOM_LEFT` |
+| `UiGradient.diagonalBottomRightToTopLeft(br, tl)` | `BOTTOM_RIGHT` → `TOP_LEFT` |
+| `UiGradient.centerLeftToTopRight(cl, tr)` | `CENTER_LEFT` → `TOP_RIGHT` |
+| `UiGradient.centerToBottomRight(center, br)` | `CENTER` → `BOTTOM_RIGHT` (hiệu ứng dải chùm góc) |
+
+### 3. Điểm neo tùy chỉnh (`UiGradientPosition`) và Tọa độ chuẩn hóa $(u, v)$
+
+Bạn có thể tùy ý nối dải màu giữa 2 trong 9 điểm neo định sẵn của enum `UiGradientPosition` (`TOP_LEFT`, `CENTER_LEFT`, `BOTTOM_LEFT`, `TOP_RIGHT`, `CENTER_RIGHT`, `BOTTOM_RIGHT`, `CENTER_TOP`, `CENTER_BOTTOM`, `CENTER`), hoặc truyền tọa độ $(u, v)$ tự do:
+
+```java
+import vn.haohan.displayui.api.gradient.UiGradientPosition;
+
+UiGradientBackgroundNode customPosBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradientPosition.CENTER_LEFT, Color.fromRGB(255, 215, 0),
+    UiGradientPosition.TOP_RIGHT, Color.fromRGB(30, 144, 255)
+);
+
+// Hoặc dùng tọa độ normalized u/v (0.0f đến 1.0f)
+UiGradient customGrad = UiGradient.of(
+    0.2f, 0.0f, Color.RED,
+    0.8f, 1.0f, Color.BLUE
+);
+```
+
+### 4. Tùy biến số lát cắt (Slices Grid) và Hiển thị 2 mặt
+
+Mặc định, engine tự tính số lát cắt tối ưu dựa trên hướng của gradient (1D = 16 lát cắt, 2D/chéo = 8×8 = 64 lát cắt). Bạn có thể điều chỉnh để cân đối giữa độ mượt thị giác và số lượng entity:
+
+```java
+// Điều chỉnh số lát cắt 1 chiều theo hướng gradient
+UiGradientBackgroundNode smooth1D = horizontalBg.withSlices(24);
+
+// Hoặc chỉ định rõ ma trận lát cắt 2 chiều X và Y
+UiGradientBackgroundNode smoothGrid = diagonalBg.withGrid(12, 12);
+
+// Bật hiển thị cả mặt sau (double-sided) với góc quay tự động
+UiGradientBackgroundNode doubleSided = horizontalBg.withDoubleSided(true);
+```
+
+### 5. Sử dụng qua `UiDocument.Builder` hoặc `UiBackgroundNode`
+
+```java
+UiDocument doc = UiDocument.builder()
+    // Thêm gradient trực tiếp qua builder
+    .gradientBackground(
+        -90, -50, 0.001f, 180, 100,
+        UiGradientPosition.CENTER_LEFT, Color.fromARGB(220, 20, 20, 60),
+        UiGradientPosition.CENTER_RIGHT, Color.fromARGB(240, 60, 20, 90)
+    )
+    // Hoặc thêm nền đơn sắc bán trong suốt
+    .background(-80, -40, 0.002f, 160, 80, Color.fromARGB(160, 0, 0, 0))
+    .build();
+
+// Hoặc tạo qua static factory của UiBackgroundNode:
+UiGradientBackgroundNode node = UiBackgroundNode.gradient(
+    new UiRect(-90, -50, 180, 100), 0.001f,
+    UiGradient.horizontal(Color.RED, Color.BLUE)
+);
+```
+
 ## Hệ tọa độ và layer
 
 - `(0, 0)` là tâm scene.
@@ -554,6 +659,8 @@ Ví dụ panel `180 × 116 px` với `pixelsPerBlock = 40` có kích thước kh
 | `ParallelogramNode` | Hình bình hành và thẻ vát góc kiểu Cyberpunk. |
 | `LineNode` | Đoạn thẳng 2D/3D với độ dày và góc xoay quanh trục (`roll`). |
 | `PolylineNode` | Đa tuyến liên tục qua nhiều đỉnh, hỗ trợ vẽ khép kín (`closed`). |
+| `UiGradientBackgroundNode` | Nền panel dải màu gradient liên tục 2D/1D với phép nội suy toán học đa lát cắt (slices grid), tùy biến hướng và số lát cắt. |
+| `UiBackgroundNode` | Nền panel đơn sắc bán trong suốt (`Color.fromARGB`) dựng bằng TextDisplay tối ưu. |
 | `AlignedTextNode` | Text theo rectangle, hỗ trợ layout và optical correction. |
 | `TextNode` | API text cấp thấp với anchor, line width và scale trực tiếp. |
 | `UiIconNode` | Item icon theo box và kích thước texture nội tại. |

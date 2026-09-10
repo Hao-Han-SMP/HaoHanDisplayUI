@@ -37,17 +37,17 @@ The plugin imposes **no specific menu or gameplay logic**. Consumer plugins supp
 
 The video demonstrates `/hhdui demo` across its 11 built-in test pages:
 
-1. Plain, bold, italic, animated gradient, obfuscated, and mixed RGB text.
-2. Text lists, icon lists, and icons paired with text.
-3. Hover descriptions and clickable icon + text rows.
-4. Camera billboards, X/Y/Z axis locks, and 45° rotations.
-5. URL, player command, console command, and permission-tested actions.
-6. Slider, checkbox, and control callbacks.
-7. **Geometric shapes** — `TriangleNode` (3-piece decomposition), `ParallelogramNode` (cyberpunk slanted badges), `LineNode` (axial roll), `PolylineNode` (closed star/pulse waveform).
-8. Independent random per-node animations on shapes, icons, and text.
-9. Application navigation scroll list.
-10. **Mixed 3D Mobs & Items grid (8 slots)** — baby mobs and 3D items with hover-spin, auto-spin, 3D tilt, and angle snapping.
-11. **3D Entity Showcase** — full-size living mob inspector (Cow, Ender Dragon Head 360°, Diamond Knight Zombie).
+1. Plain, bold, italic, animated gradient, obfuscated, and mixed RGB text (`TextStylesDemoPage`).
+2. Text lists, icon lists, and icons paired with text (`ListLayoutsDemoPage`).
+3. Slider, checkbox, and live control callbacks (`LiveControlsDemoPage`).
+4. **Geometric shapes** — `TriangleNode` (3-piece decomposition), `ParallelogramNode` (cyberpunk slanted badges), `LineNode` (axial roll), `PolylineNode` (closed star/pulse waveform) (`GeometricShapesDemoPage`).
+5. Preset effect gallery, independent per-node animations, and easing curves (`PresetEffectGalleryDemoPage`).
+6. **Mixed 3D Mobs & Items grid (8 slots)** — baby mobs and 3D items with hover-spin, auto-spin, 3D tilt, and angle snapping (`MixedGrid3DDemoPage`).
+7. **3D Entity Showcase** — full-size living mob inspector (Cow, Ender Dragon Head 360°, Diamond Knight Zombie) (`MobShowcase3DDemoPage`).
+8. Application navigation scroll list with mouse wheel / hotbar interception (`ChooseAppScrollListDemoPage`).
+9. Safe URL prompts, player commands, console commands, and permission-tested actions (`ActionsLinkCommandDemoPage`).
+10. Camera billboards, X/Y/Z axis locks, and 45° rotations (`CameraAxisLockDemoPage`).
+11. **Gradient Backgrounds** — multi-directional continuous gradient panels (Horizontal, Vertical, Diagonal, Center Slant, Radial Corner), seamless slice decomposition, and click-to-apply root gradient (`GradientBackgroundDemoPage`).
 
 ---
 
@@ -72,6 +72,7 @@ The video demonstrates `/hhdui demo` across its 11 built-in test pages:
 | Area | Capabilities |
 |---|---|
 | **Rendering** | `TextDisplay`, `ItemDisplay`, `BlockDisplay`, 2D/3D shapes, layered panels. |
+| **Background & Gradients** | Solid color panels (`UiBackgroundNode`) and continuous multi-slice gradients (`UiGradientBackgroundNode`) with 9 normalized anchors, presets (horizontal, vertical, diagonal), 2D mathematical interpolation, and configurable slice resolution. |
 | **Shapes & Geometry** | Analytical 3-piece triangles (`TriangleNode`), parallelograms/slanted badges (`ParallelogramNode`), closed polylines (`PolylineNode`), axial rolled lines (`LineNode.roll`). |
 | **Vanilla Living Mobs** | `MobEntityNode` — native mobs with `NoAI`, `Silent`, `Invulnerable`, `GENERIC_SCALE`, and a customizer consumer. No resource pack required. |
 | **Custom 3D Models** | `EntityModelNode` — item/entity models via `ItemDisplay` with full JOML matrix and Euler angles (Yaw, Pitch, Roll). |
@@ -110,11 +111,12 @@ HaoHanDisplayUI/
 ├── src/main/java/vn/haohan/displayui/
 │   ├── api/                  Public consumer API (UiDocument, UiHandle, DisplayUiService, UiOptions, UiPager)
 │   │   ├── animation/         UiAnimation, UiEasing — tick-based animations with easing curves
+│   │   ├── gradient/          UiGradient, UiGradientPosition, UiGradientEndpoint — 2D linear gradient math
 │   │   ├── icon/              UiIconRegistry — shared, plugin-scoped icon registration
 │   │   ├── interaction/       UiButton, UiButtonAction, UiSlider, UiCheckbox, UiScrollList
 │   │   │   └── event/          UiButtonClickEvent, UiControlChangeEvent (cancellable Bukkit events)
 │   │   ├── layout/            UiRect, UiAnchor, UiCameraTransform
-│   │   ├── node/              All renderable node types (text, icon, block, shape, model, mob)
+│   │   ├── node/              All renderable node types (text, icon, block, shape, model, mob, backgrounds)
 │   │   ├── shape/             DisplayShapeMath, TRSResult — analytical geometry for Display Entities
 │   │   ├── text/              UiText, UiTextAlignment, UiVerticalAlignment, UiTextOpticalPreset
 │   │   └── view/              UiAudience, UiFollowOptions — visibility and player-follow policies
@@ -455,6 +457,109 @@ public void onUiControlChange(UiControlChangeEvent event) {
 
 ---
 
+## Backgrounds & Gradients (`UiGradientBackgroundNode`, `UiBackgroundNode`)
+
+Display UI provides two specialized flat panel types rendered by glyphless, background-only `TextDisplay` entities:
+1. **Solid Color Background (`UiBackgroundNode`)**: Uniform color fill supporting ARGB opacity (`Color.fromARGB`) and double-sided viewing (`doubleSided`).
+2. **Multi-Directional Gradient (`UiGradientBackgroundNode`)**: Smooth color transition calculated via 2D analytical vector projection between two endpoints. The engine decomposes the panel into an edge-matched `TextDisplay` slice grid, mathematically interpolating colors across $(u, v) \in [0, 1] \times [0, 1]$.
+
+### 1. Basic Gradient via Presets
+
+```java
+import vn.haohan.displayui.api.gradient.UiGradient;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
+import org.bukkit.Color;
+
+// Horizontal gradient (left -> right)
+UiGradientBackgroundNode horizontalBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradient.horizontal(Color.fromRGB(220, 20, 60), Color.fromRGB(25, 25, 112))
+);
+
+// Vertical gradient (top -> bottom)
+UiGradientBackgroundNode verticalBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradient.vertical(Color.fromRGB(46, 204, 113), Color.fromRGB(22, 160, 133))
+);
+
+// Diagonal gradient (top-left -> bottom-right)
+UiGradientBackgroundNode diagonalBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradient.diagonal(Color.fromRGB(155, 89, 182), Color.fromRGB(241, 196, 15))
+);
+```
+
+### 2. Available `UiGradient` Presets
+
+| Preset | Direction |
+|---|---|
+| `UiGradient.horizontal(left, right)` | `CENTER_LEFT` → `CENTER_RIGHT` |
+| `UiGradient.horizontalReverse(right, left)` | `CENTER_RIGHT` → `CENTER_LEFT` |
+| `UiGradient.vertical(top, bottom)` | `CENTER_TOP` → `CENTER_BOTTOM` |
+| `UiGradient.verticalReverse(bottom, top)` | `CENTER_BOTTOM` → `CENTER_TOP` |
+| `UiGradient.diagonal(topLeft, bottomRight)` | `TOP_LEFT` → `BOTTOM_RIGHT` |
+| `UiGradient.diagonalBottomLeftToTopRight(bl, tr)` | `BOTTOM_LEFT` → `TOP_RIGHT` |
+| `UiGradient.diagonalTopRightToBottomLeft(tr, bl)` | `TOP_RIGHT` → `BOTTOM_LEFT` |
+| `UiGradient.diagonalBottomRightToTopLeft(br, tl)` | `BOTTOM_RIGHT` → `TOP_LEFT` |
+| `UiGradient.centerLeftToTopRight(cl, tr)` | `CENTER_LEFT` → `TOP_RIGHT` |
+| `UiGradient.centerToBottomRight(center, br)` | `CENTER` → `BOTTOM_RIGHT` (corner flare) |
+
+### 3. Custom Anchors (`UiGradientPosition`) & Normalized $(u, v)$
+
+Define gradients between any two endpoints using the 9 standard enum positions (`TOP_LEFT`, `CENTER_LEFT`, `BOTTOM_LEFT`, `TOP_RIGHT`, `CENTER_RIGHT`, `BOTTOM_RIGHT`, `CENTER_TOP`, `CENTER_BOTTOM`, `CENTER`) or explicit normalized $(u, v)$ floats:
+
+```java
+import vn.haohan.displayui.api.gradient.UiGradientPosition;
+
+UiGradientBackgroundNode customPosBg = new UiGradientBackgroundNode(
+    -90, -50, 0.001f, 180, 100,
+    UiGradientPosition.CENTER_LEFT, Color.fromRGB(255, 215, 0),
+    UiGradientPosition.TOP_RIGHT, Color.fromRGB(30, 144, 255)
+);
+
+// Or arbitrary (u, v) normalized coordinates in [0.0, 1.0]
+UiGradient customGrad = UiGradient.of(
+    0.2f, 0.0f, Color.RED,
+    0.8f, 1.0f, Color.BLUE
+);
+```
+
+### 4. Slice Grid Resolution & Double-Sided Rendering
+
+By default, slice count is automatically determined (1D gradients use 16 slices; 2D/diagonal gradients use an 8×8 grid). You can fine-tune slice density or enable double-sided visibility:
+
+```java
+// Set slice count along the dominant gradient axis
+UiGradientBackgroundNode smooth1D = horizontalBg.withSlices(24);
+
+// Explicit 2D grid resolution (X by Y slices)
+UiGradientBackgroundNode smoothGrid = diagonalBg.withGrid(12, 12);
+
+// Enable back-face display entities for 360-degree viewing
+UiGradientBackgroundNode doubleSided = horizontalBg.withDoubleSided(true);
+```
+
+### 5. Builder & Static Factory Helpers
+
+```java
+UiDocument doc = UiDocument.builder()
+    .gradientBackground(
+        -90, -50, 0.001f, 180, 100,
+        UiGradientPosition.CENTER_LEFT, Color.fromARGB(220, 20, 20, 60),
+        UiGradientPosition.CENTER_RIGHT, Color.fromARGB(240, 60, 20, 90)
+    )
+    .background(-80, -40, 0.002f, 160, 80, Color.fromARGB(160, 0, 0, 0))
+    .build();
+
+// Alternative factory via UiBackgroundNode:
+UiGradientBackgroundNode node = UiBackgroundNode.gradient(
+    new UiRect(-90, -50, 180, 100), 0.001f,
+    UiGradient.horizontal(Color.RED, Color.BLUE)
+);
+```
+
+---
+
 ## Coordinate System
 
 | Concept | Detail |
@@ -481,6 +586,8 @@ public void onUiControlChange(UiControlChangeEvent event) {
 | `ParallelogramNode` | Parallelogram and cyberpunk slanted badge quad panels. |
 | `LineNode` | 2D/3D line segment with thickness and axial roll. |
 | `PolylineNode` | Multi-vertex continuous polyline with optional closed loop. |
+| `UiGradientBackgroundNode` | Continuous multi-slice 2D/1D gradient background panel with mathematical interpolation and configurable slice grids. |
+| `UiBackgroundNode` | Solid translucent color panel (`Color.fromARGB`) rendered via background-only `TextDisplay`. |
 | `AlignedTextNode` | Rectangle-bound text with box alignment and optical correction. |
 | `TextNode` | Low-level text with direct anchor, line width, and scale. |
 | `UiIconNode` | Box-bound item icon with intrinsic texture dimensions. |

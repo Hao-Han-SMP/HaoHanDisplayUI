@@ -62,13 +62,14 @@ Wraps an immutable document set with automatic page indexing. Supports bounds cl
 
 ### Expanded Demo (`/hhdui demo`)
 
-The built-in demo now covers 11 pages: rich text, icon lists, hover descriptions, camera modes, URL and command actions, interactive controls, geometric shapes, per-node animations, scroll navigation, a mixed 3D mob and item grid, and a full-size entity inspector.
+The built-in demo now covers 11 pages: rich text, icon lists, hover descriptions, camera modes, URL and command actions, interactive controls, geometric shapes, per-node animations, scroll navigation, a mixed 3D mob and item grid, and interactive multi-directional gradient backgrounds.
 
 ---
 
 ## Main Features
 
-- `TextDisplay`, `ItemDisplay`, `BlockDisplay`, and vanilla living mob entities
+- `TextDisplay`, `ItemDisplay`, `BlockDisplay`, vanilla living mob entities, and multi-directional gradient background panels
+- Solid translucent panels (`UiBackgroundNode`) and mathematical multi-slice continuous gradients (`UiGradientBackgroundNode`)
 - Adventure Component rich text: RGB, multi-stop gradients, bold, italic, strikethrough, obfuscated
 - Box alignment: left, center, right, top, middle, bottom with `UiRect` anchors and optical corrections
 - Pixel-precise logical-pixel raycasting with hit-slop and cancellable click events
