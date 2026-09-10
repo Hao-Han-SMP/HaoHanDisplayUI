@@ -25,6 +25,7 @@ import vn.haohan.displayui.api.node.MobEntityNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.TextNode;
 import vn.haohan.displayui.api.node.ItemNode;
 import vn.haohan.displayui.api.node.LineNode;
@@ -125,6 +126,7 @@ public record UiButton(
             case UiIconNode icon -> new UiRect(icon.boxX(), icon.boxY(), icon.width(), icon.height());
             case BlockNode block -> new UiRect(block.x(), block.y(), block.width(), block.height());
             case UiBackgroundNode background -> new UiRect(background.x(), background.y(), background.width(), background.height());
+            case UiGradientBackgroundNode gradient -> new UiRect(gradient.x(), gradient.y(), gradient.width(), gradient.height());
             case EntityModelNode model -> centered(model.x(), model.y(), model.width(), model.height());
             case MobEntityNode mob -> centered(mob.x(), mob.y(), mob.width(), mob.height());
             case ItemNode item -> centered(item.x(), item.y(), 16.0f, 16.0f);

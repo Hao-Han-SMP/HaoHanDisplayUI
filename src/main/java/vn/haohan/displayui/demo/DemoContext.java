@@ -1,8 +1,11 @@
 package vn.haohan.displayui.demo;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.UiHandle;
+import vn.haohan.displayui.api.gradient.UiGradient;
+import vn.haohan.displayui.api.gradient.UiGradientPosition;
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 import vn.haohan.displayui.api.view.UiFollowMode;
 import vn.haohan.displayui.api.view.UiFollowOptions;
@@ -13,10 +16,16 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 public final class DemoContext {
+    public static final UiGradient DEFAULT_ROOT_GRADIENT = UiGradient.of(
+            UiGradientPosition.TOP_LEFT, Color.fromARGB(215, 65, 25, 95),
+            UiGradientPosition.BOTTOM_RIGHT, Color.fromARGB(235, 18, 42, 85)
+    );
+
     private final UUID playerId;
     private UiHandle handle;
     private int page;
     private int gradientFrame;
+    private UiGradient rootGradient = DEFAULT_ROOT_GRADIENT;
     private double volume = 0.65;
     private boolean enabled = true;
     private int appOffset;
@@ -48,6 +57,9 @@ public final class DemoContext {
 
     public double volume() { return volume; }
     public void volume(double volume) { this.volume = volume; }
+
+    public UiGradient rootGradient() { return rootGradient; }
+    public void rootGradient(UiGradient rootGradient) { this.rootGradient = rootGradient != null ? rootGradient : DEFAULT_ROOT_GRADIENT; }
 
     public boolean enabled() { return enabled; }
     public void enabled(boolean enabled) { this.enabled = enabled; }

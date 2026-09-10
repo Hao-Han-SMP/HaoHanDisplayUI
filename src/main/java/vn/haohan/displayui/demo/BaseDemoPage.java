@@ -2,7 +2,6 @@ package vn.haohan.displayui.demo;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.interaction.UiButton;

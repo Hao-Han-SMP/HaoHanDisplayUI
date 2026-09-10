@@ -25,7 +25,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.DisplayUiService;
-import vn.haohan.displayui.runtime.DisplayUiServiceImpl;
 import vn.haohan.displayui.api.UiOptions;
 import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.interaction.UiScrollAnimations;
@@ -68,7 +67,8 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 new MobShowcase3DDemoPage(),
                 new ChooseAppScrollListDemoPage(),
                 new ActionsLinkCommandDemoPage(),
-                new CameraAxisLockDemoPage()
+                new CameraAxisLockDemoPage(),
+                new GradientBackgroundDemoPage()
         );
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::animateDemos, 1L, 1L);
     }
@@ -132,7 +132,6 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
 
     private void cleanupExisting(UUID playerId) {
         DemoContext oldDemo = demos.remove(playerId);
-        Player player = plugin.getServer().getPlayer(playerId);
         if (oldDemo != null && oldDemo.handle() != null) oldDemo.handle().remove();
     }
 

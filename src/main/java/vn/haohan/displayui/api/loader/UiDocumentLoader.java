@@ -28,16 +28,18 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.entity.ItemDisplay;
-import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.ItemStack;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiButtonAction;
+import vn.haohan.displayui.api.gradient.UiGradient;
+import vn.haohan.displayui.api.gradient.UiGradientPosition;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.ItemNode;
 import vn.haohan.displayui.api.node.LineNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.text.UiVerticalAlignment;
@@ -135,6 +137,7 @@ public final class UiDocumentLoader {
         String type = getString(o, "type", "<missing>");
         return switch (type) {
             case "background"  -> parseBackground(o);
+            case "gradient_background", "gradientBackground" -> parseGradientBackground(o);
             case "text"        -> parseText(o);
             case "item"        -> parseItem(o);
             case "block"       -> parseBlock(o);
@@ -153,6 +156,69 @@ public final class UiDocumentLoader {
         Color color = parseColor(getString(o, "color", "#1a2035"), alpha);
         boolean ds  = getBool(o, "doubleSided", false);
         return new UiBackgroundNode(x, y, depth, w, h, color, ds);
+    }
+
+    private static UiGradientBackgroundNode parseGradientBackground(JsonObject o) {
+        float x     = getFloat(o, "x", 0);
+        float y     = getFloat(o, "y", 0);
+        float depth = getFloat(o, "depth", 0.001f);
+        float w     = getFloat(o, "width", 100);
+        float h     = getFloat(o, "height", 60);
+        boolean ds  = getBool(o, "doubleSided", false);
+
+        int startAlpha = getInt(o, "startAlpha", 255);
+        int endAlpha   = getInt(o, "endAlpha", 255);
+        Color startColor = parseColor(getString(o, "startColor", "#ff0000"), startAlpha);
+        Color endColor   = parseColor(getString(o, "endColor", "#0000ff"), endAlpha);
+
+        UiGradient gradient;
+        if (o.has("startPos") && o.has("endPos")) {
+            UiGradientPosition startPos = parseGradientPos(getString(o, "startPos", "CENTER_LEFT"));
+            UiGradientPosition endPos   = parseGradientPos(getString(o, "endPos", "CENTER_RIGHT"));
+            gradient = UiGradient.of(startPos, startColor, endPos, endColor);
+        } else if (o.has("startU") || o.has("startV") || o.has("endU") || o.has("endV")) {
+            float su = getFloat(o, "startU", 0.0f);
+            float sv = getFloat(o, "startV", 0.5f);
+            float eu = getFloat(o, "endU", 1.0f);
+            float ev = getFloat(o, "endV", 0.5f);
+            gradient = UiGradient.of(su, sv, startColor, eu, ev, endColor);
+        } else {
+            String preset = getString(o, "preset", "horizontal").toLowerCase();
+            gradient = switch (preset) {
+                case "vertical" -> UiGradient.vertical(startColor, endColor);
+                case "diagonal" -> UiGradient.diagonal(startColor, endColor);
+                case "diagonal_up", "diagonal-up" -> UiGradient.diagonalBottomLeftToTopRight(startColor, endColor);
+                case "center_slant", "center-slant" -> UiGradient.centerLeftToTopRight(startColor, endColor);
+                case "radial_corner", "radial-corner" -> UiGradient.centerToBottomRight(startColor, endColor);
+                default -> UiGradient.horizontal(startColor, endColor);
+            };
+        }
+
+        int slicesX = getInt(o, "slicesX", UiGradientBackgroundNode.defaultSlicesX(gradient));
+        int slicesY = getInt(o, "slicesY", UiGradientBackgroundNode.defaultSlicesY(gradient));
+        if (o.has("slices")) {
+            int slices = getInt(o, "slices", 16);
+            if (gradient.isHorizontal()) {
+                slicesX = slices;
+                slicesY = 1;
+            } else if (gradient.isVertical()) {
+                slicesX = 1;
+                slicesY = slices;
+            } else {
+                slicesX = slices;
+                slicesY = slices;
+            }
+        }
+
+        return new UiGradientBackgroundNode(x, y, depth, w, h, gradient, slicesX, slicesY, ds);
+    }
+
+    private static UiGradientPosition parseGradientPos(String name) {
+        try {
+            return UiGradientPosition.valueOf(name.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return UiGradientPosition.CENTER_LEFT;
+        }
     }
 
     private static AlignedTextNode parseText(JsonObject o) {
