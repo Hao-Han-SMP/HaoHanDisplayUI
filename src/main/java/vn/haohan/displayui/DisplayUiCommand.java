@@ -68,7 +68,8 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 new MobShowcase3DDemoPage(),
                 new ChooseAppScrollListDemoPage(),
                 new ActionsLinkCommandDemoPage(),
-                new CameraAxisLockDemoPage()
+                new CameraAxisLockDemoPage(),
+                new GradientBackgroundDemoPage()
         );
         plugin.getServer().getScheduler().runTaskTimer(plugin, this::animateDemos, 1L, 1L);
     }

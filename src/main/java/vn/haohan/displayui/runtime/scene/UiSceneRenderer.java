@@ -23,6 +23,7 @@ import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.TextNode;
 import vn.haohan.displayui.api.node.TriangleNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
 
@@ -41,6 +42,7 @@ final class UiSceneRenderer {
     UiSceneRenderer(UiScene scene) {
         this.scene = scene;
         register(UiBackgroundNode.class, node -> spawnBackground((UiBackgroundNode) node));
+        register(UiGradientBackgroundNode.class, node -> spawnGradientBackground((UiGradientBackgroundNode) node));
         register(TextNode.class, node -> spawnText((TextNode) node));
         register(AlignedTextNode.class, node -> spawnAlignedText((AlignedTextNode) node));
         register(ItemNode.class, node -> spawnItem((ItemNode) node));
@@ -73,13 +75,15 @@ final class UiSceneRenderer {
         for (int i = 0; i < displays.size() && i < transforms.size(); i++) {
             Display display = displays.get(i);
             if (display == null || !display.isValid()) continue;
-            updateDisplay(display, node, transforms.get(i));
+            updateDisplay(display, node, transforms.get(i), i);
         }
     }
 
-    private void updateDisplay(Display display, UiNode node, Transformation transform) {
+    private void updateDisplay(Display display, UiNode node, Transformation transform, int index) {
         if (node instanceof UiBackgroundNode background && display instanceof TextDisplay text) {
             text.setBackgroundColor(background.background());
+        } else if (node instanceof UiGradientBackgroundNode gradient && display instanceof TextDisplay text) {
+            text.setBackgroundColor(gradient.colorForDisplayIndex(index));
         } else if (node instanceof TextNode textNode && display instanceof TextDisplay text) {
             text.text(textNode.text());
             text.setShadowed(textNode.shadow());
@@ -157,6 +161,24 @@ final class UiSceneRenderer {
             display.setAlignment(TextDisplay.TextAlignment.LEFT);
             display.setBackgroundColor(node.background());
         });
+    }
+
+    private List<Display> spawnGradientBackground(UiGradientBackgroundNode node) {
+        List<Transformation> transforms = scene.computeGradientBackgroundTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
+        List<Display> displays = new ArrayList<>(transforms.size());
+        for (int i = 0; i < transforms.size(); i++) {
+            Transformation transform = transforms.get(i);
+            Color color = node.colorForDisplayIndex(i);
+            displays.add(scene.world().spawn(scene.renderOrigin(), TextDisplay.class, display -> {
+                scene.configure(display, node);
+                display.text(Component.text(" "));
+                display.setTextOpacity((byte) 0);
+                display.setAlignment(TextDisplay.TextAlignment.LEFT);
+                display.setBackgroundColor(color);
+                display.setTransformation(transform);
+            }));
+        }
+        return displays;
     }
 
     private List<Display> spawnText(TextNode node) {

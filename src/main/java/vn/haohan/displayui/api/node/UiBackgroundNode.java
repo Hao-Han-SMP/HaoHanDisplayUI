@@ -45,4 +45,26 @@ public record UiBackgroundNode(float x, float y, float depth,
     public UiBackgroundNode background(Color newBackground) {
         return new UiBackgroundNode(x, y, depth, width, height, newBackground, doubleSided);
     }
+
+    public static UiGradientBackgroundNode gradient(float x, float y, float depth, float width, float height,
+                                                    vn.haohan.displayui.api.gradient.UiGradientPosition startPos, Color startColor,
+                                                    vn.haohan.displayui.api.gradient.UiGradientPosition endPos, Color endColor) {
+        return new UiGradientBackgroundNode(x, y, depth, width, height, startPos, startColor, endPos, endColor);
+    }
+
+    public static UiGradientBackgroundNode gradient(float x, float y, float depth, float width, float height,
+                                                    vn.haohan.displayui.api.gradient.UiGradient gradient) {
+        return new UiGradientBackgroundNode(x, y, depth, width, height, gradient);
+    }
+
+    public static UiGradientBackgroundNode gradient(UiRect bounds, float depth,
+                                                    vn.haohan.displayui.api.gradient.UiGradientEndpoint start,
+                                                    vn.haohan.displayui.api.gradient.UiGradientEndpoint end) {
+        return new UiGradientBackgroundNode(bounds, depth, start, end);
+    }
+
+    public static UiGradientBackgroundNode gradient(UiRect bounds, float depth,
+                                                    vn.haohan.displayui.api.gradient.UiGradient gradient) {
+        return new UiGradientBackgroundNode(bounds, depth, gradient);
+    }
 }

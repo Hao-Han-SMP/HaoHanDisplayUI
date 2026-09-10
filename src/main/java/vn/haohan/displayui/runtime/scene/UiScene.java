@@ -59,6 +59,7 @@ import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.TextNode;
 import vn.haohan.displayui.api.node.TriangleNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
 import vn.haohan.displayui.api.shape.DisplayShapeMath;
@@ -907,6 +908,81 @@ public final class UiScene implements UiHandle {
         return list;
     }
 
+    List<Transformation> computeGradientBackgroundTransforms(UiGradientBackgroundNode node, float scale,
+                                                             float offsetX, float offsetY, float offsetZ) {
+        float pixels = options.pixelsPerBlock();
+        float frontDepth = node.depth() + BACKGROUND_DEPTH_OFFSET + offsetZ;
+        int cols = node.slicesX();
+        int rows = node.slicesY();
+        int totalCells = cols * rows;
+        boolean doubleSided = isDoubleSided(node);
+        List<Transformation> list = new ArrayList<>(doubleSided ? totalCells * 2 : totalCells);
+
+        float cellWidth = node.width() / cols;
+        float cellHeight = node.height() / rows;
+
+        Vector3f frontCenter = new Vector3f(
+                (node.x() + node.width() * 0.5f + offsetX) / pixels,
+                -(node.y() + node.height() * 0.5f + offsetY) / pixels,
+                frontDepth
+        );
+
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                float x0 = node.x() + c * cellWidth + offsetX;
+                float x1 = x0 + cellWidth;
+                float y0 = node.y() + r * cellHeight + offsetY;
+                float y1 = y0 + cellHeight;
+
+                Vector3f p1 = new Vector3f(x0 / pixels, -y1 / pixels, frontDepth);
+                Vector3f p2 = new Vector3f(x1 / pixels, -y1 / pixels, frontDepth);
+                Vector3f p3 = new Vector3f(x0 / pixels, -y0 / pixels, frontDepth);
+
+                if (scale != 1.0f) {
+                    p1.set(new Vector3f(frontCenter).add(new Vector3f(p1).sub(frontCenter).mul(scale)));
+                    p2.set(new Vector3f(frontCenter).add(new Vector3f(p2).sub(frontCenter).mul(scale)));
+                    p3.set(new Vector3f(frontCenter).add(new Vector3f(p3).sub(frontCenter).mul(scale)));
+                }
+
+                list.add(toTransformation(DisplayShapeMath.computeParallelogramTRS(p1, p2, p3)));
+            }
+        }
+
+        if (doubleSided) {
+            float backDepth = -(node.depth() + BACKGROUND_DEPTH_OFFSET) + offsetZ;
+            float leftX = node.x() + node.width() + offsetX;
+            float rightX = node.x() + offsetX;
+            Vector3f backCenter = new Vector3f(
+                    (leftX + rightX) * 0.5f / pixels,
+                    -(node.y() + node.height() * 0.5f + offsetY) / pixels,
+                    backDepth
+            );
+
+            for (int r = 0; r < rows; r++) {
+                for (int c = 0; c < cols; c++) {
+                    float cellLeftX = node.x() + (c + 1) * cellWidth + offsetX;
+                    float cellRightX = node.x() + c * cellWidth + offsetX;
+                    float y0 = node.y() + r * cellHeight + offsetY;
+                    float y1 = y0 + cellHeight;
+
+                    Vector3f p1b = new Vector3f(cellLeftX / pixels, -y1 / pixels, backDepth);
+                    Vector3f p2b = new Vector3f(cellRightX / pixels, -y1 / pixels, backDepth);
+                    Vector3f p3b = new Vector3f(cellLeftX / pixels, -y0 / pixels, backDepth);
+
+                    if (scale != 1.0f) {
+                        p1b.set(new Vector3f(backCenter).add(new Vector3f(p1b).sub(backCenter).mul(scale)));
+                        p2b.set(new Vector3f(backCenter).add(new Vector3f(p2b).sub(backCenter).mul(scale)));
+                        p3b.set(new Vector3f(backCenter).add(new Vector3f(p3b).sub(backCenter).mul(scale)));
+                    }
+
+                    list.add(toTransformation(DisplayShapeMath.computeParallelogramTRS(p1b, p2b, p3b)));
+                }
+            }
+        }
+
+        return list;
+    }
+
     List<Transformation> computeTextTransforms(TextNode node, float scale,
                                                        float offsetX, float offsetY, float offsetZ) {
         float displayScale = node.scale() * scale;
@@ -1190,6 +1266,9 @@ public final class UiScene implements UiHandle {
                 if (node instanceof UiBackgroundNode background) {
                     textDisplay.setTextOpacity((byte) 0);
                     textDisplay.setBackgroundColor(ColorUtils.withOpacity(background.background(), opacity));
+                } else if (node instanceof UiGradientBackgroundNode gradient) {
+                    textDisplay.setTextOpacity((byte) 0);
+                    textDisplay.setBackgroundColor(ColorUtils.withOpacity(gradient.colorForDisplayIndex(j), opacity));
                 } else {
                     textDisplay.setTextOpacity((byte) Math.round(opacity * 255.0f));
                 }
@@ -1228,6 +1307,9 @@ public final class UiScene implements UiHandle {
                     if (node instanceof UiBackgroundNode background) {
                         textDisplay.setTextOpacity((byte) 0);
                         textDisplay.setBackgroundColor(ColorUtils.withOpacity(background.background(), opacity));
+                    } else if (node instanceof UiGradientBackgroundNode gradient) {
+                        textDisplay.setTextOpacity((byte) 0);
+                        textDisplay.setBackgroundColor(ColorUtils.withOpacity(gradient.colorForDisplayIndex(j), opacity));
                     } else {
                         textDisplay.setTextOpacity(opacityByte);
                     }
@@ -1253,6 +1335,7 @@ public final class UiScene implements UiHandle {
             float offsetX = 0.0f;
             float offsetY = 0.0f;
             float offsetZ = 0.0f;
+            float opacity = 1.0f;
             byte opacityByte = (byte) 255;
 
             if (a.durationTicks() > 0) {
@@ -1271,7 +1354,7 @@ public final class UiScene implements UiHandle {
                 offsetX = a.offsetX() * invProgress;
                 offsetY = a.offsetY() * invProgress;
                 offsetZ = a.offsetZ() * invProgress;
-                float opacity = MathUtils.lerp(a.fromOpacity(), a.toOpacity(), progress);
+                opacity = MathUtils.lerp(a.fromOpacity(), a.toOpacity(), progress);
                 opacityByte = (byte) Math.round(opacity * 255.0f);
             }
 
@@ -1283,7 +1366,15 @@ public final class UiScene implements UiHandle {
                 display.setInterpolationDuration(interpolationTicks);
                 display.setTransformation(transforms.get(j));
                 if (display instanceof TextDisplay textDisplay) {
-                    textDisplay.setTextOpacity(opacityByte);
+                    if (node instanceof UiBackgroundNode background) {
+                        textDisplay.setTextOpacity((byte) 0);
+                        textDisplay.setBackgroundColor(ColorUtils.withOpacity(background.background(), opacity));
+                    } else if (node instanceof UiGradientBackgroundNode gradient) {
+                        textDisplay.setTextOpacity((byte) 0);
+                        textDisplay.setBackgroundColor(ColorUtils.withOpacity(gradient.colorForDisplayIndex(j), opacity));
+                    } else {
+                        textDisplay.setTextOpacity(opacityByte);
+                    }
                 }
             }
         }
@@ -1377,14 +1468,21 @@ public final class UiScene implements UiHandle {
             UiNode node = document.nodes().get(i);
             if (displays == null || displays.isEmpty()) continue;
             boolean twoSided = isDoubleSided(node);
+            if (!twoSided) {
+                if (front) {
+                    for (Display display : displays) player.showEntity(plugin, display);
+                } else {
+                    for (Display display : displays) player.hideEntity(plugin, display);
+                }
+                continue;
+            }
             if (displays.size() == 1) {
-                if (front || twoSided) player.showEntity(plugin, displays.getFirst());
-                else player.hideEntity(plugin, displays.getFirst());
+                player.showEntity(plugin, displays.getFirst());
                 continue;
             }
             for (int j = 0; j < displays.size(); j++) {
                 boolean back = UiSceneVisibilityPolicy.isBackDisplay(node, displays.size(), j);
-                boolean show = twoSided && (front != back);
+                boolean show = (front != back);
                 if (show) player.showEntity(plugin, displays.get(j));
                 else player.hideEntity(plugin, displays.get(j));
             }
@@ -1502,6 +1600,9 @@ public final class UiScene implements UiHandle {
             if (prev.doubleSided() != curr.doubleSided()) return false;
             if (prev instanceof PolylineNode p1 && curr instanceof PolylineNode p2) {
                 if (p1.points().size() != p2.points().size()) return false;
+            }
+            if (prev instanceof UiGradientBackgroundNode g1 && curr instanceof UiGradientBackgroundNode g2) {
+                if (g1.slicesX() != g2.slicesX() || g1.slicesY() != g2.slicesY()) return false;
             }
         }
         for (int i = 0; i < next.nodes().size(); i++) {

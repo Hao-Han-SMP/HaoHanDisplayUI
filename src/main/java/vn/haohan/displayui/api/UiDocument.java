@@ -27,6 +27,11 @@ import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.api.node.MobEntityNode;
+import org.bukkit.Color;
+import vn.haohan.displayui.api.gradient.UiGradient;
+import vn.haohan.displayui.api.gradient.UiGradientPosition;
+import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
 
@@ -103,6 +108,28 @@ public record UiDocument(List<UiNode> nodes, List<UiButton> buttons,
 
         public Builder mob(MobEntityNode mob) {
             return add(mob);
+        }
+
+        public Builder background(UiBackgroundNode background) {
+            return add(background);
+        }
+
+        public Builder background(float x, float y, float depth, float width, float height, Color background) {
+            return add(new UiBackgroundNode(x, y, depth, width, height, background));
+        }
+
+        public Builder gradientBackground(UiGradientBackgroundNode node) {
+            return add(node);
+        }
+
+        public Builder gradientBackground(float x, float y, float depth, float width, float height,
+                                          UiGradientPosition startPos, Color startColor,
+                                          UiGradientPosition endPos, Color endColor) {
+            return add(new UiGradientBackgroundNode(x, y, depth, width, height, startPos, startColor, endPos, endColor));
+        }
+
+        public Builder gradientBackground(float x, float y, float depth, float width, float height, UiGradient gradient) {
+            return add(new UiGradientBackgroundNode(x, y, depth, width, height, gradient));
         }
 
         public Builder interactiveText(String id, AlignedTextNode text,

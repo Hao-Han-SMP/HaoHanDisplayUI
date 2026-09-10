@@ -6,6 +6,7 @@ import vn.haohan.displayui.api.animation.UiAnimation;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiNode;
 import vn.haohan.displayui.utils.MathUtils;
 
@@ -44,7 +45,7 @@ public final class UiScrollAnimations {
     }
 
     private static boolean isInViewport(UiNode node, UiScrollList list) {
-        if (node instanceof UiBackgroundNode) return false;
+        if (node instanceof UiBackgroundNode || node instanceof UiGradientBackgroundNode) return false;
         if (node instanceof BlockNode block && (block.width() > list.width() - 5.0f
                 || block.x() >= list.x() + list.width() - 15.0f)) return false;
         if (node instanceof AlignedTextNode text && (text.width() > list.width() - 10.0f

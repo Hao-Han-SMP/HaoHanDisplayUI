@@ -3,6 +3,7 @@ package vn.haohan.displayui.runtime.scene.visibility;
 
 import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.TriangleNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiNode;
 
 import java.util.List;
@@ -24,6 +25,7 @@ public final class UiSceneVisibilityPolicy {
     public static boolean isBackDisplay(UiNode node, int displayCount, int index) {
         if (node instanceof PolylineNode) return (index & 1) == 1;
         if (node instanceof TriangleNode) return index >= displayCount / 2;
+        if (node instanceof UiGradientBackgroundNode) return index >= displayCount / 2;
         return index > 0;
     }
 }

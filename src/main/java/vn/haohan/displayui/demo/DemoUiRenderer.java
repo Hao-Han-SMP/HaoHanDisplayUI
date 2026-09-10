@@ -10,6 +10,8 @@ import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
+import vn.haohan.displayui.api.gradient.UiGradient;
 import vn.haohan.displayui.utils.MathUtils;
 import vn.haohan.displayui.api.text.UiText;
 import vn.haohan.displayui.api.text.UiTextAlignment;
@@ -26,10 +28,15 @@ public final class DemoUiRenderer {
     private DemoUiRenderer() {}
 
     public static UiDocument render(List<DemoPage> pages, DemoContext context) {
+        UiGradient rootGrad = context.rootGradient();
+        UiGradientBackgroundNode rootBackground = new UiGradientBackgroundNode(
+                PANEL_X, PANEL_Y, 0.0f,
+                PANEL_WIDTH, PANEL_HEIGHT,
+                rootGrad
+        ).withGrid(12, 8).withDoubleSided(context.doubleSided());
+
         UiDocument.Builder builder = UiDocument.builder()
-                .add(new UiBackgroundNode(PANEL_X, PANEL_Y, 0.0f,
-                        PANEL_WIDTH, PANEL_HEIGHT,
-                        org.bukkit.Color.fromARGB(0xB0000000)));
+                .gradientBackground(rootBackground);
 
         int pageIndex = MathUtils.clamp(context.page(), 0, pages.size() - 1);
         DemoPage page = pages.get(pageIndex);

@@ -22,6 +22,7 @@ import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.TextNode;
 import vn.haohan.displayui.api.node.TriangleNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
+import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
 
@@ -57,6 +58,8 @@ final class UiNodeTransformations {
             return scene.computeModelTransforms(model, scale, offsetX, offsetY, offsetZ);
         } else if (node instanceof UiBackgroundNode background) {
             return scene.computeBackgroundTransforms(background, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof UiGradientBackgroundNode gradient) {
+            return scene.computeGradientBackgroundTransforms(gradient, scale, offsetX, offsetY, offsetZ);
         } else if (node instanceof LineNode line) {
             return scene.computeLineTransforms(line, scale, offsetX, offsetY, offsetZ);
         } else if (node instanceof ParallelogramNode parallelogram) {
