@@ -9,7 +9,6 @@ import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
-import vn.haohan.displayui.api.node.UiBackgroundNode;
 import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.gradient.UiGradient;
 import vn.haohan.displayui.utils.MathUtils;

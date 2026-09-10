@@ -28,8 +28,6 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.logging.Level;
-
 public final class HaoHanDisplayUIPlugin extends JavaPlugin {
     private DisplayUiServiceImpl service;
 

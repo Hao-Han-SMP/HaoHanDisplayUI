@@ -134,6 +134,7 @@ public record EntityModelNode(
         return forMob(mobId, x, y, 32.0f, 32.0f, scale);
     }
 
+    @SuppressWarnings("deprecation")
     public static EntityModelNode forMob(String mobId, float x, float y, float width, float height, float scale) {
         int index = MOB_NAMES.indexOf(mobId.toLowerCase());
         int cmdId = index >= 0 ? 10001 + index : 10001;

@@ -28,7 +28,6 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.entity.ItemDisplay;
-import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.ItemStack;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.interaction.UiButton;

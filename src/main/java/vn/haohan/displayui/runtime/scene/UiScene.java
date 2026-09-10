@@ -27,7 +27,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Transformation;
-import org.bukkit.util.Vector;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import vn.haohan.displayui.HaoHanDisplayUIPlugin;
@@ -98,9 +97,6 @@ public final class UiScene implements UiHandle {
      * samples to blend between frames while keeping the animation responsive.
      */
     private static final int ANIMATION_INTERPOLATION_TICKS = 2;
-    /** Normalizes TextDisplay's native placeholder bounds to UI pixel bounds. */
-    private static final float BACKGROUND_NATIVE_WIDTH_SCALE = 4.25f;
-    private static final float BACKGROUND_NATIVE_HEIGHT_SCALE = 4.10f;
     /** Keeps the translucent background behind text, icons, and row blocks. */
     private static final float BACKGROUND_DEPTH_OFFSET = -0.02f;
     private final HaoHanDisplayUIPlugin plugin;
@@ -766,26 +762,6 @@ public final class UiScene implements UiHandle {
         return new Transformation(
                 translation, totalRotation,
                 new Vector3f(node.scaleX() * scale, node.scaleY() * scale, node.scaleZ() * scale),
-                new Quaternionf());
-    }
-
-    private Transformation blockTransform(BlockNode node, float scale,
-                                          float offsetX, float offsetY, float offsetZ) {
-        float pixels = options.pixelsPerBlock();
-        Quaternionf rotation = UiCameraBasis.rotation(cameraTransform);
-        // Scale symmetrically from the center of the block
-        float centerShiftX = (node.width() * 0.5f) * (1.0f - scale);
-        float centerShiftY = (node.height() * 0.5f) * (1.0f - scale);
-        Vector3f translation = new Vector3f(
-                (node.x() + offsetX + centerShiftX) / pixels,
-                -(node.y() + node.height() + offsetY - centerShiftY) / pixels,
-                    node.depth() + offsetZ - node.thickness() / pixels);
-        rotation.transform(translation);
-        return new Transformation(
-                translation, rotation,
-                new Vector3f(node.width() / pixels * scale,
-                             node.height() / pixels * scale,
-                             node.thickness() / pixels * scale),
                 new Quaternionf());
     }
 
@@ -1507,22 +1483,6 @@ public final class UiScene implements UiHandle {
                 display.setInterpolationDuration(ANIMATION_INTERPOLATION_TICKS);
             }
         }
-    }
-
-    private Transformation backgroundTransform(UiBackgroundNode node, float scale) {
-        return backgroundTransform(node, scale, 0.0f, 0.0f, 0.0f);
-    }
-
-    private Transformation backgroundTransform(UiBackgroundNode node, float scale,
-                                               float offsetX, float offsetY,
-                                               float offsetZ) {
-        float pixels = options.pixelsPerBlock();
-        return transform(node,
-                         node.width() / pixels * BACKGROUND_NATIVE_WIDTH_SCALE * scale,
-                         node.height() / pixels * BACKGROUND_NATIVE_HEIGHT_SCALE * scale,
-                         0.0f, offsetX + node.width() * 0.5f,
-                         offsetY + node.height() * 1.0f,
-                         offsetZ + BACKGROUND_DEPTH_OFFSET);
     }
 
     /** A mirrored side needs the same back-face display as double-sided mode. */

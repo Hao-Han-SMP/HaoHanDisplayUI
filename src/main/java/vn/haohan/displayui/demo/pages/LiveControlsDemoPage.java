@@ -6,7 +6,6 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.UiDocument;
-import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.interaction.UiSlider;

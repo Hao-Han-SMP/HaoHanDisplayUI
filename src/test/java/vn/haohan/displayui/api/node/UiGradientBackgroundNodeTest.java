@@ -7,7 +7,6 @@ import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.gradient.UiGradient;
 import vn.haohan.displayui.api.gradient.UiGradientPosition;
 import vn.haohan.displayui.api.interaction.UiButton;
-import vn.haohan.displayui.api.layout.UiRect;
 
 import static org.junit.jupiter.api.Assertions.*;
 
