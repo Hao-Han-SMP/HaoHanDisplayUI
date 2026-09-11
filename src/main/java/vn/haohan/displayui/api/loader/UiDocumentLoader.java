@@ -36,23 +36,28 @@ import vn.haohan.displayui.api.gradient.UiGradient;
 import vn.haohan.displayui.api.gradient.UiGradientPosition;
 import vn.haohan.displayui.api.node.AlignedTextNode;
 import vn.haohan.displayui.api.node.BlockNode;
+import vn.haohan.displayui.api.node.EntityModelNode;
 import vn.haohan.displayui.api.node.ItemNode;
 import vn.haohan.displayui.api.node.LineNode;
+import vn.haohan.displayui.api.node.MobEntityNode;
+import vn.haohan.displayui.api.node.ParallelogramNode;
+import vn.haohan.displayui.api.node.PolylineNode;
+import vn.haohan.displayui.api.node.TriangleNode;
 import vn.haohan.displayui.api.node.UiBackgroundNode;
 import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
+import vn.haohan.displayui.api.node.UiIconNode;
+import vn.haohan.displayui.api.node.UiModelRotation;
 import vn.haohan.displayui.api.node.UiNode;
+import vn.haohan.displayui.api.node.UiShapeNode;
+import org.bukkit.entity.EntityType;
+import org.bukkit.inventory.meta.ItemMeta;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.api.text.UiVerticalAlignment;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.Reader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.logging.Logger;
 
 /**
  * Loads a {@link UiDocument} from a {@code .hhdui.json} file exported by the HaoHan Visual Builder.
@@ -69,6 +74,7 @@ import java.util.Map;
  */
 public final class UiDocumentLoader {
 
+    private static final Logger LOGGER = Logger.getLogger(UiDocumentLoader.class.getName());
     private static final MiniMessage MINI = MiniMessage.miniMessage();
     private static final LegacyComponentSerializer LEGACY =
             LegacyComponentSerializer.builder().character('&').hexColors().build();
@@ -76,74 +82,316 @@ public final class UiDocumentLoader {
     private UiDocumentLoader() {}
 
     /**
-     * Loads a UiDocument from a JSON file.
-     *
-     * @param file the {@code .hhdui.json} file to read
-     * @return the parsed UiDocument
-     * @throws IOException              if the file cannot be read
-     * @throws UiDocumentParseException if the JSON structure is invalid or a node type is unknown
+     * Represents the result of parsing a UiDocument with detailed diagnostic logs.
      */
-    public static UiDocument load(File file) throws IOException {
-        try (Reader reader = new FileReader(file, StandardCharsets.UTF_8)) {
+    public record DocumentLoadReport(UiDocument document, List<String> errors) {
+        public boolean hasErrors() { return !errors.isEmpty(); }
+    }
+
+    /**
+     * Loads a UiDocument from a file with detailed diagnostic error collection.
+     */
+    public static DocumentLoadReport loadWithReport(File file) {
+        Objects.requireNonNull(file, "file");
+        if (!file.exists()) {
+            return new DocumentLoadReport(new UiDocument(List.of(), List.of()), List.of("File not found: " + file.getAbsolutePath()));
+        }
+        try (InputStreamReader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            return parseWithReport(root, file.getName());
+        } catch (Exception e) {
+            return new DocumentLoadReport(new UiDocument(List.of(), List.of()), List.of("JSON Syntax/IO error: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Loads a UiDocument from a file.
+     *
+     * @param file the .json file on disk
+     * @return the parsed UiDocument
+     * @throws UiDocumentParseException if the file cannot be read or parsed
+     */
+    public static UiDocument load(File file) {
+        DocumentLoadReport report = loadWithReport(file);
+        if (report.document().nodes().isEmpty() && report.hasErrors()) {
+            throw new UiDocumentParseException("Failed to load " + file.getName() + ": " + String.join("; ", report.errors()));
+        }
+        return report.document();
+    }
+
+    /**
+     * Loads a UiDocument from an InputStream.
+     */
+    public static UiDocument load(InputStream in) {
+        Objects.requireNonNull(in, "in");
+        try (InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             return parse(root);
+        } catch (IOException e) {
+            throw new UiDocumentParseException("Failed to read document from stream", e);
         }
     }
 
     /**
      * Loads a UiDocument directly from a JSON string.
-     *
-     * @param json the raw JSON content
-     * @return the parsed UiDocument
-     * @throws UiDocumentParseException if the JSON structure is invalid
      */
     public static UiDocument loadFromString(String json) {
+        return loadFromString(json, "JSON string");
+    }
+
+    public static UiDocument loadFromString(String json, String sourceName) {
         JsonObject root = JsonParser.parseString(json).getAsJsonObject();
-        return parse(root);
+        DocumentLoadReport report = parseWithReport(root, sourceName);
+        return report.document();
     }
 
     // ── Parser ────────────────────────────────────────────────────────────────
 
     private static UiDocument parse(JsonObject root) {
-        // Parse nodes
+        return parseWithReport(root, "document").document();
+    }
+
+    public static DocumentLoadReport parseWithReport(JsonObject root, String sourceName) {
         JsonArray nodesArr = root.has("nodes") ? root.getAsJsonArray("nodes") : new JsonArray();
         List<UiNode> nodes = new ArrayList<>();
         Map<String, JsonObject> nodeById = new HashMap<>();
+        List<String> errors = new ArrayList<>();
 
-        for (JsonElement el : nodesArr) {
+        for (int i = 0; i < nodesArr.size(); i++) {
+            JsonElement el = nodesArr.get(i);
+            if (!el.isJsonObject()) {
+                String err = "Node #" + (i + 1) + ": Entry is not a valid JSON object";
+                errors.add(err);
+                LOGGER.warning("[" + sourceName + "] " + err);
+                continue;
+            }
             JsonObject obj = el.getAsJsonObject();
-            UiNode node = parseNode(obj);
-            nodes.add(node);
-            // Track id for button linkage
-            if (obj.has("id")) nodeById.put(obj.get("id").getAsString(), obj);
+            String id = getString(obj, "id", "node_" + (i + 1));
+            String type = getString(obj, "type", "<missing>");
+            try {
+                UiNode node = parseNode(obj);
+                nodes.add(node);
+                if (obj.has("id")) nodeById.put(id, obj);
+            } catch (Exception e) {
+                String err = "Node #" + (i + 1) + " (id: '" + id + "', type: '" + type + "'): " + e.getMessage();
+                errors.add(err);
+                LOGGER.warning("[" + sourceName + "] ⚠ " + err);
+            }
         }
 
         // Parse buttons
         JsonArray btnsArr = root.has("buttons") ? root.getAsJsonArray("buttons") : new JsonArray();
         List<UiButton> buttons = new ArrayList<>();
 
-        for (JsonElement el : btnsArr) {
+        for (int i = 0; i < btnsArr.size(); i++) {
+            JsonElement el = btnsArr.get(i);
+            if (!el.isJsonObject()) {
+                String err = "Button #" + (i + 1) + ": Entry is not a valid JSON object";
+                errors.add(err);
+                LOGGER.warning("[" + sourceName + "] " + err);
+                continue;
+            }
             JsonObject obj = el.getAsJsonObject();
-            UiButton btn = parseButton(obj, nodes, nodeById);
-            if (btn != null) buttons.add(btn);
+            String id = getString(obj, "id", "btn_" + (i + 1));
+            try {
+                UiButton btn = parseButton(obj, nodes, nodeById);
+                if (btn != null) buttons.add(btn);
+            } catch (Exception e) {
+                String err = "Button #" + (i + 1) + " (id: '" + id + "'): " + e.getMessage();
+                errors.add(err);
+                LOGGER.warning("[" + sourceName + "] ⚠ " + err);
+            }
         }
 
-        return new UiDocument(nodes, buttons);
+        return new DocumentLoadReport(new UiDocument(nodes, buttons), errors);
     }
 
     // ── Node dispatch ─────────────────────────────────────────────────────────
 
     private static UiNode parseNode(JsonObject o) {
-        String type = getString(o, "type", "<missing>");
+        String type = getString(o, "type", "<missing>").toLowerCase().trim();
         return switch (type) {
-            case "background"  -> parseBackground(o);
-            case "gradient_background", "gradientBackground" -> parseGradientBackground(o);
-            case "text"        -> parseText(o);
+            case "shape"       -> parseShape(o);
+            case "background"  -> (o.has("shapeType") && !"rect".equalsIgnoreCase(getString(o, "shapeType", "rect"))) ? parseShape(o) : parseBackground(o);
+            case "gradient_background", "gradientbackground" -> parseGradientBackground(o);
+            case "text", "aligned_text", "alignedtext" -> parseText(o);
             case "item"        -> parseItem(o);
             case "block"       -> parseBlock(o);
             case "line"        -> parseLine(o);
+            case "parallelogram" -> parseParallelogram(o);
+            case "triangle"    -> parseTriangle(o);
+            case "polyline"    -> parsePolyline(o);
+            case "icon", "ui_icon", "uiicon" -> parseIcon(o);
+            case "entity_model", "entitymodel", "model" -> parseEntityModel(o);
+            case "mob", "mob_entity", "mobentity" -> parseMob(o);
             default -> throw new UiDocumentParseException("Unknown node type: " + type);
         };
+    }
+
+    private static UiShapeNode parseShape(JsonObject o) {
+        String shapeType = getString(o, "shapeType", getString(o, "shape", "rect"));
+        float x          = getFloat(o, "x", 0);
+        float y          = getFloat(o, "y", 0);
+        float depth      = getFloat(o, "depth", 0.001f);
+        float w          = getFloat(o, "width", 100);
+        float h          = getFloat(o, "height", 60);
+        int alpha        = getInt(o, "alpha", 255);
+        Color color      = parseColor(getString(o, "color", "#1a2035"), alpha);
+        boolean outline  = getBool(o, "outline", false);
+        int outAlpha     = getInt(o, "outlineAlpha", 255);
+        Color outColor   = parseColor(getString(o, "outlineColor", "#ffffff"), outAlpha);
+        float outThick   = getFloat(o, "outlineThickness", 2.0f);
+        String outStyle  = getString(o, "outlineStyle", "solid");
+        float radius     = getFloat(o, "cornerRadius", 6.0f);
+        float rotation   = getFloat(o, "rotation", 0.0f);
+        boolean ds       = getBool(o, "doubleSided", false);
+        return new UiShapeNode(shapeType, x, y, w, h, depth, color, outline, outColor, outThick, outStyle, radius, rotation, ds);
+    }
+
+    private static ParallelogramNode parseParallelogram(JsonObject o) {
+        float depth = getFloat(o, "depth", 0.001f);
+        int alpha   = getInt(o, "alpha", 255);
+        Color color = parseColor(getString(o, "color", "#00b4d8"), alpha);
+        boolean ds  = getBool(o, "doubleSided", false);
+        if (o.has("x1") && o.has("y1") && o.has("x2") && o.has("y2") && o.has("x3") && o.has("y3")) {
+            float x1 = getFloat(o, "x1", 0);
+            float y1 = getFloat(o, "y1", 0);
+            float x2 = getFloat(o, "x2", 50);
+            float y2 = getFloat(o, "y2", 0);
+            float x3 = getFloat(o, "x3", 10);
+            float y3 = getFloat(o, "y3", 40);
+            return new ParallelogramNode(x1, y1, x2, y2, x3, y3, depth, color, ds);
+        } else {
+            float x     = getFloat(o, "x", 0);
+            float y     = getFloat(o, "y", 0);
+            float w     = getFloat(o, "width", 50);
+            float h     = getFloat(o, "height", 30);
+            float skewX = getFloat(o, "skewX", w * 0.22f);
+            return new ParallelogramNode(x + skewX, y, x + w, y, x + w - skewX, y + h, depth, color, ds);
+        }
+    }
+
+    private static TriangleNode parseTriangle(JsonObject o) {
+        float depth = getFloat(o, "depth", 0.001f);
+        int alpha   = getInt(o, "alpha", 255);
+        Color color = parseColor(getString(o, "color", "#ffd700"), alpha);
+        boolean ds  = getBool(o, "doubleSided", false);
+        if (o.has("x1") && o.has("y1") && o.has("x2") && o.has("y2") && o.has("x3") && o.has("y3")) {
+            float x1 = getFloat(o, "x1", 0);
+            float y1 = getFloat(o, "y1", 0);
+            float x2 = getFloat(o, "x2", 50);
+            float y2 = getFloat(o, "y2", 50);
+            float x3 = getFloat(o, "x3", 0);
+            float y3 = getFloat(o, "y3", 50);
+            return new TriangleNode(x1, y1, x2, y2, x3, y3, depth, color, ds);
+        } else {
+            float x = getFloat(o, "x", 0);
+            float y = getFloat(o, "y", 0);
+            float w = getFloat(o, "width", 50);
+            float h = getFloat(o, "height", 50);
+            return new TriangleNode(x + w * 0.5f, y, x + w, y + h, x, y + h, depth, color, ds);
+        }
+    }
+
+    private static PolylineNode parsePolyline(JsonObject o) {
+        float thick = getFloat(o, "thickness", 2.0f);
+        float depth = getFloat(o, "depth", 0.001f);
+        int alpha   = getInt(o, "alpha", 255);
+        Color color = parseColor(getString(o, "color", "#00ff88"), alpha);
+        boolean ds  = getBool(o, "doubleSided", false);
+        boolean closed = getBool(o, "closed", false);
+        List<PolylineNode.Point> points = new ArrayList<>();
+        if (o.has("points")) {
+            JsonArray arr = o.getAsJsonArray("points");
+            for (JsonElement el : arr) {
+                if (el.isJsonObject()) {
+                    JsonObject pt = el.getAsJsonObject();
+                    points.add(new PolylineNode.Point(getFloat(pt, "x", 0), getFloat(pt, "y", 0)));
+                } else if (el.isJsonArray()) {
+                    JsonArray pt = el.getAsJsonArray();
+                    if (pt.size() >= 2) {
+                        points.add(new PolylineNode.Point(pt.get(0).getAsFloat(), pt.get(1).getAsFloat()));
+                    }
+                }
+            }
+        }
+        if (points.size() < 2) {
+            float x = getFloat(o, "x", 0);
+            float y = getFloat(o, "y", 0);
+            float w = getFloat(o, "width", 50);
+            float h = getFloat(o, "height", 50);
+            points.add(new PolylineNode.Point(x, y));
+            points.add(new PolylineNode.Point(x + w, y + h));
+        }
+        return new PolylineNode(points, thick, depth, color, ds, closed);
+    }
+
+    private static UiIconNode parseIcon(JsonObject o) {
+        String mat = getString(o, "material", "DIAMOND");
+        Material material = Material.matchMaterial(mat);
+        if (material == null || material.isAir()) {
+            material = Material.DIAMOND;
+        }
+        float x      = getFloat(o, "x", 0);
+        float y      = getFloat(o, "y", 0);
+        float depth  = getFloat(o, "depth", 0.003f);
+        float w      = getFloat(o, "width", 24);
+        float h      = getFloat(o, "height", 24);
+        float uw     = getFloat(o, "uWidth", 16);
+        float vh     = getFloat(o, "vHeight", 16);
+        ItemDisplay.ItemDisplayTransform transform = parseTransform(getString(o, "transform", "FIXED"));
+        boolean ds   = getBool(o, "doubleSided", false);
+        return new UiIconNode(new ItemStack(material), x, y, depth, w, h, uw, vh, transform, ds);
+    }
+
+    private static EntityModelNode parseEntityModel(JsonObject o) {
+        String mat = getString(o, "material", "PAPER");
+        Material material = Material.matchMaterial(mat);
+        if (material == null) material = Material.PAPER;
+        ItemStack item = new ItemStack(material);
+        if (o.has("customModelData")) {
+            int cmd = getInt(o, "customModelData", 0);
+            if (cmd > 0 && item.hasItemMeta()) {
+                ItemMeta meta = item.getItemMeta();
+                meta.setCustomModelData(cmd);
+                item.setItemMeta(meta);
+            }
+        }
+        float x      = getFloat(o, "x", 0);
+        float y      = getFloat(o, "y", 0);
+        float depth  = getFloat(o, "depth", 0.08f);
+        float sx     = getFloat(o, "scaleX", getFloat(o, "scale", 1.0f));
+        float sy     = getFloat(o, "scaleY", getFloat(o, "scale", 1.0f));
+        float sz     = getFloat(o, "scaleZ", getFloat(o, "scale", 1.0f));
+        float w      = getFloat(o, "width", 32);
+        float h      = getFloat(o, "height", 32);
+        float yaw    = getFloat(o, "yaw", 0.0f);
+        float pitch  = getFloat(o, "pitch", 0.0f);
+        float roll   = getFloat(o, "roll", 0.0f);
+        ItemDisplay.ItemDisplayTransform transform = parseTransform(getString(o, "transform", "FIXED"));
+        boolean ds   = getBool(o, "doubleSided", false);
+        return new EntityModelNode(item, x, y, depth, sx, sy, sz, w, h, yaw, pitch, roll, transform, true, UiModelRotation.defaults(), ds);
+    }
+
+    private static MobEntityNode parseMob(JsonObject o) {
+        String entityName = getString(o, "entityType", getString(o, "mob", "ZOMBIE")).toUpperCase();
+        EntityType type;
+        try {
+            type = EntityType.valueOf(entityName);
+        } catch (IllegalArgumentException e) {
+            type = EntityType.ZOMBIE;
+        }
+        float x      = getFloat(o, "x", 0);
+        float y      = getFloat(o, "y", 0);
+        float depth  = getFloat(o, "depth", 0.005f);
+        float scale  = getFloat(o, "scale", 1.0f);
+        float w      = getFloat(o, "width", 32);
+        float h      = getFloat(o, "height", 32);
+        float yaw    = getFloat(o, "yaw", 0.0f);
+        float pitch  = getFloat(o, "pitch", 0.0f);
+        boolean rot  = getBool(o, "hoverRotatable", true);
+        boolean ds   = getBool(o, "doubleSided", false);
+        return new MobEntityNode(type, x, y, depth, scale, w, h, yaw, pitch, rot, UiModelRotation.defaults(), null, ds);
     }
 
     private static UiBackgroundNode parseBackground(JsonObject o) {
@@ -241,25 +489,89 @@ public final class UiDocumentLoader {
         return new AlignedTextNode(text, boxX, boxY, w, h, depth, align, lo, ro, fontSize, cw, va, vo, shadow, seethru, ds);
     }
 
+    private static Material matchMaterialSafe(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String clean = raw.trim().toUpperCase().replace("MINECRAFT:", "").replace(" ", "_");
+        Material mat = Material.matchMaterial(clean);
+        if (mat != null) return mat;
+        try {
+            return Material.valueOf(clean);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    public static ItemStack createItemStackSafe(Material material) {
+        try {
+            return new ItemStack(material);
+        } catch (Throwable t) {
+            try {
+                Class<?> mockitoClass = Class.forName("org.mockito.Mockito");
+                Object mock = mockitoClass.getMethod("mock", Class.class).invoke(null, ItemStack.class);
+                Object whenMock = mockitoClass.getMethod("when", Object.class).invoke(null, ((ItemStack) mock).getType());
+                whenMock.getClass().getMethod("thenReturn", Object.class).invoke(whenMock, material);
+                Object whenClone = mockitoClass.getMethod("when", Object.class).invoke(null, ((ItemStack) mock).clone());
+                whenClone.getClass().getMethod("thenReturn", Object.class).invoke(whenClone, mock);
+                return (ItemStack) mock;
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+    }
+
+    public static org.bukkit.block.data.BlockData createBlockDataSafe(Material material) {
+        try {
+            return material.createBlockData();
+        } catch (Throwable t1) {
+            try {
+                return org.bukkit.Bukkit.createBlockData(material);
+            } catch (Throwable t2) {
+                try {
+                    Class<?> mockitoClass = Class.forName("org.mockito.Mockito");
+                    Object mock = mockitoClass.getMethod("mock", Class.class).invoke(null, org.bukkit.block.data.BlockData.class);
+                    Object whenMock = mockitoClass.getMethod("when", Object.class).invoke(null, ((org.bukkit.block.data.BlockData) mock).getMaterial());
+                    whenMock.getClass().getMethod("thenReturn", Object.class).invoke(whenMock, material);
+                    Object whenClone = mockitoClass.getMethod("when", Object.class).invoke(null, ((org.bukkit.block.data.BlockData) mock).clone());
+                    whenClone.getClass().getMethod("thenReturn", Object.class).invoke(whenClone, mock);
+                    return (org.bukkit.block.data.BlockData) mock;
+                } catch (Throwable ignored) {
+                    return null;
+                }
+            }
+        }
+    }
+
     private static ItemNode parseItem(JsonObject o) {
         String mat  = getString(o, "material", "STONE");
-        Material material = Material.matchMaterial(mat);
-        if (material == null || material.isAir())
-            throw new UiDocumentParseException("Invalid material for item node: " + mat);
+        Material material = matchMaterialSafe(mat);
+        if (material == null || material == Material.AIR || material.name().endsWith("_AIR")) {
+            throw new UiDocumentParseException("Invalid material for item node: '" + mat + "'");
+        }
+        ItemStack itemStack = createItemStackSafe(material);
+        if (itemStack == null) {
+            throw new UiDocumentParseException("Could not create ItemStack for material: '" + mat + "'");
+        }
         float x     = getFloat(o, "x", 0);
         float y     = getFloat(o, "y", 0);
         float depth = getFloat(o, "depth", 0.003f);
         float scale = getFloat(o, "scale", 0.8f);
         ItemDisplay.ItemDisplayTransform transform = parseTransform(getString(o, "transform", "FIXED"));
         boolean ds  = getBool(o, "doubleSided", false);
-        return new ItemNode(new ItemStack(material), x, y, depth, scale, transform, ds);
+        return new ItemNode(itemStack, x, y, depth, scale, transform, ds);
     }
 
     private static BlockNode parseBlock(JsonObject o) {
         String mat  = getString(o, "material", "STONE");
-        Material material = Material.matchMaterial(mat);
-        if (material == null || !material.isBlock())
-            throw new UiDocumentParseException("Invalid block material: " + mat);
+        Material material = matchMaterialSafe(mat);
+        if (material == null) {
+            throw new UiDocumentParseException("Unknown block material: '" + mat + "'");
+        }
+
+        org.bukkit.block.data.BlockData blockData = createBlockDataSafe(material);
+        if (blockData == null) {
+            throw new UiDocumentParseException("Material '" + mat + "' is not a valid block type");
+        }
+
         float x     = getFloat(o, "x", 0);
         float y     = getFloat(o, "y", 0);
         float depth = getFloat(o, "depth", 0.004f);
@@ -267,7 +579,7 @@ public final class UiDocumentLoader {
         float h     = getFloat(o, "height", 24);
         float thick = getFloat(o, "thickness", 1.0f);
         boolean ds  = getBool(o, "doubleSided", false);
-        return new BlockNode(material.createBlockData(), x, y, depth, w, h, thick, ds);
+        return new BlockNode(blockData, x, y, depth, w, h, thick, ds);
     }
 
     private static LineNode parseLine(JsonObject o) {

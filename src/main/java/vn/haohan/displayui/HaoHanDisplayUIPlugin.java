@@ -30,14 +30,18 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class HaoHanDisplayUIPlugin extends JavaPlugin {
     private DisplayUiServiceImpl service;
+    private vn.haohan.displayui.runtime.UiLayoutManager layoutManager;
 
     @Override
     public void onEnable() {
         service = new DisplayUiServiceImpl(this);
+        layoutManager = new vn.haohan.displayui.runtime.UiLayoutManager(this);
+        layoutManager.reloadAll();
+
         Bukkit.getServicesManager().register(
                 DisplayUiService.class, service, this, ServicePriority.Normal);
 
-        DisplayUiCommand command = new DisplayUiCommand(this, service);
+        DisplayUiCommand command = new DisplayUiCommand(this, service, layoutManager);
         if (getCommand("hhdui") != null) {
             getCommand("hhdui").setExecutor(command);
             getCommand("hhdui").setTabCompleter(command);
@@ -58,12 +62,17 @@ public final class HaoHanDisplayUIPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (layoutManager != null) layoutManager.closeAll();
         if (service != null) service.shutdown();
         Bukkit.getServicesManager().unregisterAll(this);
     }
 
     public DisplayUiServiceImpl service() {
         return service;
+    }
+
+    public vn.haohan.displayui.runtime.UiLayoutManager layoutManager() {
+        return layoutManager;
     }
 
     /**

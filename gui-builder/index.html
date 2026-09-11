@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.cdnfonts.com/css/minecraft-4" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.9.1/dist/themes/nano.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -26,14 +27,16 @@
       <div id="header-center">
         <div class="ctrl-group">
           <span class="ctrl-label">W</span>
-          <input type="number" id="canvas-w" value="256" min="64" max="1024" step="8" />
+          <input type="number" id="canvas-w" value="256" min="0" max="4096" step="1" />
           <span class="ctrl-sep">×</span>
-          <input type="number" id="canvas-h" value="192" min="64" max="1024" step="8" />
+          <input type="number" id="canvas-h" value="192" min="0" max="4096" step="1" />
           <span class="ctrl-label">px</span>
         </div>
         <div class="ctrl-group">
-          <span class="ctrl-label">Zoom</span>
-          <input type="range" id="zoom-range" min="0.5" max="4" step="0.1" value="2" />
+          <button id="btn-zoom-out" class="zoom-step-btn" title="Zoom Out (-)">−</button>
+          <input type="range" id="zoom-range" min="0.2" max="10" step="0.1" value="2" />
+          <button id="btn-zoom-in" class="zoom-step-btn" title="Zoom In (+)">+</button>
+          <button id="btn-zoom-reset" class="zoom-reset-btn" title="Reset Zoom (1:1)">1:1</button>
           <span id="zoom-label">2.0×</span>
         </div>
         <label class="toggle-label">
@@ -44,6 +47,12 @@
       </div>
 
       <div id="header-right">
+        <!-- Theme Switcher (Dark / Light) -->
+        <button id="btn-theme-toggle" class="btn btn-ghost theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <svg class="theme-icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg class="theme-icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+
         <span id="save-indicator" data-state="" title="">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           <span class="save-text">Saved</span>
@@ -65,6 +74,61 @@
       </div>
     </header>
 
+    <!-- ── Shape Picker Sub-Toolbar (Paint.NET / PowerPoint style) ── -->
+    <div id="shape-subbar">
+      <div class="shape-picker-anchor">
+        <button id="btn-shape-picker" class="shape-picker-btn" title="Pick Shape Geometry">
+          <span id="shape-picker-icon" class="shape-picker-icon">
+            <svg viewBox="0 0 20 20" fill="currentColor" stroke="currentColor" stroke-width="1.2">
+              <rect x="3" y="4" width="14" height="12" rx="0" fill="currentColor" opacity="0.3" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </span>
+          <span id="shape-picker-name">Rectangle</span>
+          <svg class="shape-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+
+        <!-- Floating Popover Dropdown -->
+        <div id="shape-picker-dropdown" class="shape-picker-dropdown" hidden>
+          <!-- Injected dynamically by editor.js from SHAPE_CATEGORIES -->
+        </div>
+      </div>
+
+      <div class="shape-bar-sep"></div>
+
+      <div class="shape-bar-group">
+        <span class="shape-bar-label">Brush size:</span>
+        <div class="shape-stepper">
+          <button id="shape-brush-dec" class="shape-stepper-btn" type="button">-</button>
+          <input type="number" id="shape-brush-size" value="2" min="1" max="40" step="1" />
+          <button id="shape-brush-inc" class="shape-stepper-btn" type="button">+</button>
+        </div>
+      </div>
+
+      <div class="shape-bar-group">
+        <span class="shape-bar-label">Style:</span>
+        <select id="shape-outline-style" class="shape-bar-select">
+          <option value="solid">━ Solid</option>
+          <option value="dashed">┅ Dashed</option>
+          <option value="dotted">⋯ Dotted</option>
+        </select>
+      </div>
+
+      <div class="shape-bar-group">
+        <span class="shape-bar-label">Fill:</span>
+        <select id="shape-fill-mode" class="shape-bar-select">
+          <option value="solid">Solid Color</option>
+          <option value="none">None (Outline only)</option>
+        </select>
+      </div>
+
+      <div class="shape-bar-sep"></div>
+
+      <button id="btn-add-active-shape" class="btn btn-sm btn-primary" title="Insert chosen shape into canvas">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Add Shape</span>
+      </button>
+    </div>
+
     <!-- ── Main layout ────────────────────────────── -->
     <main id="main">
 
@@ -73,11 +137,11 @@
         <section class="panel-section">
           <div class="section-title">Add Node</div>
           <div class="tool-grid">
-            <button class="tool-btn" data-type="background" title="Colored background panel">
+            <button class="tool-btn" data-type="shape" title="Geometric shape or background panel">
               <span class="tool-icon">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="16" height="12" rx="2"/></svg>
               </span>
-              <span>Background</span>
+              <span>Shape / BG</span>
             </button>
             <button class="tool-btn" data-type="text" title="Aligned text node">
               <span class="tool-icon tool-icon-text">T</span>
@@ -119,9 +183,171 @@
         <div id="canvas-scroll">
           <canvas id="canvas"></canvas>
         </div>
+
+        <!-- ── Scene Panel (Blender-style overlay controls) ── -->
+        <div id="scene-panel-anchor">
+          <button id="scene-panel-btn" title="Scene Environment & Viewport">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+            </svg>
+            Scene
+            <svg id="scene-panel-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          <div id="scene-panel" class="scene-panel" hidden>
+            <!-- Environment Presets -->
+            <div class="sp-section-title">Môi Trường (Environment)</div>
+            <div class="sp-env-grid" id="sp-env-grid">
+              <button class="sp-env-btn active" data-env="dark" title="Dark Studio">
+                <span class="sp-env-preview" style="background:#0a0e18"></span>
+                <span>Dark</span>
+              </button>
+              <button class="sp-env-btn" data-env="overworld_day" title="Overworld Day (Minecraft)">
+                <img class="sp-env-preview sp-env-img" src="assets/image/daytime.png" alt="Day" />
+                <span>Day</span>
+              </button>
+              <button class="sp-env-btn" data-env="overworld_night" title="Overworld Night (Minecraft)">
+                <img class="sp-env-preview sp-env-img" src="assets/image/nighttime.png" alt="Night" />
+                <span>Night</span>
+              </button>
+              <button class="sp-env-btn" data-env="nether" title="Nether (Minecraft)">
+                <img class="sp-env-preview sp-env-img" src="assets/image/nether.png" alt="Nether" />
+                <span>Nether</span>
+              </button>
+              <button class="sp-env-btn" data-env="end" title="The End (Minecraft)">
+                <img class="sp-env-preview sp-env-img" src="assets/image/theend.png" alt="The End" />
+                <span>End</span>
+              </button>
+              <button class="sp-env-btn" data-env="custom" title="Màu nền tùy chọn" id="sp-env-custom-btn">
+                <span class="sp-env-preview sp-env-preview-custom" id="sp-custom-preview"></span>
+                <span>Color</span>
+              </button>
+              <button class="sp-env-btn" data-env="image" title="Ảnh của bạn (Upload / URL / Paste)" id="sp-env-image-btn">
+                <span class="sp-env-preview sp-env-preview-image" id="sp-image-preview">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;opacity:.8">
+                    <rect x="2" y="4" width="16" height="12" rx="2"/><circle cx="7" cy="8" r="1.5"/>
+                    <polyline points="2,14 6,10 10,13 13,10 18,14"/>
+                  </svg>
+                </span>
+                <span>Ảnh Tùy Chọn</span>
+              </button>
+            </div>
+            <input type="color" id="sp-bg-color-input" value="#0a0e18" style="display:none"/>
+
+            <!-- Custom Image management box (visible when 'image' is active) -->
+            <div id="sp-image-row" class="sp-image-box" style="display:none">
+              <div class="sp-dropzone" id="sp-dropzone" title="Kéo thả ảnh hoặc nhấn để chọn file">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <div class="sp-dropzone-text">
+                  <span>Kéo thả ảnh vào đây</span>
+                  <small>hoặc <label for="sp-image-upload" class="sp-upload-link">chọn từ máy</label></small>
+                </div>
+                <input type="file" id="sp-image-upload" accept="image/*" style="display:none"/>
+              </div>
+
+              <div class="sp-image-url-wrap">
+                <input type="text" id="sp-image-url" placeholder="Hoặc dán link ảnh (URL)..." class="sp-image-url-input"/>
+                <button id="sp-image-url-apply" class="sp-image-url-btn" title="Áp dụng link ảnh">↵</button>
+              </div>
+
+              <div id="sp-image-info" class="sp-image-info" style="display:none">
+                <div class="sp-image-thumb" id="sp-current-thumb"></div>
+                <div class="sp-image-name-wrap">
+                  <span id="sp-image-name" class="sp-image-name">Ảnh của tôi</span>
+                  <div class="sp-image-actions">
+                    <button id="sp-image-fit-btn" class="sp-img-btn" title="Chế độ hiển thị">Cover</button>
+                    <button id="sp-image-clear-btn" class="sp-img-btn del" title="Xóa ảnh">Xóa</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sp-divider"></div>
+
+            <!-- Scene Opacity & Blur Sliders -->
+            <div class="sp-section-title">Hiệu Ứng Nền Scene</div>
+            <div class="sp-row">
+              <span class="sp-label" title="Độ hiển thị/trong suốt nền Scene">Độ rõ nền</span>
+              <input type="range" id="sp-scene-opacity" min="0" max="100" value="100" class="sp-range"/>
+              <span id="sp-scene-opacity-val" class="sp-val">100%</span>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label" title="Làm mờ/nhoè phông nền để dễ nhìn GUI hơn">Độ mờ (Blur)</span>
+              <input type="range" id="sp-scene-blur" min="0" max="20" value="0" class="sp-range"/>
+              <span id="sp-scene-blur-val" class="sp-val">0px</span>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label" title="Độ sáng của ảnh nền">Độ sáng</span>
+              <input type="range" id="sp-scene-brightness" min="10" max="100" value="100" class="sp-range"/>
+              <span id="sp-scene-brightness-val" class="sp-val">100%</span>
+            </div>
+
+            <div class="sp-divider"></div>
+
+            <!-- Grid Options -->
+            <div class="sp-section-title">Lưới Toạ Độ (Grid)</div>
+            <div class="sp-row">
+              <span class="sp-label">Hiện lưới</span>
+              <label class="sp-toggle">
+                <input type="checkbox" id="sp-grid-visible" checked/>
+                <span class="sp-toggle-track"><span class="sp-toggle-thumb"></span></span>
+              </label>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label">Kiểu lưới</span>
+              <div class="sp-seg" id="sp-grid-style">
+                <button class="sp-seg-btn active" data-style="dots" title="Dots">···</button>
+                <button class="sp-seg-btn" data-style="lines" title="Lines">┼</button>
+                <button class="sp-seg-btn" data-style="cross" title="Cross">+</button>
+              </div>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label">Kích cỡ</span>
+              <div class="sp-seg" id="sp-grid-size">
+                <button class="sp-seg-btn active" data-size="4">4</button>
+                <button class="sp-seg-btn" data-size="8">8</button>
+                <button class="sp-seg-btn" data-size="16">16</button>
+              </div>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label">Màu lưới</span>
+              <div class="sp-seg" id="sp-grid-color">
+                <button class="sp-seg-btn active" data-color="white" title="White">W</button>
+                <button class="sp-seg-btn" data-color="cyan" title="Cyan" style="color:#0ff">C</button>
+                <button class="sp-seg-btn" data-color="red" title="Red" style="color:#f66">R</button>
+              </div>
+            </div>
+
+            <div class="sp-divider"></div>
+
+            <!-- Canvas BG (GUI frame fill) -->
+            <div class="sp-section-title">Khung Bảng GUI (Canvas Fill)</div>
+            <div class="sp-row">
+              <span class="sp-label">Độ mờ khung</span>
+              <input type="range" id="sp-canvas-opacity" min="0" max="100" value="100" class="sp-range"/>
+              <span id="sp-canvas-opacity-val" class="sp-val">100%</span>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label">Lưới Caro</span>
+              <label class="sp-toggle">
+                <input type="checkbox" id="sp-checkerboard"/>
+                <span class="sp-toggle-track"><span class="sp-toggle-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Environment background overlay (behind canvas-scroll) -->
+        <div id="scene-env-bg"></div>
+
         <div id="canvas-status">
           <span id="cursor-pos">0, 0</span>
           <span id="canvas-dims"></span>
+          <span id="scene-env-label" class="scene-env-label"></span>
         </div>
       </div>
 

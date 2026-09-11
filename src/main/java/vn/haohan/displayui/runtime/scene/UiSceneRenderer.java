@@ -26,6 +26,7 @@ import vn.haohan.displayui.api.node.UiBackgroundNode;
 import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
+import vn.haohan.displayui.api.node.UiShapeNode;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -54,6 +55,7 @@ final class UiSceneRenderer {
         register(ParallelogramNode.class, node -> spawnParallelogram((ParallelogramNode) node));
         register(TriangleNode.class, node -> spawnTriangle((TriangleNode) node));
         register(PolylineNode.class, node -> spawnPolyline((PolylineNode) node));
+        register(UiShapeNode.class, node -> spawnShape((UiShapeNode) node));
     }
 
     List<Display> spawnNode(UiNode node) {
@@ -122,6 +124,8 @@ final class UiSceneRenderer {
         } else if (node instanceof TriangleNode shape && display instanceof TextDisplay text) {
             text.setBackgroundColor(shape.color());
         } else if (node instanceof PolylineNode shape && display instanceof TextDisplay text) {
+            text.setBackgroundColor(shape.color());
+        } else if (node instanceof UiShapeNode shape && display instanceof TextDisplay text) {
             text.setBackgroundColor(shape.color());
         }
         display.setTransformation(transform);
@@ -266,5 +270,14 @@ final class UiSceneRenderer {
 
     private List<Display> spawnPolyline(PolylineNode node) {
         return spawnColoredShape(node, scene.computePolylineTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f), node.color());
+    }
+
+    private List<Display> spawnShape(UiShapeNode node) {
+        List<UiNode> subNodes = node.decomposeToNodes();
+        List<Display> displays = new ArrayList<>();
+        for (UiNode sub : subNodes) {
+            displays.addAll(spawnNode(sub));
+        }
+        return displays;
     }
 }

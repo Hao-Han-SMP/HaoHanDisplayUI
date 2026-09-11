@@ -78,27 +78,384 @@ function drawPlaceholder(ctx, px, py, w, h, label) {
   ctx.restore();
 }
 
+/* ── Shapes Catalog ───────────────────────────────────────── */
+const SHAPE_CATEGORIES = [
+  {
+    name: 'Basic',
+    shapes: [
+      { id: 'rect', name: 'Rectangle', icon: '<rect x="3" y="4" width="14" height="12" rx="0"/>' },
+      { id: 'rounded_rect', name: 'Rounded Rectangle', icon: '<rect x="3" y="4" width="14" height="12" rx="3"/>' },
+      { id: 'circle', name: 'Circle / Ellipse', icon: '<circle cx="10" cy="10" r="7"/>' },
+      { id: 'diamond', name: 'Diamond', icon: '<polygon points="10,2 18,10 10,18 2,10"/>' },
+      { id: 'trapezoid', name: 'Trapezoid', icon: '<polygon points="5,4 15,4 18,16 2,16"/>' },
+      { id: 'parallelogram', name: 'Parallelogram', icon: '<polygon points="6,4 18,4 14,16 2,16"/>' },
+      { id: 'triangle', name: 'Triangle', icon: '<polygon points="10,3 18,17 2,17"/>' },
+      { id: 'right_triangle', name: 'Right Triangle', icon: '<polygon points="3,3 17,17 3,17"/>' },
+    ],
+  },
+  {
+    name: 'Polygons and Stars',
+    shapes: [
+      { id: 'pentagon', name: 'Pentagon (5)', icon: '<polygon points="10,2 18,8 15,17 5,17 2,8"/>' },
+      { id: 'hexagon', name: 'Hexagon (6)', icon: '<polygon points="10,2 17,6 17,14 10,18 3,14 3,6"/>' },
+      { id: 'heptagon', name: 'Heptagon (7)', icon: '<polygon points="10,2 17,5 18,13 14,18 6,18 2,13 3,5"/>' },
+      { id: 'octagon', name: 'Octagon (8)', icon: '<polygon points="6,2 14,2 18,6 18,14 14,18 6,18 2,14 2,6"/>' },
+      { id: 'star3', name: '3-Point Star', icon: '<polygon points="10,2 12,8 18,15 10,12 2,15 8,8"/>' },
+      { id: 'star4', name: '4-Point Star', icon: '<polygon points="10,2 12,8 18,10 12,12 10,18 8,12 2,10 8,8"/>' },
+      { id: 'star5', name: '5-Point Star', icon: '<polygon points="10,2 12.5,7.5 18,8 14,12 15.5,17.5 10,14.5 4.5,17.5 6,12 2,8 7.5,7.5"/>' },
+      { id: 'star6', name: '6-Point Star', icon: '<polygon points="10,2 12,6 17,6 13,10 15,15 10,12 5,15 7,10 3,6 8,6"/>' },
+    ],
+  },
+  {
+    name: 'Arrows & Symbols',
+    shapes: [
+      { id: 'arrow_right', name: 'Right Arrow', icon: '<polygon points="2,7 11,7 11,3 18,10 11,17 11,13 2,13"/>' },
+      { id: 'arrow_left', name: 'Left Arrow', icon: '<polygon points="18,7 9,7 9,3 2,10 9,17 9,13 18,13"/>' },
+      { id: 'chevron_right', name: 'Notched Chevron', icon: '<polygon points="2,3 11,10 2,17 8,17 17,10 8,3"/>' },
+      { id: 'double_arrow', name: 'Double Arrow', icon: '<polygon points="5,7 15,7 15,3 20,10 15,17 15,13 5,13 5,17 0,10 5,3"/>' },
+      { id: 'heart', name: 'Heart', icon: '<path d="M10,17 C4,13 2,9 2,6 A4,4 0 0,1 10,4.5 A4,4 0 0,1 18,6 C18,9 16,13 10,17 Z"/>' },
+      { id: 'cross', name: 'Cross', icon: '<polygon points="7,2 13,2 13,7 18,7 18,13 13,13 13,18 7,18 7,13 2,13 2,7 7,7"/>' },
+      { id: 'speech_bubble', name: 'Speech Bubble', icon: '<path d="M2,3 H18 V13 H12 L8,17 V13 H2 Z"/>' },
+    ],
+  },
+];
+
+function getShapeDef(id) {
+  for (const cat of SHAPE_CATEGORIES) {
+    const s = cat.shapes.find(x => x.id === id);
+    if (s) return s;
+  }
+  return { id: 'rect', name: 'Rectangle', icon: '<rect x="3" y="4" width="14" height="12" rx="0"/>' };
+}
+
+/* ── Geometric Path Generator ────────────────────────────── */
+function drawShapePath(ctx, shapeType, x, y, w, h, radius = 6) {
+  ctx.beginPath();
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const rx = w / 2;
+  const ry = h / 2;
+
+  switch (shapeType) {
+    case 'rounded_rect': {
+      const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+      }
+      break;
+    }
+    case 'circle':
+      ctx.ellipse(cx, cy, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, Math.PI * 2);
+      break;
+    case 'diamond':
+      ctx.moveTo(cx, y);
+      ctx.lineTo(x + w, cy);
+      ctx.lineTo(cx, y + h);
+      ctx.lineTo(x, cy);
+      ctx.closePath();
+      break;
+    case 'trapezoid': {
+      const ins = w * 0.22;
+      ctx.moveTo(x + ins, y);
+      ctx.lineTo(x + w - ins, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      break;
+    }
+    case 'parallelogram': {
+      const sl = w * 0.22;
+      ctx.moveTo(x + sl, y);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w - sl, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      break;
+    }
+    case 'triangle':
+      ctx.moveTo(cx, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      break;
+    case 'right_triangle':
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      break;
+    case 'pentagon':
+      _drawPolygon(ctx, cx, cy, rx, ry, 5, -Math.PI / 2);
+      break;
+    case 'hexagon':
+      _drawPolygon(ctx, cx, cy, rx, ry, 6, 0);
+      break;
+    case 'heptagon':
+      _drawPolygon(ctx, cx, cy, rx, ry, 7, -Math.PI / 2);
+      break;
+    case 'octagon':
+      _drawPolygon(ctx, cx, cy, rx, ry, 8, Math.PI / 8);
+      break;
+    case 'star3':
+      _drawStar(ctx, cx, cy, rx, ry, 3, 0.45, -Math.PI / 2);
+      break;
+    case 'star4':
+      _drawStar(ctx, cx, cy, rx, ry, 4, 0.4, -Math.PI / 2);
+      break;
+    case 'star5':
+      _drawStar(ctx, cx, cy, rx, ry, 5, 0.42, -Math.PI / 2);
+      break;
+    case 'star6':
+      _drawStar(ctx, cx, cy, rx, ry, 6, 0.48, -Math.PI / 2);
+      break;
+    case 'arrow_right': {
+      const aw = w * 0.45, ah = h * 0.26;
+      ctx.moveTo(x, y + ah);
+      ctx.lineTo(x + w - aw, y + ah);
+      ctx.lineTo(x + w - aw, y);
+      ctx.lineTo(x + w, cy);
+      ctx.lineTo(x + w - aw, y + h);
+      ctx.lineTo(x + w - aw, y + h - ah);
+      ctx.lineTo(x, y + h - ah);
+      ctx.closePath();
+      break;
+    }
+    case 'arrow_left': {
+      const aw = w * 0.45, ah = h * 0.26;
+      ctx.moveTo(x + w, y + ah);
+      ctx.lineTo(x + aw, y + ah);
+      ctx.lineTo(x + aw, y);
+      ctx.lineTo(x, cy);
+      ctx.lineTo(x + aw, y + h);
+      ctx.lineTo(x + aw, y + h - ah);
+      ctx.lineTo(x + w, y + h - ah);
+      ctx.closePath();
+      break;
+    }
+    case 'chevron_right':
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w * 0.55, cy);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x + w * 0.45, y + h);
+      ctx.lineTo(x + w, cy);
+      ctx.lineTo(x + w * 0.45, y);
+      ctx.closePath();
+      break;
+    case 'double_arrow': {
+      const aw = w * 0.3, ah = h * 0.26;
+      ctx.moveTo(x + aw, y);
+      ctx.lineTo(x + aw, y + ah);
+      ctx.lineTo(x + w - aw, y + ah);
+      ctx.lineTo(x + w - aw, y);
+      ctx.lineTo(x + w, cy);
+      ctx.lineTo(x + w - aw, y + h);
+      ctx.lineTo(x + w - aw, y + h - ah);
+      ctx.lineTo(x + aw, y + h - ah);
+      ctx.lineTo(x + aw, y + h);
+      ctx.lineTo(x, cy);
+      ctx.closePath();
+      break;
+    }
+    case 'heart': {
+      const topCurveH = h * 0.3;
+      ctx.moveTo(cx, y + h);
+      ctx.bezierCurveTo(x, cy + h * 0.2, x, y + topCurveH, cx - rx * 0.5, y);
+      ctx.bezierCurveTo(cx, y, cx, y + topCurveH, cx, y + topCurveH);
+      ctx.bezierCurveTo(cx, y + topCurveH, cx, y, cx + rx * 0.5, y);
+      ctx.bezierCurveTo(x + w, y + topCurveH, x + w, cy + h * 0.2, cx, y + h);
+      ctx.closePath();
+      break;
+    }
+    case 'cross': {
+      const t = w * 0.3, th = h * 0.3;
+      ctx.moveTo(cx - t / 2, y);
+      ctx.lineTo(cx + t / 2, y);
+      ctx.lineTo(cx + t / 2, cy - th / 2);
+      ctx.lineTo(x + w, cy - th / 2);
+      ctx.lineTo(x + w, cy + th / 2);
+      ctx.lineTo(cx + t / 2, cy + th / 2);
+      ctx.lineTo(cx + t / 2, y + h);
+      ctx.lineTo(cx - t / 2, y + h);
+      ctx.lineTo(cx - t / 2, cy + th / 2);
+      ctx.lineTo(x, cy + th / 2);
+      ctx.lineTo(x, cy - th / 2);
+      ctx.lineTo(cx - t / 2, cy - th / 2);
+      ctx.closePath();
+      break;
+    }
+    case 'speech_bubble': {
+      const r = Math.min(6, w / 6, h / 6);
+      const bH = h * 0.78;
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+      ctx.lineTo(x + w, y + bH - r); ctx.arcTo(x + w, y + bH, x + w - r, y + bH, r);
+      ctx.lineTo(x + w * 0.45, y + bH);
+      ctx.lineTo(x + w * 0.25, y + h);
+      ctx.lineTo(x + w * 0.28, y + bH);
+      ctx.lineTo(x + r, y + bH); ctx.arcTo(x, y + bH, x, y + bH - r, r);
+      ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+      ctx.closePath();
+      break;
+    }
+    case 'rect':
+    default:
+      ctx.rect(x, y, w, h);
+      break;
+  }
+}
+
+function _drawPolygon(ctx, cx, cy, rx, ry, sides, startAngle) {
+  for (let i = 0; i < sides; i++) {
+    const a = startAngle + (i * 2 * Math.PI) / sides;
+    const px = cx + rx * Math.cos(a);
+    const py = cy + ry * Math.sin(a);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function _drawStar(ctx, cx, cy, rx, ry, points, innerRatio, startAngle) {
+  const step = Math.PI / points;
+  for (let i = 0; i < points * 2; i++) {
+    const a = startAngle + i * step;
+    const rX = i % 2 === 0 ? rx : rx * innerRatio;
+    const rY = i % 2 === 0 ? ry : ry * innerRatio;
+    const px = cx + rX * Math.cos(a);
+    const py = cy + rY * Math.sin(a);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+/* ── Render Shape with Solid or Line Outline ────────────────── */
+function renderShape(ctx, n, zoom) {
+  const shapeType = n.shapeType || 'rect';
+  const alpha = n.alpha ?? 210;
+  const isOpaque = alpha === 255;
+  const hasOutline = Boolean(n.outline && (n.outlineThickness ?? 2) > 0);
+  const ot = (n.outlineThickness ?? 2);
+  const rad = n.cornerRadius ?? 6;
+  const rot = n.rotation || 0;
+
+  ctx.save();
+
+  if (rot !== 0) {
+    const cx = (n.x + n.width / 2) * zoom;
+    const cy = (n.y + n.height / 2) * zoom;
+    ctx.translate(cx, cy);
+    ctx.rotate((rot * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
+  }
+
+  /* 
+   * Trường hợp alpha = 255: Vẽ 1 shape đằng sau với offset dày hơn làm outline
+   * Trường hợp alpha < 255: Vẽ fill trước, sau đó vẽ line viền bao quanh
+   */
+  if (hasOutline && isOpaque) {
+    // Solid fill: Backing duplicate shape with expanded offset
+    const outAlpha = n.outlineAlpha ?? 255;
+    ctx.fillStyle = hexToRgba(n.outlineColor || '#4f8ef7', outAlpha);
+    drawShapePath(
+      ctx,
+      shapeType,
+      (n.x - ot) * zoom,
+      (n.y - ot) * zoom,
+      (n.width + ot * 2) * zoom,
+      (n.height + ot * 2) * zoom,
+      (rad + ot) * zoom
+    );
+    ctx.fill();
+
+    // Main foreground shape
+    ctx.fillStyle = hexToRgba(n.color, 255);
+    drawShapePath(ctx, shapeType, n.x * zoom, n.y * zoom, n.width * zoom, n.height * zoom, rad * zoom);
+    ctx.fill();
+
+  } else {
+    // Translucent or no outline
+    if (alpha > 0 && n.color !== 'transparent') {
+      ctx.fillStyle = hexToRgba(n.color, alpha);
+      drawShapePath(ctx, shapeType, n.x * zoom, n.y * zoom, n.width * zoom, n.height * zoom, rad * zoom);
+      ctx.fill();
+    }
+
+    if (hasOutline) {
+      // Stroke perimeter around shape
+      const outAlpha = n.outlineAlpha ?? 255;
+      ctx.strokeStyle = hexToRgba(n.outlineColor || '#4f8ef7', outAlpha);
+      ctx.lineWidth = Math.max(1, ot * zoom);
+      if (n.outlineStyle === 'dashed') ctx.setLineDash([4 * zoom, 3 * zoom]);
+      else if (n.outlineStyle === 'dotted') ctx.setLineDash([2 * zoom, 2 * zoom]);
+      else ctx.setLineDash([]);
+
+      drawShapePath(ctx, shapeType, n.x * zoom, n.y * zoom, n.width * zoom, n.height * zoom, rad * zoom);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
 /* ── Node definitions ─────────────────────────────────────── */
 const NodeDefs = {
 
-  /* ── Background ──────────────────────────────────────── */
+  /* ── Shape / Background (Unified) ────────────────────────── */
+  shape: {
+    defaults: () => ({
+      type: 'shape',
+      shapeType: 'rect',
+      id: uniqueId('shape'),
+      x: 10, y: 10, depth: 0.001,
+      width: 100, height: 60,
+      color: '#1a2035', alpha: 210,
+      cornerRadius: 6,
+      rotation: 0,
+      outline: false,
+      outlineColor: '#4f8ef7',
+      outlineAlpha: 255,
+      outlineThickness: 2,
+      outlineStyle: 'solid',
+      doubleSided: false,
+    }),
+    render(ctx, n, zoom) {
+      renderShape(ctx, n, zoom);
+    },
+    label: n => `${getShapeDef(n.shapeType || 'rect').name} ${Math.round(n.width)}×${Math.round(n.height)}`,
+    icon: '⬚',
+    props: ['shapeType', 'x', 'y', 'depth', 'width', 'height', 'rotation', '_colorAlpha', 'cornerRadius', 'outline', '_outlineColorAlpha', 'outlineThickness', 'outlineStyle', 'doubleSided'],
+  },
+
+  /* ── Background (Backward Compatibility Alias) ──────────── */
   background: {
     defaults: () => ({
-      type: 'background',
+      type: 'shape',
+      shapeType: 'rect',
       id: uniqueId('bg'),
       x: 10, y: 10, depth: 0.001,
       width: 100, height: 60,
       color: '#1a2035', alpha: 210,
+      cornerRadius: 6,
+      outline: false,
+      outlineColor: '#4f8ef7',
+      outlineAlpha: 255,
+      outlineThickness: 2,
+      outlineStyle: 'solid',
       doubleSided: false,
     }),
     render(ctx, n, zoom) {
-      ctx.fillStyle = hexToRgba(n.color, n.alpha ?? 210);
-      ctx.fillRect(n.x * zoom, n.y * zoom, n.width * zoom, n.height * zoom);
+      renderShape(ctx, n, zoom);
     },
-    label: n => `Background ${n.width}×${n.height}`,
+    label: n => `${getShapeDef(n.shapeType || 'rect').name} ${Math.round(n.width)}×${Math.round(n.height)}`,
     icon: '▭',
-    // '_colorAlpha' is a virtual prop that renders a combined RGBA picker
-    props: ['x', 'y', 'depth', 'width', 'height', '_colorAlpha', 'doubleSided'],
+    props: ['shapeType', 'x', 'y', 'depth', 'width', 'height', '_colorAlpha', 'cornerRadius', 'outline', '_outlineColorAlpha', 'outlineThickness', 'outlineStyle', 'doubleSided'],
   },
 
   /* ── Text ────────────────────────────────────────────── */
@@ -124,30 +481,34 @@ const NodeDefs = {
       ctx.strokeRect(n.boxX * zoom, n.boxY * zoom, n.width * zoom, n.height * zoom);
       ctx.restore();
 
-      // Text approximation
+      // Text rendering with Minecraft font
       const raw = stripFormatting(n.text);
-      const fsz = Math.max(6, n.fontSize * zoom * 0.86);
+      const fsz = Math.max(7, n.fontSize * zoom * 0.9);
       ctx.save();
-      ctx.font = `${n.shadow ? '600' : '500'} ${fsz}px "Inter", sans-serif`;
-      ctx.fillStyle = '#ffffff';
+      ctx.font = `${fsz}px "Minecraft", "Minecraftia", "VT323", "JetBrains Mono", monospace`;
       ctx.textBaseline = 'middle';
-      if (n.shadow) {
-        ctx.shadowColor = 'rgba(0,0,0,.65)';
-        ctx.shadowOffsetX = zoom * 0.12;
-        ctx.shadowOffsetY = zoom * 0.12;
-        ctx.shadowBlur = 1;
-      }
+      
       const cy = (n.boxY + n.height / 2) * zoom;
+      let tx = (n.boxX + 3) * zoom;
       if (n.alignment === 'CENTER') {
         ctx.textAlign = 'center';
-        ctx.fillText(raw, (n.boxX + n.width / 2) * zoom, cy);
+        tx = (n.boxX + n.width / 2) * zoom;
       } else if (n.alignment === 'RIGHT') {
         ctx.textAlign = 'right';
-        ctx.fillText(raw, (n.boxX + n.width) * zoom - 3, cy);
+        tx = (n.boxX + n.width) * zoom - 3;
       } else {
         ctx.textAlign = 'left';
-        ctx.fillText(raw, n.boxX * zoom + 3, cy);
       }
+
+      if (n.shadow) {
+        // Minecraft drop shadow: offset by ~1px with dark shadow color
+        const sOff = Math.max(1, Math.round(zoom * 0.8));
+        ctx.fillStyle = '#3f3f3f';
+        ctx.fillText(raw, tx + sOff, cy + sOff);
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(raw, tx, cy);
       ctx.restore();
     },
     label: n => `"${stripFormatting(n.text).slice(0, 20) || '(empty)'}"`,

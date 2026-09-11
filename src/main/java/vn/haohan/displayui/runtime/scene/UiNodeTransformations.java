@@ -25,6 +25,7 @@ import vn.haohan.displayui.api.node.UiBackgroundNode;
 import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
+import vn.haohan.displayui.api.node.UiShapeNode;
 
 import java.util.List;
 
@@ -66,6 +67,13 @@ final class UiNodeTransformations {
             return scene.computeParallelogramTransforms(parallelogram, scale, offsetX, offsetY, offsetZ);
         } else if (node instanceof TriangleNode triangle) {
             return scene.computeTriangleTransforms(triangle, scale, offsetX, offsetY, offsetZ);
+        } else if (node instanceof UiShapeNode shape) {
+            List<UiNode> subNodes = shape.decomposeToNodes();
+            List<Transformation> list = new java.util.ArrayList<>();
+            for (UiNode sub : subNodes) {
+                list.addAll(resolve(scene, sub, scale, offsetX, offsetY, offsetZ));
+            }
+            return list;
         } else if (node instanceof PolylineNode polyline) {
             return scene.computePolylineTransforms(polyline, scale, offsetX, offsetY, offsetZ);
         }

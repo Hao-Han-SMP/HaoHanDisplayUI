@@ -35,7 +35,9 @@ public record ItemNode(
     public ItemNode {
         Objects.requireNonNull(item, "item");
         Objects.requireNonNull(transform, "transform");
-        if (item.getType().isAir()) throw new IllegalArgumentException("item cannot be air");
+        if (item.getType() == org.bukkit.Material.AIR || item.getType().name().endsWith("_AIR")) {
+            throw new IllegalArgumentException("item cannot be air");
+        }
         if (scale <= 0.0f) throw new IllegalArgumentException("scale must be positive");
         item = item.clone();
     }

@@ -45,18 +45,21 @@ import java.util.UUID;
 
 final class DisplayUiCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBCOMMANDS = List.of(
-            "demo", "clear", "stats", "page", "follow", "camera", "reload");
+            "demo", "clear", "stats", "page", "follow", "camera", "open", "close", "list", "reload");
     private static final List<String> FOLLOW_OPTIONS = List.of("none", "follow");
     private static final List<String> CAMERA_PRESETS = List.of("fixed", "face_player", "tilt_up", "tilt_down", "rotate_left", "rotate_right", "skew", "reset");
 
     private final HaoHanDisplayUIPlugin plugin;
     private final DisplayUiService service;
+    private final vn.haohan.displayui.runtime.UiLayoutManager layoutManager;
     private final Map<UUID, DemoContext> demos = new HashMap<>();
     private final List<DemoPage> pages;
 
-    DisplayUiCommand(HaoHanDisplayUIPlugin plugin, DisplayUiService service) {
+    DisplayUiCommand(HaoHanDisplayUIPlugin plugin, DisplayUiService service,
+                     vn.haohan.displayui.runtime.UiLayoutManager layoutManager) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.service = Objects.requireNonNull(service, "service");
+        this.layoutManager = Objects.requireNonNull(layoutManager, "layoutManager");
         this.pages = List.of(
                 new TextStylesDemoPage(),
                 new ListLayoutsDemoPage(),
@@ -88,9 +91,12 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
             case "page" -> setPage(sender, args);
             case "follow" -> setFollow(sender, args);
             case "camera" -> setCamera(sender, args);
+            case "open" -> openLayout(sender, args);
+            case "close" -> closeLayout(sender, args);
+            case "list" -> listLayouts(sender);
             case "reload" -> reload(sender);
             default -> {
-                sender.sendMessage("§cUnknown subcommand. Use /hhdui <demo|clear|stats|page|follow|camera|reload>");
+                sender.sendMessage("§cUnknown subcommand. Use /hhdui <demo|clear|stats|page|follow|camera|open|close|list|reload>");
                 yield true;
             }
         };
@@ -336,9 +342,79 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean openLayout(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /hhdui open <layout_name> [player]");
+            return true;
+        }
+
+        String layoutName = args[1].toLowerCase();
+        Player target;
+        if (args.length >= 3) {
+            target = plugin.getServer().getPlayer(args[2]);
+            if (target == null) {
+                sender.sendMessage("§cPlayer not found: " + args[2]);
+                return true;
+            }
+        } else {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cConsole must specify a player: /hhdui open <layout_name> <player>");
+                return true;
+            }
+            target = player;
+        }
+
+        boolean success = layoutManager.open(target, layoutName);
+        if (success) {
+            sender.sendMessage("§aOpened UI layout '§e" + layoutName + "§a' for §e" + target.getName() + "§a.");
+        } else {
+            sender.sendMessage("§cUI layout not found: '§e" + layoutName + "§c'. Use /hhdui list to see available layouts.");
+        }
+        return true;
+    }
+
+    private boolean closeLayout(CommandSender sender, String[] args) {
+        Player target;
+        if (args.length >= 2) {
+            target = plugin.getServer().getPlayer(args[1]);
+            if (target == null) {
+                sender.sendMessage("§cPlayer not found: " + args[1]);
+                return true;
+            }
+        } else {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("§cConsole must specify a player: /hhdui close <player>");
+                return true;
+            }
+            target = player;
+        }
+
+        boolean closed = layoutManager.close(target);
+        if (closed) {
+            sender.sendMessage("§aClosed UI layout for §e" + target.getName() + "§a.");
+        } else {
+            sender.sendMessage("§e" + target.getName() + " §7does not have an active layout UI.");
+        }
+        return true;
+    }
+
+    private boolean listLayouts(CommandSender sender) {
+        List<String> names = layoutManager.getLayoutNames();
+        if (names.isEmpty()) {
+            sender.sendMessage("§eNo UI layouts found in 'plugins/HaoHanDisplayUI/layouts/'. Place your exported .json files there.");
+            return true;
+        }
+        sender.sendMessage("§a=== Available UI Layouts (" + names.size() + ") ===");
+        for (String name : names) {
+            sender.sendMessage(" §7- §e" + name + " §7(Use §b/hhdui open " + name + "§7)");
+        }
+        return true;
+    }
+
     private boolean reload(CommandSender sender) {
         plugin.reloadConfig();
-        sender.sendMessage("§aHaoHanDisplayUI configuration reloaded.");
+        layoutManager.reloadAll();
+        sender.sendMessage("§aHaoHanDisplayUI configuration & " + layoutManager.getLayoutNames().size() + " UI layout(s) reloaded!");
         return true;
     }
 
@@ -364,6 +440,23 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 List<String> pageNums = new ArrayList<>();
                 for (int i = 1; i <= pages.size(); i++) pageNums.add(String.valueOf(i));
                 return pageNums.stream().filter(s -> s.startsWith(args[1])).toList();
+            } else if ("open".equals(sub)) {
+                return layoutManager.getLayoutNames().stream()
+                        .filter(s -> s.startsWith(args[1].toLowerCase()))
+                        .toList();
+            } else if ("close".equals(sub)) {
+                return plugin.getServer().getOnlinePlayers().stream()
+                        .map(Player::getName)
+                        .filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase()))
+                        .toList();
+            }
+        } else if (args.length == 3) {
+            String sub = args[0].toLowerCase();
+            if ("open".equals(sub)) {
+                return plugin.getServer().getOnlinePlayers().stream()
+                        .map(Player::getName)
+                        .filter(s -> s.toLowerCase().startsWith(args[2].toLowerCase()))
+                        .toList();
             }
         }
         return List.of();

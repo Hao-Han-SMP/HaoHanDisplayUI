@@ -33,6 +33,7 @@ import vn.haohan.displayui.api.node.TriangleNode;
 import vn.haohan.displayui.api.node.ParallelogramNode;
 import vn.haohan.displayui.api.node.PolylineNode;
 import vn.haohan.displayui.api.node.UiNode;
+import vn.haohan.displayui.api.node.UiShapeNode;
 import net.kyori.adventure.text.Component;
 
 import java.util.Objects;
@@ -149,6 +150,7 @@ public record UiButton(
                 yield new UiRect(minX - pad, minY - pad, Math.max(1.0f, maxX - minX + pad * 2),
                         Math.max(1.0f, maxY - minY + pad * 2));
             }
+            case UiShapeNode shape -> new UiRect(shape.x(), shape.y(), shape.width(), shape.height());
         };
         return new UiButton(id, bounds);
     }
