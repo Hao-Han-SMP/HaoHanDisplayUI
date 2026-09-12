@@ -25,22 +25,28 @@ public final class UiInteractionBounds {
 
     public static Bounds calculate(UiDocument document, Collection<UiControl> controls,
                             Location origin, double pixels, UiCameraTransform camera) {
-        float minX = document.buttons().stream().map(button -> button.x() - button.hitSlop())
-                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
-        minX = Math.min(minX, controls.stream().map(control -> control.x() - control.hitSlop())
-                .min(Float::compare).orElse(0.0f));
-        float maxX = document.buttons().stream().map(button -> button.x() + button.width() + button.hitSlop())
-                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
-        maxX = Math.max(maxX, controls.stream().map(control -> control.x() + control.width() + control.hitSlop())
-                .max(Float::compare).orElse(0.0f));
-        float minY = document.buttons().stream().map(button -> button.y() - button.hitSlop())
-                .min(Float::compare).orElse(Float.POSITIVE_INFINITY);
-        minY = Math.min(minY, controls.stream().map(control -> control.y() - control.hitSlop())
-                .min(Float::compare).orElse(0.0f));
-        float maxY = document.buttons().stream().map(button -> button.y() + button.height() + button.hitSlop())
-                .max(Float::compare).orElse(Float.NEGATIVE_INFINITY);
-        maxY = Math.max(maxY, controls.stream().map(control -> control.y() + control.height() + control.hitSlop())
-                .max(Float::compare).orElse(0.0f));
+        float minX = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float maxY = Float.NEGATIVE_INFINITY;
+
+        for (var button : document.buttons()) {
+            minX = Math.min(minX, button.x() - button.hitSlop());
+            maxX = Math.max(maxX, button.x() + button.width() + button.hitSlop());
+            minY = Math.min(minY, button.y() - button.hitSlop());
+            maxY = Math.max(maxY, button.y() + button.height() + button.hitSlop());
+        }
+
+        for (var control : controls) {
+            minX = Math.min(minX, control.x() - control.hitSlop());
+            maxX = Math.max(maxX, control.x() + control.width() + control.hitSlop());
+            minY = Math.min(minY, control.y() - control.hitSlop());
+            maxY = Math.max(maxY, control.y() + control.height() + control.hitSlop());
+        }
+
+        if (Float.isInfinite(minX) || Float.isInfinite(maxX) || Float.isInfinite(minY) || Float.isInfinite(maxY)) {
+            return new Bounds(origin.clone(), 0.2, 0.2);
+        }
 
         UiCameraBasis basis = UiCameraBasis.forFixedPlane(origin, camera);
 
@@ -56,8 +62,11 @@ public final class UiInteractionBounds {
                 worldMinZ = Math.min(worldMinZ, offset.getZ()); worldMaxZ = Math.max(worldMaxZ, offset.getZ());
             }
         }
+        // In Minecraft, an Interaction entity's origin is at its bottom feet.
+        // Therefore, center.y must be worldMinY so that [worldMinY, worldMinY + height]
+        // precisely covers [worldMinY, worldMaxY].
         Location center = origin.clone().add((worldMinX + worldMaxX) * 0.5,
-                (worldMinY + worldMaxY) * 0.5, (worldMinZ + worldMaxZ) * 0.5);
+                worldMinY, (worldMinZ + worldMaxZ) * 0.5);
         return new Bounds(center, Math.max(0.2, Math.max(worldMaxX - worldMinX, worldMaxZ - worldMinZ)),
                 Math.max(0.2, worldMaxY - worldMinY));
     }
