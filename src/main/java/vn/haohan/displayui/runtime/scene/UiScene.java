@@ -61,6 +61,7 @@ import vn.haohan.displayui.api.node.UiBackgroundNode;
 import vn.haohan.displayui.api.node.UiGradientBackgroundNode;
 import vn.haohan.displayui.api.node.UiIconNode;
 import vn.haohan.displayui.api.node.UiNode;
+import vn.haohan.displayui.api.node.UiShapeNode;
 import vn.haohan.displayui.api.shape.DisplayShapeMath;
 import vn.haohan.displayui.api.shape.TRSResult;
 import vn.haohan.displayui.api.view.UiAudience;
@@ -97,8 +98,8 @@ public final class UiScene implements UiHandle {
      * samples to blend between frames while keeping the animation responsive.
      */
     private static final int ANIMATION_INTERPOLATION_TICKS = 2;
-    /** Keeps the translucent background behind text, icons, and row blocks. */
-    private static final float BACKGROUND_DEPTH_OFFSET = -0.02f;
+    /** Translucent backgrounds lie directly on the node's local UI plane. */
+    private static final float BACKGROUND_DEPTH_OFFSET = 0.0f;
     private final HaoHanDisplayUIPlugin plugin;
     private final UUID id;
     private final String ownerKey;
@@ -255,14 +256,12 @@ public final class UiScene implements UiHandle {
             if (display.isValid()) {
                 display.setInterpolationDelay(0);
                 display.setInterpolationDuration(interpolationTicks);
+                display.setTeleportDuration(interpolationTicks);
                 display.teleport(this.origin);
                 display.setRotation(origin.getYaw(), origin.getPitch());
             }
         }
         updateInteractionHitbox();
-        // Follow movement changes the entity anchor only. While an animation is
-        // active, its frame is the sole owner of the display transformation.
-        if (!isAnimating()) resetTransforms(0);
     }
 
     @Override
@@ -297,7 +296,19 @@ public final class UiScene implements UiHandle {
         ensureValid();
         if (doubleSided == enabled) return;
         doubleSided = enabled;
-        respawn();
+        if (document != null && !nodeEntities.isEmpty()) {
+            for (int i = 0; i < document.nodes().size() && i < nodeEntities.size(); i++) {
+                UiNode node = document.nodes().get(i);
+                List<Transformation> expected = UiNodeTransformations.resolve(this, node, 1.0f, 0.0f, 0.0f, 0.0f);
+                if (nodeEntities.get(i).size() != expected.size()) {
+                    rebuildNodeDisplays(i, node);
+                }
+            }
+            if (isAnimating()) applyCurrentTransformsImmediately();
+            syncViewers();
+        } else {
+            respawn();
+        }
     }
 
     @Override
@@ -711,6 +722,7 @@ public final class UiScene implements UiHandle {
         display.setShadowRadius(0.0f);
         display.setInterpolationDelay(0);
         display.setInterpolationDuration(INTERPOLATION_TICKS);
+        display.setTeleportDuration(INTERPOLATION_TICKS);
     }
 
     private Transformation transform(UiNode node, float sx, float sy, float sz,
@@ -738,7 +750,7 @@ public final class UiScene implements UiHandle {
         // alignment handles the text box; shifting to boxX + width here moves
         // centered/left-aligned labels away from their mirrored controls.
         targetX = mirrorSide ? -(node.x() + offsetX) : (node.x() + offsetX);
-        float extraBackOffset = (node instanceof ItemNode || node instanceof UiIconNode) ? 0.026f : 0.022f;
+        float extraBackOffset = (node instanceof ItemNode || node instanceof UiIconNode) ? 0.004f : 0.0f;
         float backDepth = -(node.depth() + extraBackOffset + offsetZ);
         Vector3f translation = new Vector3f(targetX / pixels,
                                             -(node.y() + offsetY) / pixels, backDepth);
@@ -835,6 +847,9 @@ public final class UiScene implements UiHandle {
     }
 
     private Transformation toTransformation(TRSResult trs) {
+        if (trs == null) {
+            return new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(0.0001f, 0.0001f, 0.0001f), new Quaternionf());
+        }
         Quaternionf baseRot = UiCameraBasis.rotation(cameraTransform);
         Vector3f worldTranslation = new Vector3f(trs.translation());
         baseRot.transform(worldTranslation);
@@ -845,7 +860,7 @@ public final class UiScene implements UiHandle {
     List<Transformation> computeBackgroundTransforms(UiBackgroundNode node, float scale,
                                                              float offsetX, float offsetY, float offsetZ) {
         float pixels = options.pixelsPerBlock();
-        float frontDepth = node.depth() + BACKGROUND_DEPTH_OFFSET + offsetZ;
+        float frontDepth = node.depth() + offsetZ;
         Vector3f p1 = new Vector3f((node.x() + offsetX) / pixels, -(node.y() + node.height() + offsetY) / pixels, frontDepth);
         Vector3f p2 = new Vector3f((node.x() + node.width() + offsetX) / pixels, -(node.y() + node.height() + offsetY) / pixels, frontDepth);
         Vector3f p3 = new Vector3f((node.x() + offsetX) / pixels, -(node.y() + offsetY) / pixels, frontDepth);
@@ -860,12 +875,9 @@ public final class UiScene implements UiHandle {
         List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
         list.add(toTransformation(DisplayShapeMath.computeParallelogramTRS(p1, p2, p3)));
         if (doubleSided) {
-            float backDepth = -(node.depth() + BACKGROUND_DEPTH_OFFSET) + offsetZ;
-            // The background is a depth-only backing surface. Keep its back
-            // face aligned with the front face when the content is mirrored;
-            // mirroring this second surface makes the panel visibly flip.
-            float leftX = node.x() + node.width() + offsetX;
-            float rightX = node.x() + offsetX;
+            float backDepth = -(node.depth() + offsetZ);
+            float leftX = mirrorSide ? -(node.x() + offsetX) : (node.x() + node.width() + offsetX);
+            float rightX = mirrorSide ? -(node.x() + node.width() + offsetX) : (node.x() + offsetX);
             Vector3f p1b = new Vector3f(leftX / pixels,
                     -(node.y() + node.height() + offsetY) / pixels, backDepth);
             Vector3f p2b = new Vector3f(rightX / pixels,
@@ -887,7 +899,7 @@ public final class UiScene implements UiHandle {
     List<Transformation> computeGradientBackgroundTransforms(UiGradientBackgroundNode node, float scale,
                                                              float offsetX, float offsetY, float offsetZ) {
         float pixels = options.pixelsPerBlock();
-        float frontDepth = node.depth() + BACKGROUND_DEPTH_OFFSET + offsetZ;
+        float frontDepth = node.depth() + offsetZ;
         int cols = node.slicesX();
         int rows = node.slicesY();
         int totalCells = cols * rows;
@@ -925,9 +937,9 @@ public final class UiScene implements UiHandle {
         }
 
         if (doubleSided) {
-            float backDepth = -(node.depth() + BACKGROUND_DEPTH_OFFSET) + offsetZ;
-            float leftX = node.x() + node.width() + offsetX;
-            float rightX = node.x() + offsetX;
+            float backDepth = -(node.depth() + offsetZ);
+            float leftX = mirrorSide ? -(node.x() + offsetX) : (node.x() + node.width() + offsetX);
+            float rightX = mirrorSide ? -(node.x() + node.width() + offsetX) : (node.x() + offsetX);
             Vector3f backCenter = new Vector3f(
                     (leftX + rightX) * 0.5f / pixels,
                     -(node.y() + node.height() * 0.5f + offsetY) / pixels,
@@ -936,8 +948,12 @@ public final class UiScene implements UiHandle {
 
             for (int r = 0; r < rows; r++) {
                 for (int c = 0; c < cols; c++) {
-                    float cellLeftX = node.x() + (c + 1) * cellWidth + offsetX;
-                    float cellRightX = node.x() + c * cellWidth + offsetX;
+                    float cellLeftX = mirrorSide
+                            ? -(node.x() + c * cellWidth + offsetX)
+                            : (node.x() + (c + 1) * cellWidth + offsetX);
+                    float cellRightX = mirrorSide
+                            ? -(node.x() + (c + 1) * cellWidth + offsetX)
+                            : (node.x() + c * cellWidth + offsetX);
                     float y0 = node.y() + r * cellHeight + offsetY;
                     float y1 = y0 + cellHeight;
 
@@ -1044,10 +1060,10 @@ public final class UiScene implements UiHandle {
             p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
         }
         List<Transformation> list = new ArrayList<>(doubleSided ? 2 : 1);
-        TRSResult trs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, rollRad);
+        TRSResult trs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, rollRad, false);
         list.add(toTransformation(trs));
         if (doubleSided) {
-            float backDepth = -(depth + 0.022f + offsetZ);
+            float backDepth = -(depth + offsetZ);
             float backOffsetX = mirrorSide ? -offsetX : offsetX;
             float bx1 = mirrorSide ? -x1 : x1;
             float bx2 = mirrorSide ? -x2 : x2;
@@ -1056,16 +1072,7 @@ public final class UiScene implements UiHandle {
             if (scale != 1.0f) {
                 GeometryUtils.scaleAroundMidpoint(p1b, p2b, scale);
             }
-            // Keep the back segment as a separate, reversed face.  Reversing the
-            // endpoints makes the line's local winding deterministic at every angle.
-            Vector3f backStart = p1b;
-            Vector3f backEnd = p2b;
-            if (GeometryUtils.lineFacingNormal(p1, p2)
-                    .dot(GeometryUtils.lineFacingNormal(p1b, p2b)) >= 0.0f) {
-                backStart = p2b;
-                backEnd = p1b;
-            }
-            TRSResult backTrs = DisplayShapeMath.computeLineTRS(backStart, backEnd, thickness, -rollRad);
+            TRSResult backTrs = DisplayShapeMath.computeLineTRS(p1b, p2b, thickness, -rollRad, true);
             list.add(toTransformation(backTrs));
         }
         return list;
@@ -1097,7 +1104,7 @@ public final class UiScene implements UiHandle {
         TRSResult trs = DisplayShapeMath.computeParallelogramTRS(p1, p2, p3);
         list.add(toTransformation(trs));
         if (doubleSided) {
-            float backDepth = -(depth + 0.022f + offsetZ);
+            float backDepth = -(depth + offsetZ);
             float backOffsetX = mirrorSide ? -offsetX : offsetX;
             float bx1 = mirrorSide ? -node.x1() : node.x1();
             float bx2 = mirrorSide ? -node.x2() : node.x2();
@@ -1144,7 +1151,7 @@ public final class UiScene implements UiHandle {
             list.add(toTransformation(trs));
         }
         if (doubleSided) {
-            float backDepth = -(depth + 0.022f + offsetZ);
+            float backDepth = -(depth + offsetZ);
             float backOffsetX = mirrorSide ? -offsetX : offsetX;
             float bx1 = mirrorSide ? -node.x1() : node.x1();
             float bx2 = mirrorSide ? -node.x2() : node.x2();
@@ -1192,10 +1199,10 @@ public final class UiScene implements UiHandle {
                 p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
                 p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
             }
-            TRSResult trs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, 0.0f);
+            TRSResult trs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, 0.0f, false);
             list.add(toTransformation(trs));
             if (doubleSided) {
-                float backDepth = -(depth + 0.022f + offsetZ);
+                float backDepth = -(depth + offsetZ);
                 float backOffsetX = mirrorSide ? -offsetX : offsetX;
                 float bx1 = mirrorSide ? -ptA.x() : ptA.x();
                 float bx2 = mirrorSide ? -ptB.x() : ptB.x();
@@ -1204,17 +1211,7 @@ public final class UiScene implements UiHandle {
                 if (scale != 1.0f) {
                     GeometryUtils.scaleAroundMidpoint(p1b, p2b, scale);
                 }
-                // Choose the endpoint order from the actual line normals.
-                // Mirroring and near-vertical lines do not always invert the
-                // same basis axis, so a mirrorSide boolean alone is unreliable.
-                Vector3f backStart = p1b;
-                Vector3f backEnd = p2b;
-                if (GeometryUtils.lineFacingNormal(p1, p2)
-                        .dot(GeometryUtils.lineFacingNormal(p1b, p2b)) >= 0.0f) {
-                    backStart = p2b;
-                    backEnd = p1b;
-                }
-                TRSResult backTrs = DisplayShapeMath.computeLineTRS(backStart, backEnd, thickness, 0.0f);
+                TRSResult backTrs = DisplayShapeMath.computeLineTRS(p1b, p2b, thickness, 0.0f, true);
                 list.add(toTransformation(backTrs));
             }
         }
@@ -1256,7 +1253,7 @@ public final class UiScene implements UiHandle {
         applyAnimationFrame(progress, ANIMATION_INTERPOLATION_TICKS);
     }
 
-    private void applyAnimationFrame(float progress, int interpolationTicks) {
+    void applyAnimationFrame(float progress, int interpolationTicks) {
         UiAnimation current = animationController.animation();
         if (current == null) return;
         float scale = MathUtils.lerp(current.fromScale(), current.toScale(), progress);
@@ -1456,6 +1453,21 @@ public final class UiScene implements UiHandle {
                 player.showEntity(plugin, displays.getFirst());
                 continue;
             }
+            if (node instanceof UiShapeNode shape) {
+                List<UiNode> subNodes = shape.decomposeToNodes();
+                int displayIdx = 0;
+                for (UiNode sub : subNodes) {
+                    List<Transformation> subTransforms = UiNodeTransformations.resolve(this, sub, 1.0f, 0.0f, 0.0f, 0.0f);
+                    int subCount = subTransforms.size();
+                    for (int k = 0; k < subCount && displayIdx < displays.size(); k++, displayIdx++) {
+                        boolean back = UiSceneVisibilityPolicy.isBackDisplay(sub, subCount, k);
+                        boolean show = (front != back);
+                        if (show) player.showEntity(plugin, displays.get(displayIdx));
+                        else player.hideEntity(plugin, displays.get(displayIdx));
+                    }
+                }
+                continue;
+            }
             for (int j = 0; j < displays.size(); j++) {
                 boolean back = UiSceneVisibilityPolicy.isBackDisplay(node, displays.size(), j);
                 boolean show = (front != back);
@@ -1551,22 +1563,36 @@ public final class UiScene implements UiHandle {
         if (removed) throw new IllegalStateException("UI scene has been removed");
     }
 
+    void rebuildNodeDisplays(int index, UiNode node) {
+        if (index < 0 || index >= nodeEntities.size()) return;
+        List<Display> oldDisplays = nodeEntities.get(index);
+        if (oldDisplays != null) {
+            for (Display d : oldDisplays) {
+                if (d != null && d.isValid()) d.remove();
+            }
+            entities.removeAll(oldDisplays);
+        }
+        List<Display> newDisplays = renderer.spawnNode(node);
+        nodeEntities.set(index, newDisplays);
+        entities.addAll(newDisplays);
+    }
+
     private boolean incrementalUpdate(UiDocument previous, UiDocument next) {
-        if (previous == null || previous.nodes().size() != next.nodes().size()) return false;
+        if (previous == null || previous.nodes().size() != next.nodes().size()
+                || nodeEntities.size() != next.nodes().size()) return false;
         for (int i = 0; i < next.nodes().size(); i++) {
             UiNode prev = previous.nodes().get(i);
             UiNode curr = next.nodes().get(i);
-            if (!prev.getClass().equals(curr.getClass())) return false;
-            if (prev.doubleSided() != curr.doubleSided()) return false;
-            if (prev instanceof PolylineNode p1 && curr instanceof PolylineNode p2) {
-                if (p1.points().size() != p2.points().size()) return false;
+            if (!prev.getClass().equals(curr.getClass())) {
+                rebuildNodeDisplays(i, curr);
+                continue;
             }
-            if (prev instanceof UiGradientBackgroundNode g1 && curr instanceof UiGradientBackgroundNode g2) {
-                if (g1.slicesX() != g2.slicesX() || g1.slicesY() != g2.slicesY()) return false;
+            List<Transformation> expected = UiNodeTransformations.resolve(this, curr, 1.0f, 0.0f, 0.0f, 0.0f);
+            if (nodeEntities.get(i).size() != expected.size()) {
+                rebuildNodeDisplays(i, curr);
+            } else {
+                renderer.updateNode(nodeEntities.get(i), curr);
             }
-        }
-        for (int i = 0; i < next.nodes().size(); i++) {
-            renderer.updateNode(nodeEntities.get(i), next.nodes().get(i));
         }
         updateInteractionHitbox();
         return true;
@@ -1587,6 +1613,9 @@ public final class UiScene implements UiHandle {
             }
         }
         spawnInteraction();
+        if (isAnimating()) {
+            applyCurrentTransformsImmediately();
+        }
         syncViewers();
     }
 
@@ -1596,6 +1625,7 @@ public final class UiScene implements UiHandle {
                 display.setBillboard(cameraTransform.billboard());
                 display.setInterpolationDelay(0);
                 display.setInterpolationDuration(INTERPOLATION_TICKS);
+                display.setTeleportDuration(INTERPOLATION_TICKS);
             }
         }
         resetTransforms();

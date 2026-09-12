@@ -61,16 +61,14 @@ public final class UiLayoutManager implements Listener {
     public void reloadAll() {
         loadedLayouts.clear();
         if (!layoutsFolder.exists()) {
-            if (layoutsFolder.mkdirs()) {
-                createDefaultExampleFile();
-            }
+            layoutsFolder.mkdirs();
         }
+        createDefaultExampleFile();
 
-        File[] files = layoutsFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".json"));
-        if (files == null || files.length == 0) {
-            createDefaultExampleFile();
-            files = layoutsFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".json"));
-        }
+        File[] files = layoutsFolder.listFiles((dir, name) -> {
+            String lower = name.toLowerCase();
+            return lower.endsWith(".json") || lower.endsWith(".hhdui");
+        });
 
         if (files != null) {
             for (File file : files) {
@@ -101,11 +99,17 @@ public final class UiLayoutManager implements Listener {
     }
 
     /**
-     * Retrieves a loaded UI document by name (case-insensitive, without .json extension).
+     * Retrieves a loaded UI document by name (case-insensitive, with or without .json/.hhdui extension).
      */
     public Optional<UiDocument> getLayout(String name) {
         if (name == null) return Optional.empty();
-        return Optional.ofNullable(loadedLayouts.get(name.toLowerCase().trim()));
+        String key = name.toLowerCase().trim();
+        if (key.endsWith(".json")) {
+            key = key.substring(0, key.length() - 5);
+        } else if (key.endsWith(".hhdui")) {
+            key = key.substring(0, key.length() - 6);
+        }
+        return Optional.ofNullable(loadedLayouts.get(key));
     }
 
     /**
@@ -186,136 +190,20 @@ public final class UiLayoutManager implements Listener {
     }
 
     private void createDefaultExampleFile() {
-        File sampleFile = new File(layoutsFolder, "example_menu.json");
-        if (sampleFile.exists()) return;
-
-        String sampleJson = """
-{
-  "name": "example_menu",
-  "width": 256,
-  "height": 192,
-  "nodes": [
-    {
-      "type": "shape",
-      "shapeType": "rounded_rect",
-      "id": "bg_panel",
-      "x": 28,
-      "y": 26,
-      "depth": 0.001,
-      "width": 200,
-      "height": 140,
-      "color": "#121826",
-      "alpha": 235,
-      "cornerRadius": 10,
-      "rotation": 0,
-      "outline": true,
-      "outlineColor": "#4f8ef7",
-      "outlineAlpha": 255,
-      "outlineThickness": 2.0,
-      "outlineStyle": "solid",
-      "doubleSided": false
-    },
-    {
-      "type": "text",
-      "id": "title_text",
-      "text": "<yellow><bold>HaoHan Display UI</bold></yellow>",
-      "boxX": 38,
-      "boxY": 36,
-      "depth": 0.002,
-      "width": 180,
-      "height": 20,
-      "fontSize": 9.0,
-      "contentWidth": 170,
-      "alignment": "CENTER",
-      "verticalAlignment": "MIDDLE",
-      "shadow": true,
-      "seeThrough": false,
-      "doubleSided": false
-    },
-    {
-      "type": "shape",
-      "shapeType": "star5",
-      "id": "star_icon",
-      "x": 113,
-      "y": 66,
-      "depth": 0.002,
-      "width": 30,
-      "height": 30,
-      "color": "#ffc83b",
-      "alpha": 255,
-      "rotation": 15,
-      "outline": true,
-      "outlineColor": "#ffffff",
-      "outlineAlpha": 255,
-      "outlineThickness": 1.5,
-      "outlineStyle": "solid",
-      "doubleSided": false
-    },
-    {
-      "type": "item",
-      "id": "sword_icon",
-      "material": "DIAMOND_SWORD",
-      "x": 68,
-      "y": 116,
-      "depth": 0.003,
-      "scale": 1.0,
-      "transform": "FIXED",
-      "doubleSided": false
-    },
-    {
-      "type": "shape",
-      "shapeType": "rounded_rect",
-      "id": "btn_help",
-      "x": 98,
-      "y": 126,
-      "depth": 0.002,
-      "width": 100,
-      "height": 24,
-      "color": "#2a4b8d",
-      "alpha": 255,
-      "cornerRadius": 6,
-      "rotation": 0,
-      "outline": true,
-      "outlineColor": "#6ba3ff",
-      "outlineAlpha": 255,
-      "outlineThickness": 1.5,
-      "outlineStyle": "solid",
-      "doubleSided": false,
-      "_button": {
-        "id": "btn_help_act",
-        "nodeId": "btn_help",
-        "description": "Click to get help",
-        "action": {
-          "type": "PLAYER_COMMAND",
-          "value": "help"
-        }
-      }
-    },
-    {
-      "type": "text",
-      "id": "btn_help_text",
-      "text": "<white>Click Me (/help)</white>",
-      "boxX": 98,
-      "boxY": 126,
-      "depth": 0.003,
-      "width": 100,
-      "height": 24,
-      "fontSize": 7.0,
-      "contentWidth": 94,
-      "alignment": "CENTER",
-      "verticalAlignment": "MIDDLE",
-      "shadow": true,
-      "seeThrough": false,
-      "doubleSided": false
+        copyResourceIfMissing("layouts/example_menu.json", "example_menu.json");
+        copyResourceIfMissing("layouts/shapes_showcase.json", "shapes_showcase.json");
     }
-  ]
-}
-""";
-        try (FileWriter writer = new FileWriter(sampleFile, StandardCharsets.UTF_8)) {
-            writer.write(sampleJson);
-            plugin.getLogger().info("Created default sample UI layout: 'layouts/example_menu.json'");
+
+    private void copyResourceIfMissing(String resourcePath, String fileName) {
+        File targetFile = new File(layoutsFolder, fileName);
+        if (targetFile.exists()) return;
+        try (java.io.InputStream in = plugin.getResource(resourcePath)) {
+            if (in != null) {
+                java.nio.file.Files.copy(in, targetFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                plugin.getLogger().info("Created default sample UI layout: 'layouts/" + fileName + "'");
+            }
         } catch (IOException e) {
-            plugin.getLogger().warning("Could not create sample UI layout: " + e.getMessage());
+            plugin.getLogger().warning("Could not copy default layout '" + fileName + "': " + e.getMessage());
         }
     }
 }

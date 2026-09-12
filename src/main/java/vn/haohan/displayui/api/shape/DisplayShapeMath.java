@@ -24,6 +24,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -34,8 +35,8 @@ import java.util.Objects;
  * via polar decomposition and analytical SVD.
  */
 public final class DisplayShapeMath {
-    private static final float MIN_LENGTH_SQUARED = 1.0E-6F;
-    private static final float MIN_AREA_SQUARED = 1.0E-8F;
+    private static final float MIN_LENGTH_SQUARED = 1.0E-10F;
+    private static final float MIN_AREA_SQUARED = 1.0E-14F;
 
     private DisplayShapeMath() {}
 
@@ -56,22 +57,32 @@ public final class DisplayShapeMath {
      * @return TRS result for TextDisplay
      */
     public static TRSResult computeLineTRS(Vector3f point1, Vector3f point2, float thickness, float roll) {
+        return computeLineTRS(point1, point2, thickness, roll, false);
+    }
+
+    /**
+     * Calculates the TRS decomposition for a line segment, supporting front and back facing planes.
+     */
+    public static TRSResult computeLineTRS(Vector3f point1, Vector3f point2, float thickness, float roll, boolean backFace) {
         validateLine(point1, point2, thickness);
         Vector3f direction = new Vector3f(point2).sub(point1);
         float length = direction.length();
-
-        Vector3f up = new Vector3f(0, 1, 0);
-        if (Math.abs(direction.y / length) > 0.99f) {
-            up = new Vector3f(1, 0, 0);
+        if (length < 1e-6f) {
+            return new TRSResult(point1, new Quaternionf(), new Vector3f(0.0001f, 0.0001f, 0.0001f), new Quaternionf());
         }
 
-        Vector3f zAxis = new Vector3f(direction).cross(up).normalize();
-        Vector3f xAxis = new Vector3f(direction).normalize();
+        Vector3f xAxis = new Vector3f(direction).div(length);
+        Vector3f zAxis = backFace ? new Vector3f(0, 0, -1) : new Vector3f(0, 0, 1);
+        if (Math.abs(xAxis.z) > 0.05f) {
+            Vector3f up = Math.abs(xAxis.y) > 0.99f ? new Vector3f(1, 0, 0) : new Vector3f(0, 1, 0);
+            zAxis = new Vector3f(xAxis).cross(up).normalize();
+            if (backFace) zAxis.negate();
+        }
         Vector3f yAxis = new Vector3f(zAxis).cross(xAxis).normalize();
 
         Quaternionf rotation = new Quaternionf().lookAlong(new Vector3f(zAxis).mul(-1f), yAxis).conjugate();
         if (roll != 0.0f) {
-            rotation.mul(new Quaternionf().rotateX(roll));
+            rotation.rotateX(roll);
         }
 
         return computeTRSFromInner2D(
@@ -80,16 +91,27 @@ public final class DisplayShapeMath {
                 1.0f, rotation, point1);
     }
 
+    public static boolean isValidSurface(Vector3f p1, Vector3f p2, Vector3f p3) {
+        if (p1 == null || p2 == null || p3 == null) return false;
+        Vector3f edge1 = new Vector3f(p2).sub(p1);
+        Vector3f edge2 = new Vector3f(p3).sub(p1);
+        return edge1.lengthSquared() >= MIN_LENGTH_SQUARED
+                && edge2.lengthSquared() >= MIN_LENGTH_SQUARED
+                && edge1.cross(edge2).lengthSquared() >= MIN_AREA_SQUARED;
+    }
+
     /**
      * Calculates the TRS decomposition for a parallelogram defined by 3 vertices.
      *
      * @param point1 corner origin
      * @param point2 edge vector 1 endpoint (width)
      * @param point3 edge vector 2 endpoint (height/shear)
-     * @return TRS result for TextDisplay
+     * @return TRS result for TextDisplay, or null if degenerate
      */
     public static TRSResult computeParallelogramTRS(Vector3f point1, Vector3f point2, Vector3f point3) {
-        validateSurface(point1, point2, point3);
+        if (!isValidSurface(point1, point2, point3)) {
+            return new TRSResult(point1 != null ? point1 : new Vector3f(), new Quaternionf(), new Vector3f(0.0001f, 0.0001f, 0.0001f), new Quaternionf());
+        }
         Vector3f p2vec = new Vector3f(point2).sub(point1);
         Vector3f p3vec = new Vector3f(point3).sub(point1);
 
@@ -116,10 +138,12 @@ public final class DisplayShapeMath {
      * @param point1 vertex 1
      * @param point2 vertex 2
      * @param point3 vertex 3
-     * @return list of 3 TRS results representing the filled triangle
+     * @return list of 3 TRS results representing the filled triangle (or empty list if degenerate)
      */
     public static List<TRSResult> computeTriangleTRS(Vector3f point1, Vector3f point2, Vector3f point3) {
-        validateSurface(point1, point2, point3);
+        if (!isValidSurface(point1, point2, point3)) {
+            return Collections.emptyList();
+        }
         Vector3f p2vec = new Vector3f(point2).sub(point1);
         Vector3f p3vec = new Vector3f(point3).sub(point1);
 

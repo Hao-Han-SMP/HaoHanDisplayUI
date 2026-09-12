@@ -68,6 +68,52 @@ public class DisplayShapeTest {
     }
 
     @Test
+    void testComputeLineTRSBackFace() {
+        Vector3f p1 = new Vector3f(0, 0, 0.005f);
+        Vector3f p2 = new Vector3f(10, 0, 0.005f);
+        float thickness = 0.5f;
+
+        TRSResult frontTrs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, 0.0f, false);
+        TRSResult backTrs = DisplayShapeMath.computeLineTRS(
+                new Vector3f(p1.x, p1.y, -p1.z),
+                new Vector3f(p2.x, p2.y, -p2.z),
+                thickness, 0.0f, true);
+
+        assertNotNull(frontTrs);
+        assertNotNull(backTrs);
+
+        // Front normal must face +Z, back normal must face -Z
+        Vector3f frontNormal = new Vector3f(0, 0, 1);
+        frontTrs.leftRotation().transform(frontNormal);
+        assertEquals(0.0f, frontNormal.x, 1e-4f);
+        assertEquals(0.0f, frontNormal.y, 1e-4f);
+        assertEquals(1.0f, frontNormal.z, 1e-4f);
+
+        Vector3f backNormal = new Vector3f(0, 0, 1);
+        backTrs.leftRotation().transform(backNormal);
+        assertEquals(0.0f, backNormal.x, 1e-4f);
+        assertEquals(0.0f, backNormal.y, 1e-4f);
+        assertEquals(-1.0f, backNormal.z, 1e-4f);
+
+        // Both front and back physical line centers must match in X and Y
+        Vector3f frontCenter = new Vector3f(frontTrs.translation());
+        Vector3f backCenter = new Vector3f(backTrs.translation());
+        // Entity center is at (0, 0.5 * thickness) along yAxis from the corner translation
+        Vector3f frontOffset = new Vector3f(0, 0.5f * thickness, 0);
+        frontTrs.leftRotation().transform(frontOffset);
+        frontCenter.add(frontOffset);
+
+        Vector3f backOffset = new Vector3f(0, 0.5f * thickness, 0);
+        backTrs.leftRotation().transform(backOffset);
+        backCenter.add(backOffset);
+
+        assertEquals(frontCenter.x, backCenter.x, 1e-4f);
+        assertEquals(frontCenter.y, backCenter.y, 1e-4f);
+        assertEquals(0.005f, frontCenter.z, 1e-4f);
+        assertEquals(-0.005f, backCenter.z, 1e-4f);
+    }
+
+    @Test
     void testComputeParallelogramTRS() {
         Vector3f p1 = new Vector3f(0, 0, 0);
         Vector3f p2 = new Vector3f(10, 0, 0);

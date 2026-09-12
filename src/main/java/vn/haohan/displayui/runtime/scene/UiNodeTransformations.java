@@ -68,10 +68,11 @@ final class UiNodeTransformations {
         } else if (node instanceof TriangleNode triangle) {
             return scene.computeTriangleTransforms(triangle, scale, offsetX, offsetY, offsetZ);
         } else if (node instanceof UiShapeNode shape) {
-            List<UiNode> subNodes = shape.decomposeToNodes();
+            UiShapeNode scaledShape = (Math.abs(scale - 1.0f) > 1e-6f) ? shape.scaled(scale) : shape;
+            List<UiNode> subNodes = scaledShape.decomposeToNodes();
             List<Transformation> list = new java.util.ArrayList<>();
             for (UiNode sub : subNodes) {
-                list.addAll(resolve(scene, sub, scale, offsetX, offsetY, offsetZ));
+                list.addAll(resolve(scene, sub, 1.0f, offsetX, offsetY, offsetZ));
             }
             return list;
         } else if (node instanceof PolylineNode polyline) {

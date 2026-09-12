@@ -66,14 +66,35 @@ public final class UiFollowController {
         Location targetLocation = eye.clone().add(direction.multiply(options.distance()));
         targetLocation.setPitch(eye.getPitch());
         targetLocation.setYaw(eye.getYaw() + 180.0f);
+
+        double distSq = targetLocation.distanceSquared(current);
+        // If the player moved extremely far (e.g. teleported > 16 blocks), snap immediately
+        if (distSq > 256.0) {
+            return targetLocation;
+        }
+
+        float yawDiff = MathUtils.signedAngleDifference(targetLocation.getYaw(), current.getYaw());
+        float pitchDiff = targetLocation.getPitch() - current.getPitch();
+
+        // Deadzone: if already settled close to the target, do not emit redundant updates
+        if (distSq < 0.0001 && Math.abs(yawDiff) < 0.05f && Math.abs(pitchDiff) < 0.05f) {
+            return null;
+        }
+
         Location next = current.clone();
         next.setX(MathUtils.lerp(current.getX(), targetLocation.getX(), options.positionDamping()));
         next.setY(MathUtils.lerp(current.getY(), targetLocation.getY(), options.positionDamping()));
         next.setZ(MathUtils.lerp(current.getZ(), targetLocation.getZ(), options.positionDamping()));
-        float yawDiff = MathUtils.signedAngleDifference(targetLocation.getYaw(), current.getYaw());
         next.setYaw(current.getYaw() + yawDiff * options.rotationDamping());
-        float pitchDiff = targetLocation.getPitch() - current.getPitch();
         next.setPitch(current.getPitch() + pitchDiff * options.rotationDamping());
+
+        // Snap if within settling threshold after lerping to avoid micro-drift
+        if (targetLocation.distanceSquared(next) < 0.0001
+                && Math.abs(MathUtils.signedAngleDifference(targetLocation.getYaw(), next.getYaw())) < 0.05f
+                && Math.abs(targetLocation.getPitch() - next.getPitch()) < 0.05f) {
+            return targetLocation;
+        }
+
         return next;
     }
 }

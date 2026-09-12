@@ -32,8 +32,8 @@ final class UiSceneAnimationController {
         nodeAnimationAgesTicks = new double[0];
         animationAgeTicks = 0.0;
         clock.reset();
+        scene.applyAnimationFrame(0.0f, 0);
         scene.configureAnimationInterpolation();
-        scene.applyAnimation(0.0);
     }
 
     void startNodes(List<UiAnimation> animations, int nodeCount) {
@@ -55,8 +55,8 @@ final class UiSceneAnimationController {
         animation = null;
         animationAgeTicks = 0.0;
         clock.reset();
+        scene.applyNodeAnimationFrames(0);
         scene.configureAnimationInterpolation();
-        scene.applyNodeAnimationFrames();
     }
 
     void stop() {

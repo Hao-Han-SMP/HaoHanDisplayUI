@@ -73,6 +73,19 @@ final class UiSceneRenderer {
                 display.setInterpolationDuration(scene.interpolationTicks());
             }
         }
+        if (node instanceof UiShapeNode shape) {
+            List<UiNode> subNodes = shape.decomposeToNodes();
+            int displayIdx = 0;
+            for (UiNode sub : subNodes) {
+                List<Transformation> subTransforms = UiNodeTransformations.resolve(scene, sub, 1.0f, 0.0f, 0.0f, 0.0f);
+                for (int k = 0; k < subTransforms.size() && displayIdx < displays.size(); k++, displayIdx++) {
+                    Display display = displays.get(displayIdx);
+                    if (display == null || !display.isValid()) continue;
+                    updateDisplay(display, sub, subTransforms.get(k), k);
+                }
+            }
+            return;
+        }
         List<Transformation> transforms = UiNodeTransformations.resolve(scene, node, 1.0f, 0.0f, 0.0f, 0.0f);
         for (int i = 0; i < displays.size() && i < transforms.size(); i++) {
             Display display = displays.get(i);
@@ -128,7 +141,9 @@ final class UiSceneRenderer {
         } else if (node instanceof UiShapeNode shape && display instanceof TextDisplay text) {
             text.setBackgroundColor(shape.color());
         }
-        display.setTransformation(transform);
+        if (!scene.isAnimating()) {
+            display.setTransformation(transform);
+        }
     }
 
     private <T extends UiNode> void register(Class<T> type, Function<UiNode, List<Display>> spawner) {

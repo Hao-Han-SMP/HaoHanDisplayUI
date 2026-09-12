@@ -91,6 +91,23 @@ public record UiShapeNode(
     }
 
     /**
+     * Returns a copy of this shape scaled uniformly around its center point.
+     */
+    public UiShapeNode scaled(float scale) {
+        if (Math.abs(scale - 1.0f) < 1e-6f) return this;
+        float cx = x + width * 0.5f;
+        float cy = y + height * 0.5f;
+        float newW = width * scale;
+        float newH = height * scale;
+        float newX = cx - newW * 0.5f;
+        float newY = cy - newH * 0.5f;
+        float newRadius = cornerRadius * scale;
+        float newThickness = outlineThickness * scale;
+        return new UiShapeNode(shapeType, newX, newY, newW, newH, depth, color,
+                outline, outlineColor, newThickness, outlineStyle, newRadius, rotation, doubleSided);
+    }
+
+    /**
      * Computes the 2D polygon boundary vertices for this shape (including rotation if non-zero).
      */
     public List<PolylineNode.Point> computeBoundaryPoints() {
@@ -144,9 +161,9 @@ public record UiShapeNode(
                 break;
             }
             case "circle": {
-                int sides = 20;
+                int sides = 24;
                 for (int i = 0; i < sides; i++) {
-                    double angle = (2.0 * Math.PI * i) / sides;
+                    double angle = -Math.PI / 2.0 + (2.0 * Math.PI * i) / sides;
                     pts.add(new PolylineNode.Point((float) (cx + rx * Math.cos(angle)), (float) (cy + ry * Math.sin(angle))));
                 }
                 break;
@@ -159,18 +176,19 @@ public record UiShapeNode(
                 break;
             }
             case "trapezoid": {
-                float ins = w * 0.22f;
+                float ins = Math.max(0.0f, Math.min(w * 0.22f, (w - 2.0f) * 0.5f));
                 pts.add(new PolylineNode.Point(x + ins, y));
                 pts.add(new PolylineNode.Point(x + w - ins, y));
                 pts.add(new PolylineNode.Point(x + w, y + h));
                 pts.add(new PolylineNode.Point(x, y + h));
                 break;
             }
-            case "parallelogram": {
-                float sl = w * 0.22f;
-                pts.add(new PolylineNode.Point(x + sl, y));
+            case "parallelogram":
+            case "slanted": {
+                float skew = Math.max(0.0f, Math.min(w * 0.25f, (w - 2.0f) * 0.5f));
+                pts.add(new PolylineNode.Point(x + skew, y));
                 pts.add(new PolylineNode.Point(x + w, y));
-                pts.add(new PolylineNode.Point(x + w - sl, y + h));
+                pts.add(new PolylineNode.Point(x + w - skew, y + h));
                 pts.add(new PolylineNode.Point(x, y + h));
                 break;
             }
@@ -190,7 +208,7 @@ public record UiShapeNode(
                 pts.addAll(createRegularPolygonPoints(cx, cy, rx, ry, 5, -Math.PI / 2.0));
                 break;
             case "hexagon":
-                pts.addAll(createRegularPolygonPoints(cx, cy, rx, ry, 6, 0));
+                pts.addAll(createRegularPolygonPoints(cx, cy, rx, ry, 6, 0.0));
                 break;
             case "heptagon":
                 pts.addAll(createRegularPolygonPoints(cx, cy, rx, ry, 7, -Math.PI / 2.0));
@@ -199,64 +217,76 @@ public record UiShapeNode(
                 pts.addAll(createRegularPolygonPoints(cx, cy, rx, ry, 8, Math.PI / 8.0));
                 break;
             case "star3":
-                pts.addAll(createStarPoints(cx, cy, rx, ry, 3, 0.45f, -Math.PI / 2.0));
+                pts.addAll(createStarPoints(cx, cy, rx, ry, 3, 0.40f, -Math.PI / 2.0));
                 break;
             case "star4":
-                pts.addAll(createStarPoints(cx, cy, rx, ry, 4, 0.4f, -Math.PI / 2.0));
+                pts.addAll(createStarPoints(cx, cy, rx, ry, 4, 0.35f, -Math.PI / 2.0));
                 break;
             case "star5":
-                pts.addAll(createStarPoints(cx, cy, rx, ry, 5, 0.42f, -Math.PI / 2.0));
+                pts.addAll(createStarPoints(cx, cy, rx, ry, 5, 0.382f, -Math.PI / 2.0));
                 break;
             case "star6":
-                pts.addAll(createStarPoints(cx, cy, rx, ry, 6, 0.48f, -Math.PI / 2.0));
+                pts.addAll(createStarPoints(cx, cy, rx, ry, 6, 0.577f, -Math.PI / 2.0));
                 break;
             case "arrow_right": {
-                float aw = w * 0.45f, ah = h * 0.26f;
-                pts.add(new PolylineNode.Point(x, y + ah));
-                pts.add(new PolylineNode.Point(x + w - aw, y + ah));
-                pts.add(new PolylineNode.Point(x + w - aw, y));
+                float headLen = Math.max(2.0f, Math.min(w * 0.42f, w - 2.0f));
+                float shaftH = Math.max(1.0f, Math.min(h * 0.45f, h - 2.0f));
+                float shaftTop = cy - shaftH * 0.5f;
+                float shaftBottom = cy + shaftH * 0.5f;
+                pts.add(new PolylineNode.Point(x, shaftTop));
+                pts.add(new PolylineNode.Point(x + w - headLen, shaftTop));
+                pts.add(new PolylineNode.Point(x + w - headLen, y));
                 pts.add(new PolylineNode.Point(x + w, cy));
-                pts.add(new PolylineNode.Point(x + w - aw, y + h));
-                pts.add(new PolylineNode.Point(x + w - aw, y + h - ah));
-                pts.add(new PolylineNode.Point(x, y + h - ah));
+                pts.add(new PolylineNode.Point(x + w - headLen, y + h));
+                pts.add(new PolylineNode.Point(x + w - headLen, shaftBottom));
+                pts.add(new PolylineNode.Point(x, shaftBottom));
                 break;
             }
             case "arrow_left": {
-                float aw = w * 0.45f, ah = h * 0.26f;
-                pts.add(new PolylineNode.Point(x + w, y + ah));
-                pts.add(new PolylineNode.Point(x + aw, y + ah));
-                pts.add(new PolylineNode.Point(x + aw, y));
+                float headLen = Math.max(2.0f, Math.min(w * 0.42f, w - 2.0f));
+                float shaftH = Math.max(1.0f, Math.min(h * 0.45f, h - 2.0f));
+                float shaftTop = cy - shaftH * 0.5f;
+                float shaftBottom = cy + shaftH * 0.5f;
+                pts.add(new PolylineNode.Point(x + w, shaftTop));
+                pts.add(new PolylineNode.Point(x + headLen, shaftTop));
+                pts.add(new PolylineNode.Point(x + headLen, y));
                 pts.add(new PolylineNode.Point(x, cy));
-                pts.add(new PolylineNode.Point(x + aw, y + h));
-                pts.add(new PolylineNode.Point(x + aw, y + h - ah));
-                pts.add(new PolylineNode.Point(x + w, y + h - ah));
+                pts.add(new PolylineNode.Point(x + headLen, y + h));
+                pts.add(new PolylineNode.Point(x + headLen, shaftBottom));
+                pts.add(new PolylineNode.Point(x + w, shaftBottom));
                 break;
             }
-            case "chevron_right": {
+            case "chevron_right":
+            case "chevron": {
+                float armW = Math.max(2.0f, Math.min(w * 0.42f, w * 0.5f));
+                pts.add(new PolylineNode.Point(x + w - armW, cy));
                 pts.add(new PolylineNode.Point(x, y));
-                pts.add(new PolylineNode.Point(x + w * 0.55f, cy));
-                pts.add(new PolylineNode.Point(x, y + h));
-                pts.add(new PolylineNode.Point(x + w * 0.45f, y + h));
+                pts.add(new PolylineNode.Point(x + armW, y));
                 pts.add(new PolylineNode.Point(x + w, cy));
-                pts.add(new PolylineNode.Point(x + w * 0.45f, y));
+                pts.add(new PolylineNode.Point(x + armW, y + h));
+                pts.add(new PolylineNode.Point(x, y + h));
                 break;
             }
             case "double_arrow": {
-                float aw = w * 0.3f, ah = h * 0.26f;
-                pts.add(new PolylineNode.Point(x + aw, y));
-                pts.add(new PolylineNode.Point(x + aw, y + ah));
-                pts.add(new PolylineNode.Point(x + w - aw, y + ah));
-                pts.add(new PolylineNode.Point(x + w - aw, y));
-                pts.add(new PolylineNode.Point(x + w, cy));
-                pts.add(new PolylineNode.Point(x + w - aw, y + h));
-                pts.add(new PolylineNode.Point(x + w - aw, y + h - ah));
-                pts.add(new PolylineNode.Point(x + aw, y + h - ah));
-                pts.add(new PolylineNode.Point(x + aw, y + h));
+                float headLen = Math.max(2.0f, Math.min(w * 0.28f, (w - 2.0f) * 0.5f));
+                float shaftH = Math.max(1.0f, Math.min(h * 0.40f, h - 2.0f));
+                float shaftTop = cy - shaftH * 0.5f;
+                float shaftBottom = cy + shaftH * 0.5f;
                 pts.add(new PolylineNode.Point(x, cy));
+                pts.add(new PolylineNode.Point(x + headLen, y));
+                pts.add(new PolylineNode.Point(x + headLen, shaftTop));
+                pts.add(new PolylineNode.Point(x + w - headLen, shaftTop));
+                pts.add(new PolylineNode.Point(x + w - headLen, y));
+                pts.add(new PolylineNode.Point(x + w, cy));
+                pts.add(new PolylineNode.Point(x + w - headLen, y + h));
+                pts.add(new PolylineNode.Point(x + w - headLen, shaftBottom));
+                pts.add(new PolylineNode.Point(x + headLen, shaftBottom));
+                pts.add(new PolylineNode.Point(x + headLen, y + h));
                 break;
             }
             case "cross": {
-                float tw = w * 0.3f, th = h * 0.3f;
+                float tw = Math.max(1.0f, Math.min(w * 0.34f, w - 2.0f));
+                float th = Math.max(1.0f, Math.min(h * 0.34f, h - 2.0f));
                 pts.add(new PolylineNode.Point(cx - tw * 0.5f, y));
                 pts.add(new PolylineNode.Point(cx + tw * 0.5f, y));
                 pts.add(new PolylineNode.Point(cx + tw * 0.5f, cy - th * 0.5f));
@@ -271,28 +301,39 @@ public record UiShapeNode(
                 pts.add(new PolylineNode.Point(cx - tw * 0.5f, cy - th * 0.5f));
                 break;
             }
+            case "heart": {
+                int N = 32;
+                for (int i = 0; i < N; i++) {
+                    double t = -Math.PI + (2.0 * Math.PI * i) / N;
+                    double sinT = Math.sin(t);
+                    double cosT = Math.cos(t);
+                    double hx = 16.0 * sinT * sinT * sinT;
+                    double hy = 13.0 * cosT - 5.0 * Math.cos(2.0 * t) - 2.0 * Math.cos(3.0 * t) - Math.cos(4.0 * t);
+                    float px = (float) (cx + (hx / 16.0) * rx);
+                    float py = (float) (y + h - ((hy + 17.0) / 29.0) * h);
+                    pts.add(new PolylineNode.Point(px, py));
+                }
+                break;
+            }
             case "speech_bubble": {
-                float bH = h * 0.78f;
+                float bH = h * 0.76f;
                 pts.add(new PolylineNode.Point(x, y));
                 pts.add(new PolylineNode.Point(x + w, y));
                 pts.add(new PolylineNode.Point(x + w, y + bH));
-                pts.add(new PolylineNode.Point(x + w * 0.45f, y + bH));
-                pts.add(new PolylineNode.Point(x + w * 0.25f, y + h));
-                pts.add(new PolylineNode.Point(x + w * 0.28f, y + bH));
+                pts.add(new PolylineNode.Point(x + w * 0.38f, y + bH));
+                pts.add(new PolylineNode.Point(x + w * 0.10f, y + h));
+                pts.add(new PolylineNode.Point(x + w * 0.18f, y + bH));
                 pts.add(new PolylineNode.Point(x, y + bH));
                 break;
             }
-            case "heart": {
-                pts.add(new PolylineNode.Point(cx, y + h));
-                pts.add(new PolylineNode.Point(x + w * 0.15f, y + h * 0.65f));
-                pts.add(new PolylineNode.Point(x, y + h * 0.35f));
-                pts.add(new PolylineNode.Point(x + w * 0.15f, y + h * 0.1f));
-                pts.add(new PolylineNode.Point(x + w * 0.35f, y));
-                pts.add(new PolylineNode.Point(cx, y + h * 0.22f));
-                pts.add(new PolylineNode.Point(x + w * 0.65f, y));
-                pts.add(new PolylineNode.Point(x + w * 0.85f, y + h * 0.1f));
-                pts.add(new PolylineNode.Point(x + w, y + h * 0.35f));
-                pts.add(new PolylineNode.Point(x + w * 0.85f, y + h * 0.65f));
+            case "lightning":
+            case "bolt": {
+                pts.add(new PolylineNode.Point(x + w * 0.58f, y));
+                pts.add(new PolylineNode.Point(x + w * 0.15f, y + h * 0.52f));
+                pts.add(new PolylineNode.Point(x + w * 0.48f, y + h * 0.52f));
+                pts.add(new PolylineNode.Point(x + w * 0.38f, y + h));
+                pts.add(new PolylineNode.Point(x + w * 0.85f, y + h * 0.44f));
+                pts.add(new PolylineNode.Point(x + w * 0.52f, y + h * 0.44f));
                 break;
             }
             default: { // default rectangle
@@ -403,7 +444,10 @@ public record UiShapeNode(
                 }
 
                 if (!hasInside) {
-                    triangles.add(new TriangleNode(a.x(), a.y(), b.x(), b.y(), c.x(), c.y(), depth, color, doubleSided));
+                    double triArea = Math.abs(a.x() * (b.y() - c.y()) + b.x() * (c.y() - a.y()) + c.x() * (a.y() - b.y()));
+                    if (triArea > 0.01) {
+                        triangles.add(new TriangleNode(a.x(), a.y(), b.x(), b.y(), c.x(), c.y(), depth, color, doubleSided));
+                    }
                     poly.remove(i);
                     earFound = true;
                     break;
@@ -418,11 +462,17 @@ public record UiShapeNode(
 
         if (poly.size() >= 3) {
             for (int i = 1; i < poly.size() - 1; i++) {
-                triangles.add(new TriangleNode(
-                        poly.get(0).x(), poly.get(0).y(),
-                        poly.get(i).x(), poly.get(i).y(),
-                        poly.get(i + 1).x(), poly.get(i + 1).y(),
-                        depth, color, doubleSided));
+                PolylineNode.Point p0 = poly.get(0);
+                PolylineNode.Point pi = poly.get(i);
+                PolylineNode.Point pi1 = poly.get(i + 1);
+                double triArea = Math.abs(p0.x() * (pi.y() - pi1.y()) + pi.x() * (pi1.y() - p0.y()) + pi1.x() * (p0.y() - pi.y()));
+                if (triArea > 0.01) {
+                    triangles.add(new TriangleNode(
+                            p0.x(), p0.y(),
+                            pi.x(), pi.y(),
+                            pi1.x(), pi1.y(),
+                            depth, color, doubleSided));
+                }
             }
         }
 
@@ -443,22 +493,28 @@ public record UiShapeNode(
     }
 
     /**
-     * Decomposes this shape node into standard elemental UiNodes (UiBackgroundNode, TriangleNode, PolylineNode).
+     * Decomposes this shape node into standard elemental UiNodes (UiBackgroundNode, TriangleNode, ParallelogramNode, LineNode).
      */
     public List<UiNode> decomposeToNodes() {
         List<UiNode> nodes = new ArrayList<>();
         String type = shapeType.toLowerCase().trim();
         boolean hasRotation = Math.abs(rotation) > 1e-4f;
+        float cx = x + width * 0.5f;
+        float cy = y + height * 0.5f;
+        float rx = width * 0.5f;
+        float ry = height * 0.5f;
 
-        // 1. Fill rendering
+        // 1. Fill rendering — Optimized assembly from fundamental primitives (rect, triangle, parallelogram) or triangulation
         if (!hasRotation && type.equals("rect")) {
-            nodes.add(new UiBackgroundNode(x, y, depth, width, height, color, doubleSided));
-        } else if (!hasRotation && type.equals("rounded_rect")) {
-            float rx = width * 0.5f;
-            float ry = height * 0.5f;
-            float r = Math.max(0, Math.min(cornerRadius, Math.min(rx, ry)));
-            if (r <= 0.5f) {
+            if (width > 0.001f && height > 0.001f) {
                 nodes.add(new UiBackgroundNode(x, y, depth, width, height, color, doubleSided));
+            }
+        } else if (!hasRotation && type.equals("rounded_rect")) {
+            float r = Math.max(0, Math.min(cornerRadius, Math.min(rx, ry)));
+            if (r <= 0.5f || width <= 2.0f || height <= 2.0f) {
+                if (width > 0.001f && height > 0.001f) {
+                    nodes.add(new UiBackgroundNode(x, y, depth, width, height, color, doubleSided));
+                }
             } else {
                 int cornerSteps = 8;
                 float stepH = r / cornerSteps;
@@ -470,7 +526,7 @@ public record UiShapeNode(
                     float d = r - midY;
                     float indent = (float) (r - Math.sqrt(Math.max(0, r * r - d * d)));
                     float sliceW = width - 2.0f * indent;
-                    if (sliceW > 0.05f) {
+                    if (sliceW > 0.05f && stepH > 0.05f) {
                         nodes.add(new UiBackgroundNode(x + indent, sliceY, depth, sliceW, stepH, color, doubleSided));
                     }
                 }
@@ -488,17 +544,13 @@ public record UiShapeNode(
                     float d = midY;
                     float indent = (float) (r - Math.sqrt(Math.max(0, r * r - d * d)));
                     float sliceW = width - 2.0f * indent;
-                    if (sliceW > 0.05f) {
+                    if (sliceW > 0.05f && stepH > 0.05f) {
                         nodes.add(new UiBackgroundNode(x + indent, sliceY, depth, sliceW, stepH, color, doubleSided));
                     }
                 }
             }
-        } else if (!hasRotation && type.equals("circle")) {
+        } else if (!hasRotation && type.equals("circle") && width > 4.0f && height > 4.0f) {
             int steps = 20;
-            float rx = width * 0.5f;
-            float ry = height * 0.5f;
-            float cx = x + rx;
-            float cy = y + ry;
             float stepH = height / steps;
             for (int i = 0; i < steps; i++) {
                 float sliceY = y + i * stepH;
@@ -507,37 +559,111 @@ public record UiShapeNode(
                 if (Math.abs(dy) <= 1.0f) {
                     float sliceW = (float) (2.0f * rx * Math.sqrt(Math.max(0, 1.0f - dy * dy)));
                     float sliceX = cx - sliceW * 0.5f;
-                    if (sliceW > 0.05f) {
+                    if (sliceW > 0.05f && stepH > 0.05f) {
                         nodes.add(new UiBackgroundNode(sliceX, sliceY, depth, sliceW, stepH, color, doubleSided));
                     }
                 }
             }
-        } else if (!hasRotation && type.equals("parallelogram")) {
-            float sl = width * 0.22f;
-            nodes.add(new ParallelogramNode(x + sl, y, x + width, y, x + width - sl, y + height, depth, color, doubleSided));
-        } else if (!hasRotation && type.equals("triangle")) {
-            float cx = x + width * 0.5f;
+        } else if (!hasRotation && type.equals("diamond") && width > 1.0f && height > 1.0f) {
+            // Exactly 2 triangles (top & bottom)
+            nodes.add(new TriangleNode(cx, y, x, cy, x + width, cy, depth, color, doubleSided));
+            nodes.add(new TriangleNode(cx, y + height, x, cy, x + width, cy, depth, color, doubleSided));
+        } else if (!hasRotation && type.equals("trapezoid") && width > 4.0f && height > 1.0f) {
+            // 1 core rect + 2 side triangles (0% overlap)
+            float ins = Math.max(0.0f, Math.min(width * 0.22f, (width - 2.0f) * 0.5f));
+            float coreW = width - 2.0f * ins;
+            if (coreW > 0.05f) {
+                nodes.add(new UiBackgroundNode(x + ins, y, depth, coreW, height, color, doubleSided));
+            }
+            if (ins > 0.05f) {
+                nodes.add(new TriangleNode(x + ins, y, x, y + height, x + ins, y + height, depth, color, doubleSided));
+                nodes.add(new TriangleNode(x + width - ins, y, x + width, y + height, x + width - ins, y + height, depth, color, doubleSided));
+            }
+        } else if (!hasRotation && (type.equals("parallelogram") || type.equals("slanted")) && width > 2.0f && height > 1.0f) {
+            float skew = Math.max(0.0f, Math.min(width * 0.25f, (width - 1.0f) * 0.5f));
+            nodes.add(new ParallelogramNode(x + skew, y, x + width, y, x, y + height, depth, color, doubleSided));
+        } else if (!hasRotation && type.equals("triangle") && width > 0.5f && height > 0.5f) {
             nodes.add(new TriangleNode(cx, y, x + width, y + height, x, y + height, depth, color, doubleSided));
-        } else if (!hasRotation && type.equals("right_triangle")) {
+        } else if (!hasRotation && type.equals("right_triangle") && width > 0.5f && height > 0.5f) {
             nodes.add(new TriangleNode(x, y, x + width, y + height, x, y + height, depth, color, doubleSided));
+        } else if (!hasRotation && type.equals("arrow_right") && width > 4.0f && height > 2.0f) {
+            // 1 shaft rect + 1 head triangle (0% overlap)
+            float headLen = Math.max(2.0f, Math.min(width * 0.42f, width - 2.0f));
+            float shaftH = Math.max(1.0f, Math.min(height * 0.45f, height - 1.0f));
+            float shaftW = width - headLen;
+            float shaftTop = cy - shaftH * 0.5f;
+            if (shaftW > 0.05f && shaftH > 0.05f) {
+                nodes.add(new UiBackgroundNode(x, shaftTop, depth, shaftW, shaftH, color, doubleSided));
+            }
+            nodes.add(new TriangleNode(x + width - headLen, y, x + width - headLen, y + height, x + width, cy, depth, color, doubleSided));
+        } else if (!hasRotation && type.equals("arrow_left") && width > 4.0f && height > 2.0f) {
+            // 1 shaft rect + 1 head triangle (0% overlap)
+            float headLen = Math.max(2.0f, Math.min(width * 0.42f, width - 2.0f));
+            float shaftH = Math.max(1.0f, Math.min(height * 0.45f, height - 1.0f));
+            float shaftW = width - headLen;
+            float shaftTop = cy - shaftH * 0.5f;
+            if (shaftW > 0.05f && shaftH > 0.05f) {
+                nodes.add(new UiBackgroundNode(x + headLen, shaftTop, depth, shaftW, shaftH, color, doubleSided));
+            }
+            nodes.add(new TriangleNode(x + headLen, y, x + headLen, y + height, x, cy, depth, color, doubleSided));
+        } else if (!hasRotation && type.equals("double_arrow") && width > 6.0f && height > 2.0f) {
+            // 1 shaft rect + 2 head triangles (0% overlap)
+            float headLen = Math.max(2.0f, Math.min(width * 0.28f, (width - 2.0f) * 0.5f));
+            float shaftH = Math.max(1.0f, Math.min(height * 0.40f, height - 1.0f));
+            float shaftW = width - 2.0f * headLen;
+            float shaftTop = cy - shaftH * 0.5f;
+            nodes.add(new TriangleNode(x, cy, x + headLen, y, x + headLen, y + height, depth, color, doubleSided));
+            if (shaftW > 0.05f && shaftH > 0.05f) {
+                nodes.add(new UiBackgroundNode(x + headLen, shaftTop, depth, shaftW, shaftH, color, doubleSided));
+            }
+            nodes.add(new TriangleNode(x + width, cy, x + width - headLen, y, x + width - headLen, y + height, depth, color, doubleSided));
+        } else if (!hasRotation && type.equals("cross") && width > 3.0f && height > 3.0f) {
+            // 3 non-overlapping rects: vertical bar + left arm + right arm (0% overlap for alpha)
+            float tw = Math.max(1.0f, Math.min(width * 0.34f, width - 1.0f));
+            float th = Math.max(1.0f, Math.min(height * 0.34f, height - 1.0f));
+            float armW = (width - tw) * 0.5f;
+            nodes.add(new UiBackgroundNode(cx - tw * 0.5f, y, depth, tw, height, color, doubleSided));
+            if (armW > 0.05f && th > 0.05f) {
+                nodes.add(new UiBackgroundNode(x, cy - th * 0.5f, depth, armW, th, color, doubleSided));
+                nodes.add(new UiBackgroundNode(cx + tw * 0.5f, cy - th * 0.5f, depth, armW, th, color, doubleSided));
+            }
+        } else if (!hasRotation && type.equals("star6") && width > 2.0f && height > 2.0f) {
+            // 2 overlapping equilateral triangles
+            List<PolylineNode.Point> up = createRegularPolygonPoints(cx, cy, rx, ry, 3, -Math.PI / 2.0);
+            List<PolylineNode.Point> down = createRegularPolygonPoints(cx, cy, rx, ry, 3, Math.PI / 2.0);
+            nodes.add(new TriangleNode(up.get(0).x(), up.get(0).y(), up.get(1).x(), up.get(1).y(), up.get(2).x(), up.get(2).y(), depth, color, doubleSided));
+            nodes.add(new TriangleNode(down.get(0).x(), down.get(0).y(), down.get(1).x(), down.get(1).y(), down.get(2).x(), down.get(2).y(), depth, color, doubleSided));
+        } else if (!hasRotation && (type.equals("pentagon") || type.equals("hexagon") || type.equals("heptagon") || type.equals("octagon")
+                || type.equals("star3") || type.equals("star4") || type.equals("star5"))) {
+            // Fast, exact Triangle Fan from center for convex regular polygons and stars
+            List<PolylineNode.Point> pts = computeBoundaryPoints();
+            for (int i = 0; i < pts.size(); i++) {
+                PolylineNode.Point p1 = pts.get(i);
+                PolylineNode.Point p2 = pts.get((i + 1) % pts.size());
+                double triArea = Math.abs(cx * (p1.y() - p2.y()) + p1.x() * (p2.y() - cy) + p2.x() * (cy - p1.y()));
+                if (triArea > 0.001) {
+                    nodes.add(new TriangleNode(cx, cy, p1.x(), p1.y(), p2.x(), p2.y(), depth, color, doubleSided));
+                }
+            }
         } else {
             nodes.addAll(triangulate());
         }
 
+        // If decomposition yielded nothing (e.g. tiny shape with sub-threshold triangles), ensure at least 1 fallback element
+        if (nodes.isEmpty()) {
+            if (width > 0.001f && height > 0.001f) {
+                nodes.add(new UiBackgroundNode(x, y, depth, width, height, color, doubleSided));
+            }
+        }
+
         // 2. Outline rendering
         if (outline && outlineThickness > 0) {
-            if (!hasRotation && color.getAlpha() == 255 && type.equals("rect")) {
-                // Alpha = 255 for plain rect: Single expanded background behind the main shape
-                nodes.add(0, new UiBackgroundNode(
-                        x - outlineThickness, y - outlineThickness,
-                        depth - 0.0001f,
-                        width + 2.0f * outlineThickness, height + 2.0f * outlineThickness,
-                        outlineColor, doubleSided));
-            } else if (!hasRotation && type.equals("rounded_rect")) {
-                float rx = width * 0.5f;
-                float ry = height * 0.5f;
-                float r = Math.max(0, Math.min(cornerRadius, Math.min(rx, ry)));
-                nodes.addAll(createRoundedRectOutlineNodes(x, y, width, height, r, outlineThickness, depth + 0.0001f, outlineColor, doubleSided));
+            String style = outlineStyle != null ? outlineStyle.toLowerCase().trim() : "solid";
+            if ("dashed".equals(style) || "dotted".equals(style)) {
+                List<PolylineNode.Point> boundary = computeBoundaryPoints();
+                float dashLen = "dotted".equals(style) ? Math.max(2.5f, outlineThickness * 1.5f) : 6.0f;
+                float gapLen = "dotted".equals(style) ? Math.max(3.0f, outlineThickness * 2.0f) : 4.0f;
+                nodes.addAll(createDashedOutlineNodes(boundary, dashLen, gapLen, outlineThickness, depth + 0.0001f, outlineColor, doubleSided));
             } else {
                 List<PolylineNode.Point> boundary = computeBoundaryPoints();
                 nodes.add(new PolylineNode(boundary, outlineThickness, depth + 0.0001f, outlineColor, doubleSided, true));
@@ -547,92 +673,78 @@ public record UiShapeNode(
         return nodes;
     }
 
-    private static List<UiNode> createRoundedRectOutlineNodes(
-            float x, float y, float width, float height, float r,
+    private static List<UiNode> createDashedOutlineNodes(
+            List<PolylineNode.Point> boundary, float dashLen, float gapLen,
             float thickness, float depth, Color outlineColor, boolean doubleSided) {
         List<UiNode> nodes = new ArrayList<>();
-        if (thickness <= 0.001f) return nodes;
+        int n = boundary.size();
+        if (n < 2) return nodes;
 
-        if (r <= 0.5f) {
-            nodes.add(new UiBackgroundNode(x - thickness, y - thickness, depth, width + 2.0f * thickness, thickness, outlineColor, doubleSided));
-            nodes.add(new UiBackgroundNode(x - thickness, y + height, depth, width + 2.0f * thickness, thickness, outlineColor, doubleSided));
-            nodes.add(new UiBackgroundNode(x - thickness, y, depth, thickness, height, outlineColor, doubleSided));
-            nodes.add(new UiBackgroundNode(x + width, y, depth, thickness, height, outlineColor, doubleSided));
-            return nodes;
-        }
+        for (int i = 0; i < n; i++) {
+            PolylineNode.Point p1 = boundary.get(i);
+            PolylineNode.Point p2 = boundary.get((i + 1) % n);
+            float dx = p2.x() - p1.x();
+            float dy = p2.y() - p1.y();
+            float length = (float) Math.sqrt(dx * dx + dy * dy);
+            if (length < 1e-4f) continue;
 
-        // Top, Bottom, Left, Right straight bars
-        if (width - 2.0f * r > 0.05f) {
-            nodes.add(new UiBackgroundNode(x + r, y - thickness, depth, width - 2.0f * r, thickness, outlineColor, doubleSided));
-            nodes.add(new UiBackgroundNode(x + r, y + height, depth, width - 2.0f * r, thickness, outlineColor, doubleSided));
-        }
-        if (height - 2.0f * r > 0.05f) {
-            nodes.add(new UiBackgroundNode(x - thickness, y + r, depth, thickness, height - 2.0f * r, outlineColor, doubleSided));
-            nodes.add(new UiBackgroundNode(x + width, y + r, depth, thickness, height - 2.0f * r, outlineColor, doubleSided));
-        }
+            float ux = dx / length;
+            float uy = dy / length;
+            float current = 0.0f;
 
-        int steps = 8;
-        float rOut = r + thickness;
-        float stepH = rOut / steps;
-
-        // Top corners
-        for (int i = 0; i < steps; i++) {
-            float sliceY = y - thickness + i * stepH;
-            float midY = (i + 0.5f) * stepH;
-            float dOut = rOut - midY;
-            float indOut = (float) (rOut - Math.sqrt(Math.max(0, rOut * rOut - dOut * dOut)));
-
-            float indIn;
-            if (midY < thickness) {
-                indIn = r + thickness;
-            } else {
-                float dIn = r - (midY - thickness);
-                indIn = (float) (r - Math.sqrt(Math.max(0, r * r - dIn * dIn)));
-            }
-
-            float leftX = x - thickness + indOut;
-            float leftW = (x + indIn) - leftX;
-            if (leftW > 0.05f) {
-                nodes.add(new UiBackgroundNode(leftX, sliceY, depth, leftW, stepH, outlineColor, doubleSided));
-            }
-
-            float rightX = x + width - indIn;
-            float rightEnd = x + width + thickness - indOut;
-            float rightW = rightEnd - rightX;
-            if (rightW > 0.05f) {
-                nodes.add(new UiBackgroundNode(rightX, sliceY, depth, rightW, stepH, outlineColor, doubleSided));
+            while (current < length) {
+                float end = Math.min(current + dashLen, length);
+                float x1 = p1.x() + ux * current;
+                float y1 = p1.y() + uy * current;
+                float x2 = p1.x() + ux * end;
+                float y2 = p1.y() + uy * end;
+                nodes.add(new LineNode(x1, y1, x2, y2, thickness, depth, outlineColor, doubleSided, 0.0f));
+                current += dashLen + gapLen;
             }
         }
-
-        // Bottom corners
-        for (int i = 0; i < steps; i++) {
-            float sliceY = y + height - r + i * stepH;
-            float midY = (i + 0.5f) * stepH;
-            float dOut = midY;
-            float indOut = (float) (rOut - Math.sqrt(Math.max(0, rOut * rOut - dOut * dOut)));
-
-            float indIn;
-            if (midY > r) {
-                indIn = r + thickness;
-            } else {
-                float dIn = midY;
-                indIn = (float) (r - Math.sqrt(Math.max(0, r * r - dIn * dIn)));
-            }
-
-            float leftX = x - thickness + indOut;
-            float leftW = (x + indIn) - leftX;
-            if (leftW > 0.05f) {
-                nodes.add(new UiBackgroundNode(leftX, sliceY, depth, leftW, stepH, outlineColor, doubleSided));
-            }
-
-            float rightX = x + width - indIn;
-            float rightEnd = x + width + thickness - indOut;
-            float rightW = rightEnd - rightX;
-            if (rightW > 0.05f) {
-                nodes.add(new UiBackgroundNode(rightX, sliceY, depth, rightW, stepH, outlineColor, doubleSided));
-            }
-        }
-
         return nodes;
+    }
+
+    public static Builder builder(String shapeType, float x, float y, float width, float height) {
+        return new Builder(shapeType, x, y, width, height);
+    }
+
+    public static final class Builder {
+        private String shapeType;
+        private float x;
+        private float y;
+        private float width;
+        private float height;
+        private float depth = 0.001f;
+        private Color color = Color.WHITE;
+        private boolean outline = false;
+        private Color outlineColor = Color.WHITE;
+        private float outlineThickness = 2.0f;
+        private String outlineStyle = "solid";
+        private float cornerRadius = 6.0f;
+        private float rotation = 0.0f;
+        private boolean doubleSided = false;
+
+        public Builder(String shapeType, float x, float y, float width, float height) {
+            this.shapeType = shapeType;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+
+        public Builder depth(float depth) { this.depth = depth; return this; }
+        public Builder color(Color color) { this.color = color; return this; }
+        public Builder outline(boolean outline) { this.outline = outline; return this; }
+        public Builder outlineColor(Color outlineColor) { this.outlineColor = outlineColor; return this; }
+        public Builder outlineThickness(float outlineThickness) { this.outlineThickness = outlineThickness; return this; }
+        public Builder outlineStyle(String outlineStyle) { this.outlineStyle = outlineStyle; return this; }
+        public Builder cornerRadius(float cornerRadius) { this.cornerRadius = cornerRadius; return this; }
+        public Builder rotation(float rotation) { this.rotation = rotation; return this; }
+        public Builder doubleSided(boolean doubleSided) { this.doubleSided = doubleSided; return this; }
+
+        public UiShapeNode build() {
+            return new UiShapeNode(shapeType, x, y, width, height, depth, color, outline, outlineColor, outlineThickness, outlineStyle, cornerRadius, rotation, doubleSided);
+        }
     }
 }

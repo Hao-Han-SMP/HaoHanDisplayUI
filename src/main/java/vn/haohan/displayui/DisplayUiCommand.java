@@ -119,10 +119,9 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
 
         context.handle(service.create(demoOwner(player.getUniqueId()), origin,
                 DemoUiRenderer.render(pages, context),
-                new UiOptions(80.0f, 12.0, false, 0.2f, "haohan_display_ui", context.cameraTransform()),
+                new UiOptions(80.0f, 12.0, false, 0.2f, "haohan_display_ui", context.cameraTransform())
+                        .withSides(context.doubleSided(), context.mirrorSide()),
                 candidate -> candidate.getUniqueId().equals(player.getUniqueId())));
-        context.handle().mirrorSide(context.mirrorSide());
-        context.handle().sides(context.doubleSided(), context.mirrorSide());
         context.handle().scrollAnimation(UiScrollAnimations.slide());
 
         context.handle().onClick(click -> onDemoClick(context, click.button().id(), click.player()));

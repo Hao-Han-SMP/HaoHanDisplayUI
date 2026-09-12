@@ -20,139 +20,144 @@ package vn.haohan.displayui.demo.pages;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Color;
+import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.UiDocument;
 import vn.haohan.displayui.api.node.AlignedTextNode;
-import vn.haohan.displayui.api.node.LineNode;
-import vn.haohan.displayui.api.node.ParallelogramNode;
-import vn.haohan.displayui.api.node.PolylineNode;
-import vn.haohan.displayui.api.node.TriangleNode;
+import vn.haohan.displayui.api.node.UiShapeNode;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.demo.BaseDemoPage;
 import vn.haohan.displayui.demo.DemoContext;
 
+import java.util.List;
+
+/**
+ * Interactive showcase displaying all 2D shapes with global master outline toggle,
+ * selectable line styles (solid / dashed / dotted), and thickness adjustments.
+ */
 public final class GeometricShapesDemoPage extends BaseDemoPage {
+
+    private record ShapeShowcase(String type, String label, Color color, float rotation, float cornerRadius) {}
+
+    private static final List<ShapeShowcase> SHOWCASE_SHAPES = List.of(
+            // Row 0
+            new ShapeShowcase("rect", "Rectangle", Color.fromRGB(239, 71, 111), 0f, 0f),
+            new ShapeShowcase("rounded_rect", "Round Rect", Color.fromRGB(247, 140, 107), 0f, 4f),
+            new ShapeShowcase("circle", "Circle", Color.fromRGB(255, 209, 102), 0f, 0f),
+            new ShapeShowcase("diamond", "Diamond", Color.fromRGB(6, 214, 160), 0f, 0f),
+            new ShapeShowcase("trapezoid", "Trapezoid", Color.fromRGB(17, 138, 178), 0f, 0f),
+            new ShapeShowcase("parallelogram", "Slanted", Color.fromRGB(7, 59, 76), 0f, 0f),
+
+            // Row 1
+            new ShapeShowcase("triangle", "Triangle", Color.fromRGB(131, 56, 236), 0f, 0f),
+            new ShapeShowcase("right_triangle", "Right Tri", Color.fromRGB(255, 0, 110), 0f, 0f),
+            new ShapeShowcase("pentagon", "Pentagon", Color.fromRGB(58, 134, 255), 0f, 0f),
+            new ShapeShowcase("hexagon", "Hexagon", Color.fromRGB(0, 180, 216), 0f, 0f),
+            new ShapeShowcase("heptagon", "Heptagon", Color.fromRGB(72, 202, 228), 0f, 0f),
+            new ShapeShowcase("octagon", "Octagon", Color.fromRGB(144, 224, 239), 0f, 0f),
+
+            // Row 2
+            new ShapeShowcase("star3", "Star 3", Color.fromRGB(255, 183, 3), 0f, 0f),
+            new ShapeShowcase("star4", "Star 4", Color.fromRGB(251, 133, 0), 0f, 0f),
+            new ShapeShowcase("star5", "Star 5", Color.fromRGB(255, 214, 10), 0f, 0f),
+            new ShapeShowcase("star6", "Star 6", Color.fromRGB(244, 140, 6), 0f, 0f),
+            new ShapeShowcase("arrow_right", "Arrow R", Color.fromRGB(167, 201, 87), 0f, 0f),
+            new ShapeShowcase("arrow_left", "Arrow L", Color.fromRGB(56, 176, 0), 0f, 0f),
+
+            // Row 3
+            new ShapeShowcase("chevron_right", "Chevron", Color.fromRGB(0, 114, 0), 0f, 0f),
+            new ShapeShowcase("double_arrow", "Double Arr", Color.fromRGB(114, 9, 183), 0f, 0f),
+            new ShapeShowcase("cross", "Cross", Color.fromRGB(247, 37, 133), 0f, 0f),
+            new ShapeShowcase("heart", "Heart", Color.fromRGB(230, 57, 70), 0f, 0f),
+            new ShapeShowcase("speech_bubble", "Bubble", Color.fromRGB(76, 201, 240), 0f, 0f),
+            new ShapeShowcase("lightning", "Lightning", Color.fromRGB(255, 220, 0), 0f, 0f)
+    );
+
     @Override
     public String title() {
-        return "GEOMETRIC SHAPES";
+        return "ALL SHAPES & STYLES";
     }
 
     @Override
     public void build(UiDocument.Builder builder, DemoContext context) {
-        // --- SECTION 1: TRIANGLE MESH & 2D DECOMPOSITION (Left Column: X [-86, -30]) ---
-        builder.add(new AlignedTextNode(
-                Component.text("TRIANGLE MESH", NamedTextColor.GOLD, TextDecoration.BOLD),
-                -86, -36, 56, 8, UiTextAlignment.CENTER).fontSize(4));
+        // --- TOP MASTER CONTROLS (Y = -39 to -27) ---
+        String outlineLabel = context.shapeOutline() ? "OUTLINE: ON" : "OUTLINE: OFF";
+        addControlButton(builder, "shape_outline_toggle", -86, -39, 52, outlineLabel, "Toggle outline for all shapes");
 
-        // Triforce / Gem Triangles
-        float triCenterX = -58;
-        float triCenterY = -14;
-        // Top triangle (Golden Yellow)
-        builder.add(new TriangleNode(
-                triCenterX, triCenterY - 14,
-                triCenterX - 10, triCenterY,
-                triCenterX + 10, triCenterY,
-                0.002f, Color.fromRGB(255, 215, 0), true));
-        // Bottom-left triangle (Orange)
-        builder.add(new TriangleNode(
-                triCenterX - 10, triCenterY,
-                triCenterX - 20, triCenterY + 14,
-                triCenterX, triCenterY + 14,
-                0.002f, Color.fromRGB(255, 140, 0), true));
-        // Bottom-right triangle (Amber)
-        builder.add(new TriangleNode(
-                triCenterX + 10, triCenterY,
-                triCenterX, triCenterY + 14,
-                triCenterX + 20, triCenterY + 14,
-                0.002f, Color.fromRGB(255, 180, 0), true));
+        String styleLabel = "STYLE: " + context.lineStyle().toUpperCase();
+        addControlButton(builder, "shape_style_cycle", -28, -39, 56, styleLabel, "Cycle outline style (solid / dashed / dotted)");
 
-        // Inverted inner accent
-        builder.add(new TriangleNode(
-                triCenterX, triCenterY + 14,
-                triCenterX - 10, triCenterY,
-                triCenterX + 10, triCenterY,
-                0.003f, Color.fromRGB(50, 50, 60), true));
+        String thickLabel = "THICK: " + (int) context.lineThickness() + "px";
+        addControlButton(builder, "shape_thick_cycle", 32, -39, 54, thickLabel, "Cycle line thickness (1px / 2px / 3px / 4px)");
 
-        builder.add(new AlignedTextNode(
-                Component.text("3-Piece Triangle", NamedTextColor.GRAY),
-                -86, 6, 56, 8, UiTextAlignment.CENTER).fontSize(4));
-        builder.add(new AlignedTextNode(
-                Component.text("Exact 2D Shearing", NamedTextColor.DARK_GRAY),
-                -86, 15, 56, 8, UiTextAlignment.CENTER).fontSize(3));
+        // --- SHAPE GRID (6 columns x 4 rows, Y from -24.5 to +36, comfortably above footer at +48) ---
+        float startX = -86.0f;
+        float startY = -24.5f;
+        float cellW = 26.0f;
+        float cellH = 9.5f;
+        float gapX = 3.0f;
+        float rowStep = 15.0f;
 
-        // --- SECTION 2: SLANTED QUADS & ROLLED BEAMS (Center Column: X [-24, 26]) ---
-        builder.add(new AlignedTextNode(
-                Component.text("SLANTED & ROLLED", NamedTextColor.AQUA, TextDecoration.BOLD),
-                -24, -36, 52, 8, UiTextAlignment.CENTER).fontSize(4));
+        for (int i = 0; i < SHOWCASE_SHAPES.size(); i++) {
+            int col = i % 6;
+            int row = i / 6;
 
-        // Cyberpunk style slanted cards
-        builder.add(ParallelogramNode.slanted(-22, -26, 48, 12, 6, Color.fromRGB(0, 180, 216), true));
-        builder.add(new AlignedTextNode(
-                Component.text("CYBER BADGE #1", NamedTextColor.WHITE, TextDecoration.BOLD),
-                -20, -24, 44, 8, UiTextAlignment.CENTER).fontSize(4).atDepth(0.003f));
+            float x = startX + col * (cellW + gapX);
+            float y = startY + row * rowStep;
 
-        builder.add(ParallelogramNode.slanted(-22, -10, 48, 12, -6, Color.fromRGB(247, 37, 133), true));
-        builder.add(new AlignedTextNode(
-                Component.text("SLANTED BADGE #2", NamedTextColor.WHITE, TextDecoration.BOLD),
-                -20, -8, 44, 8, UiTextAlignment.CENTER).fontSize(4).atDepth(0.003f));
+            ShapeShowcase shape = SHOWCASE_SHAPES.get(i);
 
-        // Rolled line beams with roll angles
-        builder.add(new LineNode(-20, 12, 22, 12, 2.0f, 0.002f, Color.fromRGB(114, 9, 183), true, 0.0f));
-        builder.add(new LineNode(-20, 20, 22, 20, 2.5f, 0.002f, Color.fromRGB(76, 201, 240), true, 45.0f));
-        builder.add(new LineNode(-20, 28, 22, 28, 3.0f, 0.002f, Color.fromRGB(67, 97, 238), true, 90.0f));
+            // Shape Node
+            UiShapeNode node = UiShapeNode.builder(shape.type(), x + 2.0f, y, cellW - 4.0f, cellH)
+                    .color(shape.color())
+                    .outline(context.shapeOutline())
+                    .outlineColor(Color.fromRGB(255, 255, 255))
+                    .outlineThickness(context.lineThickness())
+                    .outlineStyle(context.lineStyle())
+                    .rotation(shape.rotation())
+                    .cornerRadius(shape.cornerRadius())
+                    .depth(0.002f)
+                    .doubleSided(context.doubleSided())
+                    .build();
+            builder.add(node);
 
-        builder.add(new AlignedTextNode(
-                Component.text("Roll: 0° / 45° / 90°", NamedTextColor.GRAY),
-                -24, 34, 52, 8, UiTextAlignment.CENTER).fontSize(3));
-
-        // --- SECTION 3: CLOSED POLYLINES & SINE WAVE (Right Column: X [32, 86]) ---
-        builder.add(new AlignedTextNode(
-                Component.text("POLYLINES", NamedTextColor.GREEN, TextDecoration.BOLD),
-                32, -36, 54, 8, UiTextAlignment.CENTER).fontSize(4));
-
-        // Five-point star outline, built from alternating outer and inner points.
-        float starCenterX = 59;
-        float starCenterY = -15;
-        float outer = 14.0f;
-        float inner = 6.2f;
-        float[][] starPoints = new float[10][2];
-        for (int i = 0; i < 10; i++) {
-            double angle = Math.toRadians(-90.0 + i * 36.0);
-            float radius = (i & 1) == 0 ? outer : inner;
-            starPoints[i][0] = (float) (starCenterX + radius * Math.cos(angle));
-            starPoints[i][1] = (float) (starCenterY + radius * Math.sin(angle));
+            // Label underneath
+            builder.add(new AlignedTextNode(
+                    Component.text(shape.label(), NamedTextColor.GRAY),
+                    x, y + cellH + 0.5f, cellW, 3.5f, UiTextAlignment.CENTER)
+                    .fontSize(2.8f).atDepth(0.003f));
         }
-        for (int i = 0; i < starPoints.length; i++) {
-            float[] start = starPoints[i];
-            float[] end = starPoints[(i + 1) % starPoints.length];
-            float roll = end[0] < start[0] ? 180.0f : 0.0f;
-            builder.add(new LineNode(start[0], start[1], end[0], end[1],
-                                     1.8f, 0.002f, Color.fromRGB(255, 200, 0), true, roll));
+    }
+
+    @Override
+    public boolean onClick(DemoContext context, String buttonId, Player player) {
+        switch (buttonId) {
+            case "shape_outline_toggle" -> {
+                context.shapeOutline(!context.shapeOutline());
+                context.updateView();
+                return true;
+            }
+            case "shape_style_cycle" -> {
+                String current = context.lineStyle().toLowerCase();
+                String next = switch (current) {
+                    case "solid" -> "dashed";
+                    case "dashed" -> "dotted";
+                    default -> "solid";
+                };
+                context.lineStyle(next);
+                context.updateView();
+                return true;
+            }
+            case "shape_thick_cycle" -> {
+                float current = context.lineThickness();
+                float next = current >= 4.0f ? 1.0f : current + 1.0f;
+                context.lineThickness(next);
+                context.updateView();
+                return true;
+            }
+            default -> {
+                return false;
+            }
         }
-
-        // Heart / Pulse waveform below star
-        PolylineNode pulse = PolylineNode.builder()
-                .add(36, 18)
-                .add(44, 18)
-                .add(48, 8)
-                .add(52, 26)
-                .add(56, 12)
-                .add(60, 18)
-                .add(82, 18)
-                .thickness(1.5f)
-                .color(Color.fromRGB(0, 255, 136))
-                .depth(0.002f)
-                .doubleSided(true)
-                .closed(false)
-                .build();
-        builder.add(pulse);
-
-        builder.add(new AlignedTextNode(
-                Component.text("Closed Star & ECG Pulse", NamedTextColor.GRAY),
-                32, 26, 54, 8, UiTextAlignment.CENTER).fontSize(3));
-        builder.add(new AlignedTextNode(
-                Component.text("Fullbright & DoubleSided", NamedTextColor.DARK_GRAY),
-                32, 34, 54, 8, UiTextAlignment.CENTER).fontSize(3));
     }
 }

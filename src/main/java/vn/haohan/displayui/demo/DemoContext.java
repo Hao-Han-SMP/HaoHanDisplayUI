@@ -36,6 +36,9 @@ public final class DemoContext {
     private UiFollowOptions followOptions = UiFollowOptions.defaults();
     private boolean doubleSided = false;
     private boolean mirrorSide = true;
+    private boolean shapeOutline = true;
+    private String lineStyle = "solid";
+    private float lineThickness = 2.0f;
     private Consumer<DemoContext> pageUpdater;
 
     public DemoContext(UUID playerId) {
@@ -109,6 +112,15 @@ public final class DemoContext {
         this.followOptions = options;
         if (followMode == UiFollowMode.FOLLOW) followMode(UiFollowMode.FOLLOW);
     }
+
+    public boolean shapeOutline() { return shapeOutline; }
+    public void shapeOutline(boolean shapeOutline) { this.shapeOutline = shapeOutline; }
+
+    public String lineStyle() { return lineStyle; }
+    public void lineStyle(String lineStyle) { this.lineStyle = lineStyle != null ? lineStyle : "solid"; }
+
+    public float lineThickness() { return lineThickness; }
+    public void lineThickness(float lineThickness) { this.lineThickness = lineThickness; }
 
     public void setPageUpdater(Consumer<DemoContext> updater) {
         this.pageUpdater = updater;
