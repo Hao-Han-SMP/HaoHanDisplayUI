@@ -4,7 +4,12 @@ import vn.haohan.displayui.utils.MathUtils;
 import java.util.Objects;
 import java.util.function.DoubleUnaryOperator;
 
-/** Shared easing functions and interpolation helpers. */
+/**
+ * Collection of standard motion easing functions and mathematical interpolation utilities.
+ * <p>
+ * Implements standard industry easing curves (Linear, Sine, Quad, Cubic, Quart, Quint,
+ * Expo, Circle, BackOut, ElasticOut, BounceOut) to ensure smooth transitions and micro-animations.
+ */
 public enum Easings {
     Linear(t -> t), Curve(Easings::curve),
     InSine(t -> 1 - Math.cos(t * Math.PI / 2)), OutSine(t -> Math.sin(t * Math.PI / 2)),
@@ -33,10 +38,48 @@ public enum Easings {
 
     Easings(DoubleUnaryOperator function) { this.function = Objects.requireNonNull(function); }
 
+    /**
+     * Evaluates the easing function on a normalized progress ratio clamped to [0.0, 1.0].
+     *
+     * @param progress raw progress value (clamped between 0.0 and 1.0)
+     * @return eased interpolation factor
+     */
     public double apply(double progress) { return function.applyAsDouble(MathUtils.clamp(progress, 0, 1)); }
+
+    /**
+     * Equivalent to {@link #apply(double)}, accepting any {@link Number}.
+     *
+     * @param n progress value
+     * @return eased interpolation factor
+     */
     public double inc(Number n) { return apply(n.doubleValue()); }
+
+    /**
+     * Returns the inverse complement of progress: {@code 1 - inc(n)}.
+     *
+     * @param n progress value
+     * @return complement factor
+     */
     public double dec(Number n) { return 1 - inc(n); }
+
+    /**
+     * Linear interpolation (lerp) between start and end bounds parameterized by n.
+     *
+     * @param n     interpolation factor
+     * @param start start value
+     * @param end   end value
+     * @return interpolated value
+     */
     public double dec(double n, double start, double end) { return MathUtils.lerp(start, end, n); }
+
+    /**
+     * Evaluates easing with optional direction inversion and value flipping.
+     *
+     * @param n      progress value
+     * @param invert {@code true} to reverse time direction
+     * @param flip   {@code true} to flip the output value
+     * @return transformed factor
+     */
     public double get(Number n, boolean invert, boolean flip) {
         double value = n.doubleValue();
         if (invert && flip) return 1 - inc(1 - value);

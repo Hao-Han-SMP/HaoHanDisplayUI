@@ -19,11 +19,12 @@
 package vn.haohan.displayui.api.view;
 
 /**
- * Camera and player tracking modes for displaying interactive floating HUD interfaces.
+ * Tracking mode governing whether a UI follows player movement and gaze.
  */
 public enum UiFollowMode {
-    /** Stationary world-anchored UI (no follow). */
+    /** Static mode locked at world coordinates; player tracking is disabled. */
     NONE,
-    /** Player follow; speed, damping and interpolation are configured separately. */
+    /** Dynamic tracking mode following player movements with damping and interpolation. */
     FOLLOW
 }
+

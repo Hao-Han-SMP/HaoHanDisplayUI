@@ -18,9 +18,15 @@
  */
 package vn.haohan.displayui.api.text;
 
-/** Vertical placement of text inside its logical layout box. */
+/**
+ * Vertical text alignment options within a UI layout bounding box.
+ */
 public enum UiVerticalAlignment {
+    /** Align to the top of the box. */
     TOP,
+    /** Center vertically within the box. */
     CENTER,
+    /** Align to the bottom of the box. */
     BOTTOM
 }
+

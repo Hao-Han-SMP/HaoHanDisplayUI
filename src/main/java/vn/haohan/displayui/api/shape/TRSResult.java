@@ -25,8 +25,14 @@ import org.joml.Vector3f;
 import java.util.Objects;
 
 /**
- * Result of decomposing a transformation into Translation, LeftRotation, Scale,
- * and RightRotation matching Minecraft Display entity format.
+ * Decomposition result of an affine transformation matrix into the four standard components
+ * required by Minecraft Display entities:
+ * Translation, LeftRotation, Scale, and RightRotation.
+ *
+ * @param translation translation vector {@link Vector3f}
+ * @param leftRotation pre-scale rotation quaternion {@link Quaternionf}
+ * @param scale 3D scale vector {@link Vector3f}
+ * @param rightRotation post-scale rotation quaternion {@link Quaternionf}
  */
 public record TRSResult(
         Vector3f translation,
@@ -41,7 +47,11 @@ public record TRSResult(
         Objects.requireNonNull(rightRotation, "rightRotation");
     }
 
-    /** Converts this TRS result to a Bukkit {@link Transformation}. */
+    /**
+     * Converts this TRS result into a native Bukkit {@link Transformation} instance.
+     *
+     * @return a {@link Transformation} object ready to be applied directly via {@code Display.setTransformation()}
+     */
     public Transformation toBukkitTransformation() {
         return new Transformation(
                 new Vector3f(translation),

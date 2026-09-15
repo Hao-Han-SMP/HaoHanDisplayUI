@@ -38,7 +38,21 @@ import net.kyori.adventure.text.Component;
 
 import java.util.Objects;
 
-/** Invisible rectangular hit zone in the same logical-pixel space as UI nodes. */
+/**
+ * Interactive button component in a Display UI document.
+ * <p>
+ * Represents a rectangular raycast collision zone in UI canvas space.
+ * When a player aims at and clicks this region, an interaction click event and optional {@link UiButtonAction} are triggered.
+ *
+ * @param id          unique button identifier (matching {@code [a-z0-9_.-]})
+ * @param x           top-left X coordinate of hit zone in UI pixels
+ * @param y           top-left Y coordinate of hit zone in UI pixels
+ * @param width       width of hit zone in UI pixels (must be > 0)
+ * @param height      height of hit zone in UI pixels (must be > 0)
+ * @param description tooltip or button description component
+ * @param action      automated action to execute on click (open URL, run command, etc.)
+ * @param hitSlop     expanded raycast hit margin in UI pixels
+ */
 public record UiButton(
         String id,
         float x,
@@ -64,62 +78,151 @@ public record UiButton(
         }
     }
 
+    /**
+     * Constructs a basic button with bounds coordinates.
+     *
+     * @param id     unique button identifier
+     * @param x      top-left X in UI pixels
+     * @param y      top-left Y in UI pixels
+     * @param width  width in UI pixels
+     * @param height height in UI pixels
+     */
     public UiButton(String id, float x, float y, float width, float height) {
         this(id, x, y, width, height, Component.empty(), UiButtonAction.none(), 0.0f);
     }
 
+    /**
+     * Constructs a button matching the bounds of a {@link UiRect}.
+     *
+     * @param id     unique button identifier
+     * @param bounds rectangle defining button bounds
+     */
     public UiButton(String id, UiRect bounds) {
         this(id, Objects.requireNonNull(bounds, "bounds").x(), bounds.y(),
                 bounds.width(), bounds.height());
     }
 
+    /**
+     * Constructs a button with coordinates and a description component.
+     *
+     * @param id          unique button identifier
+     * @param x           top-left X in UI pixels
+     * @param y           top-left Y in UI pixels
+     * @param width       width in UI pixels
+     * @param height      height in UI pixels
+     * @param description tooltip or button label component
+     */
     public UiButton(String id, float x, float y, float width, float height,
                     Component description) {
         this(id, x, y, width, height, description, UiButtonAction.none(), 0.0f);
     }
 
+    /**
+     * Constructs a button with coordinates, description, and an automated action.
+     *
+     * @param id          unique button identifier
+     * @param x           top-left X in UI pixels
+     * @param y           top-left Y in UI pixels
+     * @param width       width in UI pixels
+     * @param height      height in UI pixels
+     * @param description tooltip or button label component
+     * @param action      automated action to trigger on click
+     */
     public UiButton(String id, float x, float y, float width, float height,
                     Component description, UiButtonAction action) {
         this(id, x, y, width, height, description, action, 0.0f);
     }
 
+    /**
+     * Creates a copy of this button with a modified description component.
+     *
+     * @param description new tooltip component
+     * @return a new {@link UiButton} instance
+     */
     public UiButton describedBy(Component description) {
         return new UiButton(id, x, y, width, height,
                 description != null ? description : Component.empty(), action, hitSlop);
     }
 
+    /**
+     * Creates a copy of this button with an attached automated action.
+     *
+     * @param action automated {@link UiButtonAction}
+     * @return a new {@link UiButton} instance
+     */
     public UiButton withAction(UiButtonAction action) {
         return new UiButton(id, x, y, width, height, description,
                 action != null ? action : UiButtonAction.none(), hitSlop);
     }
 
+    /**
+     * Creates a copy of this button with expanded raycast hit slop margin.
+     *
+     * @param pixels hit margin expansion in UI pixels
+     * @return a new {@link UiButton} instance
+     */
     public UiButton hitSlop(float pixels) {
         return new UiButton(id, x, y, width, height, description, action, pixels);
     }
 
+    /**
+     * Creates a button matching the bounds of an aligned text node.
+     *
+     * @param id   unique button identifier
+     * @param text aligned text node
+     * @return a new {@link UiButton} instance bound to the text area
+     */
     public static UiButton forText(String id, AlignedTextNode text) {
         Objects.requireNonNull(text, "text");
         return new UiButton(id, text.boxX(), text.boxY(), text.width(), text.height());
     }
 
+    /**
+     * Creates a button matching the bounds of an icon node.
+     *
+     * @param id   unique button identifier
+     * @param icon icon display node
+     * @return a new {@link UiButton} instance bound to the icon area
+     */
     public static UiButton forIcon(String id, UiIconNode icon) {
         Objects.requireNonNull(icon, "icon");
         return new UiButton(id, icon.boxX(), icon.boxY(), icon.width(), icon.height());
     }
 
+    /**
+     * Creates a button matching the bounds of an entity model node.
+     *
+     * @param id    unique button identifier
+     * @param model entity model display node
+     * @return a new {@link UiButton} instance bound to the model area
+     */
     public static UiButton forModel(String id, EntityModelNode model) {
         Objects.requireNonNull(model, "model");
         return new UiButton(id, model.x() - model.width() * 0.5f,
                 model.y() - model.height() * 0.5f, model.width(), model.height());
     }
 
+    /**
+     * Creates a button matching the bounds of a living mob entity node.
+     *
+     * @param id  unique button identifier
+     * @param mob mob entity display node
+     * @return a new {@link UiButton} instance bound to the mob area
+     */
     public static UiButton forMob(String id, MobEntityNode mob) {
         Objects.requireNonNull(mob, "mob");
         return new UiButton(id, mob.x() - mob.width() * 0.5f,
                 mob.y() - mob.height() * 0.5f, mob.width(), mob.height());
     }
 
-    /** Creates a hit zone around any renderable node supported by the engine. */
+    /**
+     * Automatically computes bounding coordinates and creates a matching button for any {@link UiNode}.
+     *
+     * @param id   unique button identifier
+     * @param node visual display node
+     * @return a new {@link UiButton} sized to match the node
+     * @throws NullPointerException if {@code node} is {@code null}
+     */
     public static UiButton forNode(String id, UiNode node) {
         Objects.requireNonNull(node, "node");
         UiRect bounds = switch (node) {
@@ -176,8 +279,10 @@ public record UiButton(
                 Math.max(1.0f, maxY - minY + padding * 2));
     }
 
+    @Override
     public boolean contains(float localX, float localY) {
         return localX >= x - hitSlop && localX <= x + width + hitSlop
                 && localY >= y - hitSlop && localY <= y + height + hitSlop;
     }
 }
+

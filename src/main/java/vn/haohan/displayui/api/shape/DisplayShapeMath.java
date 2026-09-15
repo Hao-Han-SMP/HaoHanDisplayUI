@@ -29,10 +29,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * High-performance geometric transformation and shape rasterization math for TextDisplay entities.
+ * High-performance geometric mathematics utility for rasterizing 2D and 3D shapes using TextDisplay entities.
  * <p>
- * Provides analytical TRS decomposition for lines, triangles, parallelograms, and general 3D matrices
- * via polar decomposition and analytical SVD.
+ * Provides analytical TRS (Translation, Rotation, Scale) decomposition for line segments, triangles, parallelograms,
+ * and arbitrary 4x4 transformation matrices using polar decomposition and analytical 2D/3D SVD.
  */
 public final class DisplayShapeMath {
     private static final float MIN_LENGTH_SQUARED = 1.0E-10F;
@@ -41,27 +41,36 @@ public final class DisplayShapeMath {
     private DisplayShapeMath() {}
 
     /**
-     * Transformation matrix that normalizes the native TextDisplay background quad into a unit square [0, 1].
+     * Gets the normalized transformation matrix that maps the default TextDisplay background quad to a unit square [0, 1].
+     *
+     * @return the transformation matrix {@link Matrix4f}
      */
     public static Matrix4f getTextDisplayUnitSquare() {
         return new Matrix4f().translate(0.4F, 0.0F, 0.0F).scale(8.0F, 4.0F, 1.0F);
     }
 
     /**
-     * Calculates the TRS decomposition for a line segment in 3D space.
+     * Computes the TRS decomposition for a line segment in 3D space.
      *
-     * @param point1 start point
-     * @param point2 end point
-     * @param thickness thickness of the line in world units
-     * @param roll roll angle around the line axis in radians
-     * @return TRS result for TextDisplay
+     * @param point1 start point coordinate
+     * @param point2 end point coordinate
+     * @param thickness thickness of the line (in world units)
+     * @param roll roll rotation angle along the line axis (in radians)
+     * @return the computed {@link TRSResult} to apply to a TextDisplay entity
      */
     public static TRSResult computeLineTRS(Vector3f point1, Vector3f point2, float thickness, float roll) {
         return computeLineTRS(point1, point2, thickness, roll, false);
     }
 
     /**
-     * Calculates the TRS decomposition for a line segment, supporting front and back facing planes.
+     * Computes the TRS decomposition for a 3D line segment with support for front or back face rendering.
+     *
+     * @param point1 start point coordinate
+     * @param point2 end point coordinate
+     * @param thickness thickness of the line (in world units)
+     * @param roll roll rotation angle along the line axis (in radians)
+     * @param backFace {@code true} if rendering the back face
+     * @return the computed {@link TRSResult} to apply to a TextDisplay entity
      */
     public static TRSResult computeLineTRS(Vector3f point1, Vector3f point2, float thickness, float roll, boolean backFace) {
         validateLine(point1, point2, thickness);
@@ -91,6 +100,14 @@ public final class DisplayShapeMath {
                 1.0f, rotation, point1);
     }
 
+    /**
+     * Checks whether 3 vertices define a valid planar surface (non-degenerate non-zero area).
+     *
+     * @param p1 vertex 1
+     * @param p2 vertex 2
+     * @param p3 vertex 3
+     * @return {@code true} if the surface is valid and non-degenerate
+     */
     public static boolean isValidSurface(Vector3f p1, Vector3f p2, Vector3f p3) {
         if (p1 == null || p2 == null || p3 == null) return false;
         Vector3f edge1 = new Vector3f(p2).sub(p1);
@@ -101,12 +118,12 @@ public final class DisplayShapeMath {
     }
 
     /**
-     * Calculates the TRS decomposition for a parallelogram defined by 3 vertices.
+     * Computes the TRS decomposition for a parallelogram defined by 3 vertices.
      *
-     * @param point1 corner origin
-     * @param point2 edge vector 1 endpoint (width)
-     * @param point3 edge vector 2 endpoint (height/shear)
-     * @return TRS result for TextDisplay, or null if degenerate
+     * @param point1 origin corner vertex
+     * @param point2 end vertex of edge vector 1 (width)
+     * @param point3 end vertex of edge vector 2 (height and shear)
+     * @return the computed {@link TRSResult} for the TextDisplay entity
      */
     public static TRSResult computeParallelogramTRS(Vector3f point1, Vector3f point2, Vector3f point3) {
         if (!isValidSurface(point1, point2, point3)) {
@@ -133,12 +150,12 @@ public final class DisplayShapeMath {
     }
 
     /**
-     * Calculates the TRS decomposition for an arbitrary 3D triangle, split into 3 sub-pieces.
+     * Computes the TRS decomposition for an arbitrary triangle in 3D space by splitting into 3 TextDisplay quads.
      *
      * @param point1 vertex 1
      * @param point2 vertex 2
      * @param point3 vertex 3
-     * @return list of 3 TRS results representing the filled triangle (or empty list if degenerate)
+     * @return a list of 3 {@link TRSResult} objects composing the closed triangle
      */
     public static List<TRSResult> computeTriangleTRS(Vector3f point1, Vector3f point2, Vector3f point3) {
         if (!isValidSurface(point1, point2, point3)) {
@@ -182,7 +199,11 @@ public final class DisplayShapeMath {
     }
 
     /**
-     * Decomposes an arbitrary 4x4 matrix into Minecraft Display entity format (leftRotation * scale * rightRotation + translation).
+     * Decomposes an arbitrary 4x4 transformation matrix into standard Minecraft Display entity TRS format
+     * (leftRotation * scale * rightRotation + translation).
+     *
+     * @param matrix the 4x4 matrix to decompose
+     * @return the decomposed {@link TRSResult}
      */
     public static TRSResult decompose(Matrix4f matrix) {
         Vector3f translation = new Vector3f();
@@ -251,6 +272,22 @@ public final class DisplayShapeMath {
         return new TRSResult(translation, leftRotation, D, rightRotation);
     }
 
+    /**
+     * Computes analytical 2D SVD decomposition combined with global 3D rotation and translation.
+     * <p>
+     * Analytically solves the singular values and rotation angles for a 2x2 matrix without numerical iteration.
+     *
+     * @param m00 row 0, column 0 element of the 2D matrix
+     * @param m01 row 0, column 1 element of the 2D matrix
+     * @param m10 row 1, column 0 element of the 2D matrix
+     * @param m11 row 1, column 1 element of the 2D matrix
+     * @param tx translation along X in the 2D plane
+     * @param ty translation along Y in the 2D plane
+     * @param zScale scale factor along Z axis
+     * @param rotation orientation rotation quaternion in 3D space
+     * @param worldOrigin world coordinate origin vector
+     * @return the computed {@link TRSResult}
+     */
     public static TRSResult computeTRSFromInner2D(
             double m00, double m01, double m10, double m11,
             double tx, double ty,

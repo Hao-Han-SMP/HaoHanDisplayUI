@@ -16,7 +16,23 @@ import net.kyori.adventure.text.Component;
 
 import java.util.Objects;
 
-/** Horizontal continuous or stepped value control. */
+/**
+ * Interactive slider control supporting continuous or stepped numeric adjustment.
+ * <p>
+ * Enables players to adjust a double value within a bounded range [{@code minimum}, {@code maximum}].
+ *
+ * @param id          unique control identifier
+ * @param x           top-left X coordinate in UI pixels
+ * @param y           top-left Y coordinate in UI pixels
+ * @param width       slider width in UI pixels
+ * @param height      slider height in UI pixels
+ * @param minimum     lower numeric bound
+ * @param maximum     upper numeric bound
+ * @param value       current value
+ * @param step        stepping increment (0.0 for continuous smooth sliding)
+ * @param description tooltip or label component
+ * @param hitSlop     expanded raycast hit margin in UI pixels
+ */
 public record UiSlider(
         String id,
         float x,
@@ -47,12 +63,38 @@ public record UiSlider(
         value = snap(value, minimum, maximum, step);
     }
 
+    /**
+     * Constructs a basic continuous slider.
+     *
+     * @param id      unique control identifier
+     * @param x       top-left X in UI pixels
+     * @param y       top-left Y in UI pixels
+     * @param width   width in UI pixels
+     * @param height  height in UI pixels
+     * @param minimum lower numeric bound
+     * @param maximum upper numeric bound
+     * @param value   initial value
+     */
     public UiSlider(String id, float x, float y, float width, float height,
                     double minimum, double maximum, double value) {
         this(id, x, y, width, height, minimum, maximum, value, 0.0,
                 Component.empty(), 0.0f);
     }
 
+    /**
+     * Constructs a slider with step snapping and description component.
+     *
+     * @param id          unique control identifier
+     * @param x           top-left X in UI pixels
+     * @param y           top-left Y in UI pixels
+     * @param width       width in UI pixels
+     * @param height      height in UI pixels
+     * @param minimum     lower numeric bound
+     * @param maximum     upper numeric bound
+     * @param value       initial value
+     * @param step        stepping increment
+     * @param description tooltip or label component
+     */
     public UiSlider(String id, float x, float y, float width, float height,
                     double minimum, double maximum, double value, double step,
                     Component description) {
@@ -60,38 +102,76 @@ public record UiSlider(
                 description, 0.0f);
     }
 
+    /**
+     * Creates a copy of this slider with a new value (snapped to step and clamped).
+     *
+     * @param nextValue new numeric value
+     * @return a new {@link UiSlider} instance
+     */
     public UiSlider withValue(double nextValue) {
         return new UiSlider(id, x, y, width, height, minimum, maximum,
                 nextValue, step, description, hitSlop);
     }
 
+    /**
+     * Creates a copy of this slider with an updated description component.
+     *
+     * @param nextDescription new description component
+     * @return a new {@link UiSlider} instance
+     */
     public UiSlider describedBy(Component nextDescription) {
         return new UiSlider(id, x, y, width, height, minimum, maximum,
                 value, step, Objects.requireNonNull(nextDescription, "description"), hitSlop);
     }
 
+    /**
+     * Creates a copy of this slider with modified raycast hit slop margin.
+     *
+     * @param pixels hit margin expansion in UI pixels
+     * @return a new {@link UiSlider} instance
+     */
     public UiSlider hitSlop(float pixels) {
         return new UiSlider(id, x, y, width, height, minimum, maximum,
                 value, step, description, pixels);
     }
 
-    /** Converts a local X coordinate to the nearest valid slider value. */
+    /**
+     * Computes the numeric value corresponding to a local X click coordinate.
+     *
+     * @param localX local canvas X coordinate in UI pixels
+     * @return snapped and clamped slider value
+     */
     public double valueAt(float localX) {
         double progress = MathUtils.clamp((localX - x) / (double) width, 0.0, 1.0);
         return snap(minimum + (maximum - minimum) * progress,
                 minimum, maximum, step);
     }
 
+    /**
+     * Returns the normalized progress ratio of the current value between 0.0 and 1.0.
+     *
+     * @return normalized progress ratio
+     */
     public double progress() {
         return (value - minimum) / (maximum - minimum);
     }
 
-    /** The logical bounds developers can use to draw a track. */
+    /**
+     * Returns the bounding layout rectangle {@link UiRect} of the slider track.
+     *
+     * @return track {@link UiRect}
+     */
     public UiRect trackRect() {
         return new UiRect(x, y, width, height);
     }
 
-    /** A logical fill rectangle, sized from the current value. */
+    /**
+     * Returns the bounding layout rectangle {@link UiRect} representing the filled portion of the track.
+     *
+     * @param minimumWidth minimum rendered fill width in UI pixels
+     * @return fill {@link UiRect}
+     * @throws IllegalArgumentException if {@code minimumWidth < 0}
+     */
     public UiRect fillRect(float minimumWidth) {
         if (!Float.isFinite(minimumWidth) || minimumWidth < 0.0f) {
             throw new IllegalArgumentException("minimumWidth must be finite and non-negative");
@@ -99,7 +179,14 @@ public record UiSlider(
         return new UiRect(x, y, Math.max(minimumWidth, (float) (width * progress())), height);
     }
 
-    /** Centers a thumb rectangle at the current value. */
+    /**
+     * Returns the centered bounding layout rectangle {@link UiRect} of the draggable slider thumb.
+     *
+     * @param thumbWidth  thumb width in UI pixels
+     * @param thumbHeight thumb height in UI pixels
+     * @return thumb {@link UiRect}
+     * @throws IllegalArgumentException if dimensions are non-positive or non-finite
+     */
     public UiRect thumbRect(float thumbWidth, float thumbHeight) {
         if (!Float.isFinite(thumbWidth) || !Float.isFinite(thumbHeight)
                 || thumbWidth <= 0.0f || thumbHeight <= 0.0f) {
@@ -108,6 +195,7 @@ public record UiSlider(
         return UiRect.centered((float) (x + width * progress()),
                 y + height * 0.5f, thumbWidth, thumbHeight);
     }
+
 
     private static double snap(double raw, double minimum, double maximum, double step) {
         double bounded = MathUtils.clamp(raw, minimum, maximum);

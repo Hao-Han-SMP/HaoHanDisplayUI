@@ -19,17 +19,29 @@
 package vn.haohan.displayui.api.loader;
 
 /**
- * Thrown when a {@code .hhdui.json} file exported by the Visual Builder
- * cannot be parsed due to an invalid structure, unknown node type,
- * or invalid property value.
+ * Exception thrown when parsing a UI template or layout document file (typically {@code .hhdui.json}) fails.
+ * <p>
+ * Occurs when JSON syntax is malformed, required schema nodes are invalid, or attribute values fail validation.
  */
 public final class UiDocumentParseException extends RuntimeException {
 
+    /**
+     * Constructs a parse exception with a detailed error message.
+     *
+     * @param message descriptive error message detailing the parse failure
+     */
     public UiDocumentParseException(String message) {
         super(message);
     }
 
+    /**
+     * Constructs a parse exception with a message and underlying cause.
+     *
+     * @param message descriptive error message
+     * @param cause   underlying cause (e.g., IOException, JsonSyntaxException)
+     */
     public UiDocumentParseException(String message, Throwable cause) {
         super(message, cause);
     }
 }
+

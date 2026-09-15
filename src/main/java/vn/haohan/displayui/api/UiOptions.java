@@ -20,7 +20,25 @@ package vn.haohan.displayui.api;
 
 import vn.haohan.displayui.api.layout.UiCameraTransform;
 
-/** Runtime behavior shared by every node in a display group. */
+/**
+ * Configuration options governing the rendering scale, interaction bounds, and behaviors of a Display UI.
+ * <p>
+ * Defines pixel-to-block conversion ratio, maximum player interaction distance, view range,
+ * click feedback sound, camera billboard transformation, and double-sided rendering flags.
+ *
+ * @param pixelsPerBlock     number of UI canvas pixels per Minecraft world block (default 40.0f)
+ * @param maxDistance        maximum raycast reach in blocks for player clicks (default 12.0)
+ * @param requireFront       whether clicks are restricted to players facing the front of the UI
+ * @param viewRange          display entity render distance multiplier (default 0.15f)
+ * @param scoreboardTag      scoreboard tag applied to spawned display entities (default "haohan_display_ui")
+ * @param cameraTransform    camera orientation mode (FIXED or BILLBOARD)
+ * @param clickSound         sound key played on button clicks (e.g., "minecraft:ui.button.click"), or null if disabled
+ * @param clickSoundVolume   volume of the click sound (>= 0.0f)
+ * @param clickSoundPitch    pitch of the click sound (>= 0.0f)
+ * @param cullItemBackfaces  whether backfaces of ItemDisplay nodes are culled to boost rendering performance
+ * @param doubleSided        whether the UI renders and accepts clicks from both front and back faces
+ * @param mirrorSide         whether the reverse face horizontally flips coordinates so text isn't reversed
+ */
 public record UiOptions(
         float pixelsPerBlock,
         double maxDistance,
@@ -50,19 +68,50 @@ public record UiOptions(
         }
     }
 
+    /**
+     * Constructs options with primary geometry parameters and default sound/camera behavior.
+     *
+     * @param pixelsPerBlock number of pixels per block
+     * @param maxDistance    maximum interaction raycast reach
+     * @param requireFront   whether front-facing position is required
+     * @param viewRange      display entity view range multiplier
+     * @param scoreboardTag  scoreboard tag identifying spawned entities
+     */
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag) {
         this(pixelsPerBlock, maxDistance, requireFront, viewRange, scoreboardTag,
                 UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);
     }
 
+    /**
+     * Constructs options with camera transform mode and default sound parameters.
+     *
+     * @param pixelsPerBlock  number of pixels per block
+     * @param maxDistance     maximum interaction raycast reach
+     * @param requireFront    whether front-facing position is required
+     * @param viewRange       display entity view range multiplier
+     * @param scoreboardTag   scoreboard tag identifying spawned entities
+     * @param cameraTransform billboard / camera transformation mode
+     */
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag, UiCameraTransform cameraTransform) {
         this(pixelsPerBlock, maxDistance, requireFront, viewRange, scoreboardTag,
                 cameraTransform, "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);
     }
 
-    /** Backward-compatible constructor from before item backface culling and double-sided. */
+    /**
+     * Constructs options with customized click sound feedback parameters.
+     *
+     * @param pixelsPerBlock   number of pixels per block
+     * @param maxDistance      maximum interaction raycast reach
+     * @param requireFront     whether front-facing position is required
+     * @param viewRange        display entity view range multiplier
+     * @param scoreboardTag    scoreboard tag identifying spawned entities
+     * @param cameraTransform  billboard / camera transformation mode
+     * @param clickSound       sound key string
+     * @param clickSoundVolume sound volume
+     * @param clickSoundPitch  sound pitch
+     */
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag, UiCameraTransform cameraTransform,
                      String clickSound, float clickSoundVolume, float clickSoundPitch) {
@@ -70,7 +119,20 @@ public record UiOptions(
                 cameraTransform, clickSound, clickSoundVolume, clickSoundPitch, true, false, false);
     }
 
-    /** Backward-compatible constructor with item backface culling flag. */
+    /**
+     * Constructs options with item display backface culling toggle.
+     *
+     * @param pixelsPerBlock    number of pixels per block
+     * @param maxDistance       maximum interaction raycast reach
+     * @param requireFront      whether front-facing position is required
+     * @param viewRange         display entity view range multiplier
+     * @param scoreboardTag     scoreboard tag identifying spawned entities
+     * @param cameraTransform   billboard / camera transformation mode
+     * @param clickSound        sound key string
+     * @param clickSoundVolume  sound volume
+     * @param clickSoundPitch   sound pitch
+     * @param cullItemBackfaces whether backfaces of ItemDisplays are culled
+     */
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag, UiCameraTransform cameraTransform,
                      String clickSound, float clickSoundVolume, float clickSoundPitch,
@@ -79,7 +141,21 @@ public record UiOptions(
                 cameraTransform, clickSound, clickSoundVolume, clickSoundPitch, cullItemBackfaces, false, false);
     }
 
-    /** Backward-compatible constructor with double-sided flag. */
+    /**
+     * Constructs options with double-sided rendering toggle.
+     *
+     * @param pixelsPerBlock    number of pixels per block
+     * @param maxDistance       maximum interaction raycast reach
+     * @param requireFront      whether front-facing position is required
+     * @param viewRange         display entity view range multiplier
+     * @param scoreboardTag     scoreboard tag identifying spawned entities
+     * @param cameraTransform   billboard / camera transformation mode
+     * @param clickSound        sound key string
+     * @param clickSoundVolume  sound volume
+     * @param clickSoundPitch   sound pitch
+     * @param cullItemBackfaces whether backfaces of ItemDisplays are culled
+     * @param doubleSided       whether double-sided rendering is enabled
+     */
     public UiOptions(float pixelsPerBlock, double maxDistance, boolean requireFront,
                      float viewRange, String scoreboardTag, UiCameraTransform cameraTransform,
                      String clickSound, float clickSoundVolume, float clickSoundPitch,
@@ -88,53 +164,97 @@ public record UiOptions(
                 cameraTransform, clickSound, clickSoundVolume, clickSoundPitch, cullItemBackfaces, doubleSided, false);
     }
 
+    /**
+     * Creates a copy of these options with a different camera transform mode.
+     *
+     * @param transform new camera transformation mode
+     * @return a new {@link UiOptions} instance
+     */
     public UiOptions withCameraTransform(UiCameraTransform transform) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, transform, clickSound, clickSoundVolume, clickSoundPitch,
                 cullItemBackfaces, doubleSided, mirrorSide);
     }
 
-    /** Sets the sound played after a non-cancelled button/control interaction. */
+    /**
+     * Creates a copy of these options with customized click sound feedback.
+     *
+     * @param sound  Minecraft sound key (e.g. "minecraft:ui.button.click")
+     * @param volume sound volume
+     * @param pitch  sound pitch
+     * @return a new {@link UiOptions} instance
+     */
     public UiOptions withClickSound(String sound, float volume, float pitch) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, cameraTransform, sound, volume, pitch, cullItemBackfaces, doubleSided, mirrorSide);
     }
 
-    /** Disables interaction sounds for this scene. */
+    /**
+     * Creates a copy of these options with click sound feedback disabled.
+     *
+     * @return a new {@link UiOptions} instance without click sounds
+     */
     public UiOptions withoutClickSound() {
         return withClickSound(null, clickSoundVolume, clickSoundPitch);
     }
 
-    /** Enables software backface culling for fixed ItemDisplay/Icon nodes. */
+    /**
+     * Creates a copy of these options with item backface culling enabled or disabled.
+     *
+     * @param enabled {@code true} to cull item backfaces
+     * @return a new {@link UiOptions} instance
+     */
     public UiOptions withItemBackfaceCulling(boolean enabled) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
                 clickSoundPitch, enabled, doubleSided, mirrorSide);
     }
 
-    /** Sets whether the UI should render and accept interaction from both sides. */
+    /**
+     * Creates a copy of these options with double-sided rendering enabled or disabled.
+     *
+     * @param enabled {@code true} to render both front and back faces
+     * @return a new {@link UiOptions} instance
+     */
     public UiOptions withDoubleSided(boolean enabled) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
                 clickSoundPitch, cullItemBackfaces, enabled, mirrorSide);
     }
 
-    /** Sets whether the back side should be mirrored for seamless viewing and interaction. */
+    /**
+     * Creates a copy of these options with reverse side horizontal mirroring configured.
+     *
+     * @param enabled {@code true} to flip coordinates horizontally on the back face
+     * @return a new {@link UiOptions} instance
+     */
     public UiOptions withMirrorSide(boolean enabled) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
                 clickSoundPitch, cullItemBackfaces, doubleSided, enabled);
     }
 
-    /** Configures both two-sided rendering and back-side mirroring together. */
+    /**
+     * Creates a copy of these options configuring both double-sided rendering and back-side mirroring.
+     *
+     * @param doubleSided whether double-sided rendering is enabled
+     * @param mirrorSide  whether horizontal mirroring is enabled on the reverse face
+     * @return a new {@link UiOptions} instance
+     */
     public UiOptions withSides(boolean doubleSided, boolean mirrorSide) {
         return new UiOptions(pixelsPerBlock, maxDistance, requireFront, viewRange,
                 scoreboardTag, cameraTransform, clickSound, clickSoundVolume,
                 clickSoundPitch, cullItemBackfaces, doubleSided, mirrorSide);
     }
 
+    /**
+     * Returns default production-ready options for typical Display UI installations.
+     *
+     * @return standard {@link UiOptions}
+     */
     public static UiOptions defaults() {
         return new UiOptions(40.0f, 12.0, true, 0.15f, "haohan_display_ui",
                 UiCameraTransform.fixed(), "minecraft:ui.button.click", 0.7f, 1.0f, true, false, false);
     }
 }
+

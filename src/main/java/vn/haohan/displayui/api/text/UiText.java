@@ -28,20 +28,49 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/** Convenience builder for multi-color, gradient and styled Adventure text. */
+/**
+ * Fluent builder and utility methods for constructing Adventure {@link Component} text in Display UIs.
+ * <p>
+ * Provides helpers for multi-stop gradients, HEX color parsing, Minecraft glyph width estimation,
+ * and component concatenation.
+ */
 public final class UiText {
     private UiText() {}
 
+    /**
+     * Creates a new fluent {@link Builder} to construct and format an Adventure {@link Component}.
+     *
+     * @return a new UiText builder
+     */
     public static Builder builder() {
         return new Builder();
     }
 
+    /**
+     * Parses a HEX color string into a {@link TextColor}.
+     *
+     * @param value HEX color string (e.g., {@code "#FF5555"} or {@code "#FFFFFF"})
+     * @return corresponding {@link TextColor}
+     * @throws IllegalArgumentException if the HEX color string is invalid
+     * @throws NullPointerException     if {@code value} is {@code null}
+     */
     public static TextColor hex(String value) {
         TextColor color = TextColor.fromHexString(value);
         if (color == null) throw new IllegalArgumentException("Invalid hex color: " + value);
         return color;
     }
 
+    /**
+     * Estimates the physical rendered width of text in logical UI pixels.
+     * <p>
+     * Based on default Minecraft font glyph widths scaled by the font size ratio ({@code fontSize / 10.0f}).
+     *
+     * @param component Adventure text {@link Component} to measure
+     * @param fontSize  font size in logical UI pixels (must be > 0)
+     * @return estimated rendered width in UI pixels (minimum 1.0f)
+     * @throws NullPointerException     if {@code component} is {@code null}
+     * @throws IllegalArgumentException if {@code fontSize <= 0.0f}
+     */
     public static float estimateWidth(Component component, float fontSize) {
         Objects.requireNonNull(component, "component");
         if (fontSize <= 0.0f) throw new IllegalArgumentException("fontSize must be positive");
@@ -64,34 +93,88 @@ public final class UiText {
         return Math.max(1.0f, pixels * fontSize / 10.0f);
     }
 
+    /**
+     * Convenience method to construct a two-color gradient text component.
+     *
+     * @param text        raw text string to display
+     * @param from        gradient start color
+     * @param to          gradient end color
+     * @param decorations optional text decorations (BOLD, ITALIC, etc.)
+     * @return styled {@link Component} with gradient colors applied
+     * @throws NullPointerException if any required parameter is {@code null}
+     */
     public static Component gradient(String text, TextColor from, TextColor to,
                                      TextDecoration... decorations) {
         return builder().gradient(text, List.of(from, to), decorations).build();
     }
 
+    /**
+     * Fluent builder for assembling styled and decorated Adventure text components.
+     */
     public static final class Builder {
         private Component result = Component.empty();
 
+        /**
+         * Appends an existing {@link Component} to the builder.
+         *
+         * @param component component to append
+         * @return this builder instance
+         * @throws NullPointerException if {@code component} is {@code null}
+         */
         public Builder append(Component component) {
             result = result.append(Objects.requireNonNull(component, "component"));
             return this;
         }
 
+        /**
+         * Appends a raw plain text string without styling.
+         *
+         * @param text string to append
+         * @return this builder instance
+         * @throws NullPointerException if {@code text} is {@code null}
+         */
         public Builder text(String text) {
             return append(Component.text(Objects.requireNonNull(text, "text")));
         }
 
+        /**
+         * Appends a colored text string with optional decorations.
+         *
+         * @param text        string to append
+         * @param color       text color
+         * @param decorations optional text decorations (BOLD, ITALIC, etc.)
+         * @return this builder instance
+         * @throws NullPointerException if {@code text} or {@code color} is {@code null}
+         */
         public Builder text(String text, TextColor color, TextDecoration... decorations) {
             Component component = Component.text(Objects.requireNonNull(text, "text"),
                     Objects.requireNonNull(color, "color"));
             return append(decorate(component, decorations));
         }
 
+        /**
+         * Appends a text string formatted with an Adventure {@link Style}.
+         *
+         * @param text  string to append
+         * @param style text style
+         * @return this builder instance
+         * @throws NullPointerException if {@code text} or {@code style} is {@code null}
+         */
         public Builder styled(String text, Style style) {
             return append(Component.text(Objects.requireNonNull(text, "text"))
                     .style(Objects.requireNonNull(style, "style")));
         }
 
+        /**
+         * Appends a translatable text component with fallback and decorations.
+         *
+         * @param key         Minecraft translation key
+         * @param fallback    fallback string if key is unmapped
+         * @param color       text color
+         * @param decorations optional text decorations
+         * @return this builder instance
+         * @throws NullPointerException if any required parameter is {@code null}
+         */
         public Builder translatable(String key, String fallback, TextColor color,
                                     TextDecoration... decorations) {
             Component component = Component.translatable(Objects.requireNonNull(key, "key"))
@@ -100,22 +183,58 @@ public final class UiText {
             return append(decorate(component, decorations));
         }
 
+        /**
+         * Appends text styled with a two-color linear gradient.
+         *
+         * @param text        text string
+         * @param from        gradient start color
+         * @param to          gradient end color
+         * @param decorations optional text decorations
+         * @return this builder instance
+         */
         public Builder gradient(String text, TextColor from, TextColor to,
                                 TextDecoration... decorations) {
             return gradient(text, List.of(from, to), decorations);
         }
 
+        /**
+         * Appends text styled with a multi-stop gradient array and intensity factor.
+         *
+         * @param text        text string
+         * @param colors      array of gradient stop colors
+         * @param factor      blending intensity factor (0.0 to 1.0)
+         * @param decorations optional text decorations
+         * @return this builder instance
+         */
         public Builder gradient(String text, TextColor[] colors, double factor,
                                 TextDecoration... decorations) {
             Objects.requireNonNull(colors, "colors");
             return gradient(text, List.of(colors), factor, decorations);
         }
 
+        /**
+         * Appends text styled with a multi-stop gradient list.
+         *
+         * @param text        text string
+         * @param stops       list of color stops (at least 2 colors)
+         * @param decorations optional text decorations
+         * @return this builder instance
+         */
         public Builder gradient(String text, List<? extends TextColor> stops,
                                 TextDecoration... decorations) {
             return gradient(text, stops, 1.0, decorations);
         }
 
+        /**
+         * Appends text styled with a multi-stop gradient list and intensity factor.
+         *
+         * @param text        text string
+         * @param stops       list of color stops (at least 2 colors)
+         * @param factor      blending intensity factor (0.0 to 1.0)
+         * @param decorations optional text decorations
+         * @return this builder instance
+         * @throws IllegalArgumentException if fewer than 2 stops or factor outside [0, 1]
+         */
         public Builder gradient(String text, List<? extends TextColor> stops,
                                 double factor, TextDecoration... decorations) {
             Objects.requireNonNull(text, "text");
@@ -145,14 +264,29 @@ public final class UiText {
             return this;
         }
 
+        /**
+         * Appends a space character to the text component.
+         *
+         * @return this builder instance
+         */
         public Builder space() {
             return append(Component.space());
         }
 
+        /**
+         * Appends a newline character to the text component.
+         *
+         * @return this builder instance
+         */
         public Builder newline() {
             return append(Component.newline());
         }
 
+        /**
+         * Builds the final immutable Adventure {@link Component}.
+         *
+         * @return assembled component
+         */
         public Component build() {
             return result;
         }
@@ -175,3 +309,4 @@ public final class UiText {
         }
     }
 }
+

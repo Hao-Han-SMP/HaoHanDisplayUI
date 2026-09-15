@@ -18,7 +18,17 @@
  */
 package vn.haohan.displayui.api.interaction;
 
+/**
+ * Listener interface for handling player click interactions on Display UI elements.
+ */
 @FunctionalInterface
 public interface UiClickHandler {
+
+    /**
+     * Invoked when a player clicks an interactive button region on the UI.
+     *
+     * @param click click interaction event payload
+     */
     void onClick(UiClick click);
 }
+

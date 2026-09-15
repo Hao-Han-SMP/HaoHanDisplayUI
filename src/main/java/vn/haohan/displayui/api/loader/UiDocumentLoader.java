@@ -60,16 +60,17 @@ import java.util.*;
 import java.util.logging.Logger;
 
 /**
- * Loads a {@link UiDocument} from a {@code .hhdui.json} file exported by the HaoHan Visual Builder.
+ * Utility for parsing and loading {@link UiDocument} instances from {@code .hhdui.json} files or JSON strings.
+ * <p>
+ * This format is exported by HaoHan Visual Builder or authored by hand.
+ * Supports Adventure MiniMessage formatting (e.g. {@code <red>text</red>}) and Minecraft legacy color codes (e.g. {@code &cRed &lBold}).
  *
- * <p>Supports MiniMessage formatting ({@code <red>text</red>}) and legacy {@code &} color codes
- * ({@code &ctext}, {@code &lbold}).
- *
- * <h3>Usage</h3>
+ * <h3>Usage Example:</h3>
  * <pre>{@code
- * UiDocument doc = UiDocumentLoader.load(new File(getDataFolder(), "panels/my_panel.hhdui.json"));
+ * File file = new File(getDataFolder(), "panels/my_panel.hhdui.json");
+ * UiDocument doc = UiDocumentLoader.load(file);
  * DisplayUiService ui = getServer().getServicesManager().load(DisplayUiService.class);
- * UiHandle handle = ui.show(location, doc, UiOptions.defaults(), player);
+ * UiHandle handle = ui.create("my_plugin", player.getLocation(), doc);
  * }</pre>
  */
 public final class UiDocumentLoader {
@@ -82,14 +83,28 @@ public final class UiDocumentLoader {
     private UiDocumentLoader() {}
 
     /**
-     * Represents the result of parsing a UiDocument with detailed diagnostic logs.
+     * Report containing parsed {@link UiDocument} and any diagnostic warning/error messages encountered.
+     *
+     * @param document parsed document (may contain partially loaded valid nodes if errors were encountered)
+     * @param errors   list of descriptive error messages
      */
     public record DocumentLoadReport(UiDocument document, List<String> errors) {
+        /**
+         * Checks if any parse errors or warnings were logged.
+         *
+         * @return {@code true} if at least one error occurred; {@code false} if completely clean
+         */
         public boolean hasErrors() { return !errors.isEmpty(); }
     }
 
     /**
-     * Loads a UiDocument from a file with detailed diagnostic error collection.
+     * Loads and parses a UI document from a file with a detailed diagnostics report.
+     * <p>
+     * Does not throw exceptions on syntax errors; instead, issues are collected into {@link DocumentLoadReport#errors()}.
+     *
+     * @param file {@code .json} or {@code .hhdui.json} file on disk
+     * @return a {@link DocumentLoadReport} containing the document and collected errors
+     * @throws NullPointerException if {@code file} is {@code null}
      */
     public static DocumentLoadReport loadWithReport(File file) {
         Objects.requireNonNull(file, "file");
@@ -105,11 +120,12 @@ public final class UiDocumentLoader {
     }
 
     /**
-     * Loads a UiDocument from a file.
+     * Loads a UI document from a file on disk.
      *
-     * @param file the .json file on disk
-     * @return the parsed UiDocument
-     * @throws UiDocumentParseException if the file cannot be read or parsed
+     * @param file UI document file on disk
+     * @return fully parsed {@link UiDocument}
+     * @throws UiDocumentParseException if the file is missing, an I/O error occurs, or syntax is invalid
+     * @throws NullPointerException     if {@code file} is {@code null}
      */
     public static UiDocument load(File file) {
         DocumentLoadReport report = loadWithReport(file);
@@ -120,7 +136,12 @@ public final class UiDocumentLoader {
     }
 
     /**
-     * Loads a UiDocument from an InputStream.
+     * Loads a UI document from an input stream.
+     *
+     * @param in input stream providing JSON content (UTF-8 encoded)
+     * @return fully parsed {@link UiDocument}
+     * @throws UiDocumentParseException if stream reading fails or JSON syntax is invalid
+     * @throws NullPointerException     if {@code in} is {@code null}
      */
     public static UiDocument load(InputStream in) {
         Objects.requireNonNull(in, "in");
@@ -133,12 +154,23 @@ public final class UiDocumentLoader {
     }
 
     /**
-     * Loads a UiDocument directly from a JSON string.
+     * Loads a UI document directly from a JSON string.
+     *
+     * @param json string containing UI document JSON
+     * @return parsed {@link UiDocument}
+     * @throws UiDocumentParseException if JSON parsing fails
      */
     public static UiDocument loadFromString(String json) {
         return loadFromString(json, "JSON string");
     }
 
+    /**
+     * Loads a UI document directly from a JSON string with a custom source name for debugging.
+     *
+     * @param json       string containing UI document JSON
+     * @param sourceName source label (e.g. file name or context) for diagnostic log messages
+     * @return parsed {@link UiDocument}
+     */
     public static UiDocument loadFromString(String json, String sourceName) {
         JsonObject root = JsonParser.parseString(json).getAsJsonObject();
         DocumentLoadReport report = parseWithReport(root, sourceName);
@@ -151,6 +183,13 @@ public final class UiDocumentLoader {
         return parseWithReport(root, "document").document();
     }
 
+    /**
+     * Parses a {@link JsonObject} root tree into a {@link DocumentLoadReport}.
+     *
+     * @param root       root JSON object containing nodes and buttons arrays
+     * @param sourceName label used for logging warnings
+     * @return {@link DocumentLoadReport} with parsed document and diagnostics
+     */
     public static DocumentLoadReport parseWithReport(JsonObject root, String sourceName) {
         JsonArray nodesArr = root.has("nodes") ? root.getAsJsonArray("nodes") : new JsonArray();
         List<UiNode> nodes = new ArrayList<>();
@@ -501,6 +540,12 @@ public final class UiDocumentLoader {
         }
     }
 
+    /**
+     * Safely instantiates an {@link ItemStack} from {@link Material}, supporting both runtime Bukkit servers and Unit Test (Mockito) environments.
+     *
+     * @param material Minecraft material type
+     * @return a valid {@link ItemStack}, or {@code null} if instantiation fails
+     */
     public static ItemStack createItemStackSafe(Material material) {
         try {
             return new ItemStack(material);
@@ -519,6 +564,12 @@ public final class UiDocumentLoader {
         }
     }
 
+    /**
+     * Safely instantiates {@link org.bukkit.block.data.BlockData} from {@link Material}, supporting runtime and Mockito mock environments.
+     *
+     * @param material Minecraft block material type
+     * @return a valid {@link org.bukkit.block.data.BlockData}, or {@code null} if creation fails
+     */
     public static org.bukkit.block.data.BlockData createBlockDataSafe(Material material) {
         try {
             return material.createBlockData();
@@ -638,9 +689,17 @@ public final class UiDocumentLoader {
     // ── Text format helpers ────────────────────────────────────────────────────
 
     /**
-     * Parses a text string that may use MiniMessage ({@code <red>text</red>}) or
-     * legacy {@code &} color codes ({@code &ctext}). If neither tag is detected,
-     * returns the string as plain text.
+     * Parses a string into an Adventure {@link Component}.
+     * <p>
+     * Automatically recognizes markup:
+     * <ul>
+     *   <li>Modern MiniMessage formatting if tags are present (e.g. {@code <gold><bold>Text</gold></bold>})</li>
+     *   <li>Legacy Minecraft color codes if {@code &} characters are detected (e.g. {@code &aGreen text})</li>
+     *   <li>Plain uncolored text if no formatting syntax is detected</li>
+     * </ul>
+     *
+     * @param text input formatted or raw string
+     * @return styled {@link Component} (or {@link Component#empty()} if text is null or blank)
      */
     public static Component parseText(String text) {
         if (text == null || text.isBlank()) return Component.empty();
