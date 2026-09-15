@@ -11,21 +11,21 @@
 const ItemPicker = (() => {
 
   const DATA_PATHS_URL = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/dataPaths.json';
-  const DATA_BASE  = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc';
-  const TEX_BASE   = 'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets';
+  const DATA_BASE = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc';
+  const TEX_BASE = 'https://raw.githubusercontent.com/InventivetalentDev/minecraft-assets';
 
-  const _itemCache  = {}; // version → merged item array
-  const _texFailed  = new Set();
-  let _versions     = null; // [{label, value}] loaded from dataPaths.json
+  const _itemCache = {}; // version → merged item array
+  const _texFailed = new Set();
+  let _versions = null; // [{label, value}] loaded from dataPaths.json
 
-  let _modal     = null;
-  let _callback  = null;
-  let _version   = null; // set to latest after versions load
-  let _tab       = 'all';      // 'all' | 'items' | 'blocks'
-  let _query     = '';
-  let _selected  = '';
-  let _allItems  = [];
-  let _tooltip   = null;
+  let _modal = null;
+  let _callback = null;
+  let _version = '1.21.11';
+  let _tab = 'all';      // 'all' | 'items' | 'blocks'
+  let _query = '';
+  let _selected = '';
+  let _allItems = [];
+  let _tooltip = null;
 
   /* ── Version list (fetched once, cached) ─────────────── */
 
@@ -55,10 +55,10 @@ const ItemPicker = (() => {
     } catch {
       // Fallback if GitHub is unreachable
       _versions = [
-        { value: '1.21.5', label: '1.21.5 (Latest)' },
-        { value: '1.21.4', label: '1.21.4' },
+        { value: '1.21.11', label: '1.21.11 (Recommended)' },
         { value: '1.21.1', label: '1.21.1' },
         { value: '1.20.4', label: '1.20.4' },
+        { value: '1.20.1', label: '1.20.1' },
       ];
     }
     if (!_version) _version = _versions[0].value;
@@ -70,6 +70,9 @@ const ItemPicker = (() => {
   function open(current, callback) {
     _callback = callback;
     _selected = current || '';
+    if (typeof getMcVersion === 'function') {
+      _version = getMcVersion() || _version;
+    }
     _createModal();
     // Fetch versions first, then load items
     getVersions().then(versions => {
@@ -88,34 +91,38 @@ const ItemPicker = (() => {
     const overlay = document.createElement('div');
     overlay.id = 'icp-overlay';
     overlay.innerHTML = `
-      <div id="icp-modal" role="dialog" aria-label="Select item">
+      <div id="icp-modal" role="dialog" aria-modal="true" aria-label="Select item or block">
         <!-- Header -->
         <div id="icp-header">
           <div id="icp-title">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            Select Item
+            Select Item / Block
           </div>
           <div id="icp-search-wrap">
             <svg class="icp-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input id="icp-search" type="text" placeholder="Search items…" autocomplete="off" spellcheck="false" />
-            <button id="icp-search-clear" class="icp-search-clear">✕</button>
+            <input id="icp-search" type="text" placeholder="Search items & blocks…" autocomplete="off" spellcheck="false" />
+            <button id="icp-search-clear" class="icp-search-clear" type="button">✕</button>
           </div>
           <div id="icp-tabs">
-            <button class="icp-tab ${_tab==='all'?'active':''}"    data-tab="all">All</button>
-            <button class="icp-tab ${_tab==='items'?'active':''}"  data-tab="items">Items</button>
-            <button class="icp-tab ${_tab==='blocks'?'active':''}" data-tab="blocks">Blocks</button>
+            <button class="icp-tab ${_tab === 'all' ? 'active' : ''}"    data-tab="all" type="button">All</button>
+            <button class="icp-tab ${_tab === 'items' ? 'active' : ''}"  data-tab="items" type="button">Items</button>
+            <button class="icp-tab ${_tab === 'blocks' ? 'active' : ''}" data-tab="blocks" type="button">Blocks</button>
           </div>
-          <select id="icp-version" disabled title="Loading versions…">
-            <option>Loading…</option>
+          <select id="icp-version" disabled title="Minecraft Version">
+            <option>${_version}</option>
           </select>
-          <button id="icp-close" title="Close">✕</button>
+          <button id="icp-close" title="Close (Escape)" type="button">✕</button>
         </div>
 
         <!-- Body -->
         <div id="icp-body">
           <div id="icp-loading">
             <div class="icp-spinner"></div>
-            <span>Loading item registry…</span>
+            <span>Loading Minecraft registry…</span>
+          </div>
+          <div id="icp-error" style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px;color:var(--text-dim);text-align:center;">
+            <span>Unable to load items from repository.</span>
+            <button id="icp-retry-btn" class="btn btn-sm btn-secondary" type="button">Retry</button>
           </div>
           <div id="icp-grid"></div>
         </div>
@@ -148,13 +155,21 @@ const ItemPicker = (() => {
       _renderGrid();
     });
     document.getElementById('icp-search-clear').addEventListener('click', () => {
-      document.getElementById('icp-search').value = '';
+      const searchInput = document.getElementById('icp-search');
+      if (searchInput) searchInput.value = '';
       _query = '';
       document.getElementById('icp-search-clear').style.display = 'none';
       _renderGrid();
     });
     document.getElementById('icp-version').addEventListener('change', e => {
       _version = e.target.value;
+      if (typeof setMcVersion === 'function') {
+        setMcVersion(_version);
+      }
+      _loadItems(_version);
+    });
+
+    document.getElementById('icp-retry-btn')?.addEventListener('click', () => {
       _loadItems(_version);
     });
 
@@ -168,10 +183,15 @@ const ItemPicker = (() => {
     });
 
     // Keyboard: Escape to close
-    const onKey = e => { if (e.key === 'Escape') { _destroyModal(); document.removeEventListener('keydown', onKey); } };
+    const onKey = e => {
+      if (e.key === 'Escape') {
+        _destroyModal();
+        document.removeEventListener('keydown', onKey);
+      }
+    };
     document.addEventListener('keydown', onKey);
 
-    // Focus search after animation
+    // Focus search input
     setTimeout(() => document.getElementById('icp-search')?.focus(), 60);
     _updateSelectedPreview(_selected);
   }
@@ -183,14 +203,18 @@ const ItemPicker = (() => {
       .map(v => `<option value="${v.value}" ${v.value === _version ? 'selected' : ''}>${v.label}</option>`)
       .join('');
     sel.disabled = false;
-    sel.title = '';
+    sel.title = 'Minecraft Version';
   }
 
   /* ── Data loading ────────────────────────────────────── */
 
   async function _loadItems(version) {
-    document.getElementById('icp-loading').style.display = 'flex';
-    document.getElementById('icp-grid').style.display    = 'none';
+    const loadingEl = document.getElementById('icp-loading');
+    const errorEl = document.getElementById('icp-error');
+    const gridEl = document.getElementById('icp-grid');
+    if (loadingEl) loadingEl.style.display = 'flex';
+    if (errorEl) errorEl.style.display = 'none';
+    if (gridEl) gridEl.style.display = 'none';
 
     if (_itemCache[version]) {
       _allItems = _itemCache[version];
@@ -218,18 +242,39 @@ const ItemPicker = (() => {
         });
       });
 
+      (blocksData || []).forEach(block => {
+        if (!itemMap.has(block.name)) {
+          itemMap.set(block.name, {
+            name: block.name,
+            namespace: `minecraft:${block.name}`,
+            displayName: block.displayName || _toDisplay(block.name),
+            isBlock: true,
+            stackSize: 64,
+          });
+        }
+      });
+
+      if (itemMap.size === 0) {
+        throw new Error('No items found');
+      }
+
       _itemCache[version] = [...itemMap.values()];
       _allItems = _itemCache[version];
       _showGrid();
     } catch {
-      _allItems = [];
-      _showGrid();
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (errorEl) errorEl.style.display = 'flex';
+      if (gridEl) gridEl.style.display = 'none';
     }
   }
 
   function _showGrid() {
-    document.getElementById('icp-loading').style.display = 'none';
-    document.getElementById('icp-grid').style.display    = '';
+    const loadingEl = document.getElementById('icp-loading');
+    const errorEl = document.getElementById('icp-error');
+    const gridEl = document.getElementById('icp-grid');
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (errorEl) errorEl.style.display = 'none';
+    if (gridEl) gridEl.style.display = '';
     _renderGrid();
   }
 
@@ -241,17 +286,21 @@ const ItemPicker = (() => {
     if (!grid) return;
 
     const filtered = _allItems.filter(item => {
-      if (_tab === 'items'  && item.isBlock)  return false;
+      if (_tab === 'items' && item.isBlock) return false;
       if (_tab === 'blocks' && !item.isBlock) return false;
-      if (_query) return item.name.includes(_query) || item.displayName.toLowerCase().includes(_query) || item.namespace.includes(_query);
+      if (_query) {
+        return item.name.includes(_query) ||
+          item.displayName.toLowerCase().includes(_query) ||
+          item.namespace.includes(_query);
+      }
       return true;
     });
 
-    countEl.textContent = `${filtered.length.toLocaleString()} items`;
+    if (countEl) countEl.textContent = `${filtered.length.toLocaleString()} items`;
 
-    // Use document fragment for performance
+    // Fast fragment population
     const frag = document.createDocumentFragment();
-    filtered.forEach(item => {
+    filtered.slice(0, 400).forEach(item => {
       const cell = _createCell(item);
       frag.appendChild(cell);
     });
@@ -274,25 +323,24 @@ const ItemPicker = (() => {
 
     const label = document.createElement('div');
     label.className = 'icp-cell-label';
-    label.textContent = item.displayName.length > 10 ? item.displayName.slice(0, 9) + '…' : item.displayName;
+    label.textContent = item.displayName.length > 11 ? item.displayName.slice(0, 10) + '…' : item.displayName;
 
     cell.appendChild(img);
     cell.appendChild(label);
 
-    // Click to select
+    // Click to select & confirm
     cell.addEventListener('click', () => {
       document.querySelectorAll('.icp-cell.selected').forEach(c => c.classList.remove('selected'));
       cell.classList.add('selected');
       _selected = item.namespace;
       _updateSelectedPreview(item.namespace);
-      // Confirm selection on double-click or after brief delay on single click
       _callback?.(item.namespace, item);
       _destroyModal();
     });
 
     // Tooltip on hover
     cell.addEventListener('mouseenter', e => _showTooltip(e, item));
-    cell.addEventListener('mousemove',  e => _moveTooltip(e));
+    cell.addEventListener('mousemove', e => _moveTooltip(e));
     cell.addEventListener('mouseleave', _hideTooltip);
 
     return cell;
@@ -300,15 +348,14 @@ const ItemPicker = (() => {
 
   /* ── Pixel-art placeholder ──────────────────────────── */
 
-  // Color palette keyed by first char of name for consistent per-item color
-  const _PAL = ['#3a5080','#4a6030','#603030','#504080','#307060','#605030','#403060'];
+  const _PAL = ['#3a5080', '#4a6030', '#603030', '#504080', '#307060', '#605030', '#403060'];
   function _placeholder(name) {
     const cvs = document.createElement('canvas');
     cvs.width = cvs.height = 16;
     const c = cvs.getContext('2d');
     const col = _PAL[name.charCodeAt(0) % _PAL.length];
     const col2 = _PAL[(name.charCodeAt(0) + 3) % _PAL.length];
-    c.fillStyle = col;  c.fillRect(0, 0, 16, 16);
+    c.fillStyle = col; c.fillRect(0, 0, 16, 16);
     c.fillStyle = col2; c.fillRect(0, 0, 8, 8);
     c.fillStyle = col2; c.fillRect(8, 8, 8, 8);
     c.fillStyle = 'rgba(255,255,255,.12)';
@@ -321,16 +368,11 @@ const ItemPicker = (() => {
     const name = item.name;
     img.alt = '';
 
-    // Build ordered source list:
-    // 1. InventivetalentDev item/ or block/ (primary)
-    // 2. InventivetalentDev the other folder  (swap)
-    // 3. Minecraft Wiki Invicon               (official renders, highest coverage)
-    // 4. Placeholder canvas                   (never broken-image icon)
     const cdnTypes = item.isBlock ? ['block', 'item'] : ['item', 'block'];
     const sources = [
       ...cdnTypes.map(t => ({
         url: `${TEX_BASE}/${_version}/assets/minecraft/textures/${t}/${name}.png`,
-        key: `${t}:${name}`,
+        key: `${_version}:${t}:${name}`,
       })),
       {
         url: `https://minecraft.wiki/images/Invicon_${encodeURIComponent(item.displayName.replace(/\s+/g, '_'))}.png`,
@@ -344,7 +386,7 @@ const ItemPicker = (() => {
         img.onerror = null;
         img.src = _placeholder(name);
         img.style.imageRendering = 'pixelated';
-        img.style.opacity = '0.45';
+        img.style.opacity = '0.5';
         return;
       }
       const src = sources[attempt++];
@@ -360,12 +402,12 @@ const ItemPicker = (() => {
 
   function _updateSelectedPreview(namespace) {
     const nameEl = document.getElementById('icp-sel-name');
-    const imgEl  = document.getElementById('icp-sel-img');
+    const imgEl = document.getElementById('icp-sel-img');
     if (!nameEl || !imgEl) return;
     if (!namespace) { nameEl.textContent = 'None selected'; imgEl.src = ''; return; }
     nameEl.textContent = namespace;
     const name = namespace.replace('minecraft:', '');
-    // Try item → block → wiki for the footer preview too
+
     const previewSrcs = [
       `${TEX_BASE}/${_version}/assets/minecraft/textures/item/${name}.png`,
       `${TEX_BASE}/${_version}/assets/minecraft/textures/block/${name}.png`,
@@ -373,7 +415,11 @@ const ItemPicker = (() => {
     ];
     let pi = 0;
     const tryPrev = () => {
-      if (pi >= previewSrcs.length) { imgEl.style.opacity = '.2'; return; }
+      if (pi >= previewSrcs.length) {
+        imgEl.onerror = null;
+        imgEl.src = _placeholder(name);
+        return;
+      }
       imgEl.onerror = () => { pi++; tryPrev(); };
       imgEl.src = previewSrcs[pi++];
     };
@@ -392,15 +438,15 @@ const ItemPicker = (() => {
     if (!_tooltip) return;
     const x = e.clientX + 14, y = e.clientY + 14;
     const tw = _tooltip.offsetWidth, th = _tooltip.offsetHeight;
-    _tooltip.style.left = (x + tw > window.innerWidth  - 8 ? e.clientX - tw - 8 : x) + 'px';
-    _tooltip.style.top  = (y + th > window.innerHeight - 8 ? e.clientY - th - 8 : y) + 'px';
+    _tooltip.style.left = (x + tw > window.innerWidth - 8 ? e.clientX - tw - 8 : x) + 'px';
+    _tooltip.style.top = (y + th > window.innerHeight - 8 ? e.clientY - th - 8 : y) + 'px';
   }
   function _hideTooltip() { if (_tooltip) _tooltip.style.display = 'none'; }
 
   /* ── Helpers ─────────────────────────────────────────── */
 
   function _destroyModal() {
-    _modal?.remove();  _modal = null;
+    _modal?.remove(); _modal = null;
     _tooltip?.remove(); _tooltip = null;
   }
 
@@ -408,5 +454,5 @@ const ItemPicker = (() => {
     return name.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
   }
 
-  return { open };
+  return { open, getVersions };
 })();
