@@ -23,7 +23,20 @@ import org.bukkit.block.data.BlockData;
 
 import java.util.Objects;
 
-/** A block-model layer; useful for panels that do not rely on font glyphs. */
+/**
+ * A UI node that renders a Minecraft block model ({@link BlockData}) using a BlockDisplay entity.
+ * <p>
+ * Suitable for building 3D borders, backplates, panels, or volumetric decorations on UI surfaces.
+ *
+ * @param block       the block data state to render
+ * @param x           the top-left X coordinate (pixels)
+ * @param y           the top-left Y coordinate (pixels)
+ * @param depth       the layer Z-depth (pixels)
+ * @param width       the block width (pixels, > 0)
+ * @param height      the block height (pixels, > 0)
+ * @param thickness   the block depth thickness (pixels, > 0)
+ * @param doubleSided whether back faces are rendered
+ */
 public record BlockNode(
         BlockData block,
         float x,
@@ -65,5 +78,9 @@ public record BlockNode(
     @Override
     public BlockNode withDoubleSided(boolean doubleSided) {
         return new BlockNode(block, x, y, depth, width, height, thickness, doubleSided);
+    }
+
+    public BlockNode doubleSided(boolean doubleSided) {
+        return withDoubleSided(doubleSided);
     }
 }

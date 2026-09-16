@@ -21,7 +21,16 @@ package vn.haohan.displayui.api.interaction;
 import vn.haohan.displayui.api.UiHandle;
 import org.bukkit.entity.Player;
 
-/** Data delivered to scene-local click callbacks. */
+/**
+ * Event context record passed to local UI click listeners.
+ *
+ * @param handle   controlling {@link UiHandle} of the clicked UI instance
+ * @param button   interactive button {@link UiButton} triggered
+ * @param player   player who clicked the button
+ * @param localX   local canvas X-coordinate at click point in UI pixels
+ * @param localY   local canvas Y-coordinate at click point in UI pixels
+ * @param distance raycast distance from player eye location to UI canvas in blocks
+ */
 public record UiClick(
         UiHandle handle,
         UiButton button,
@@ -30,3 +39,4 @@ public record UiClick(
         float localY,
         double distance
 ) {}
+

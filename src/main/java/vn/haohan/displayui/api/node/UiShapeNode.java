@@ -25,8 +25,24 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * A versatile 2D shape node that supports geometric primitives, polygons, stars, arrows,
- * symbols, custom outlines, and rotation matching the HaoHan Visual GUI Builder.
+ * A versatile 2D geometric shape node supporting primitive shapes (rect, circle, triangle, polygon, star, arrow, etc.),
+ * rounded corners (corner radius), borders (solid/dashed/dotted outlines), 2D rotation, and automatic decomposition
+ * into optimized Display entities.
+ *
+ * @param shapeType        shape type identifier ("rect", "rounded_rect", "circle", "diamond", "trapezoid", "star5", "arrow_right", ...)
+ * @param x                top-left bounding box X coordinate (pixels)
+ * @param y                top-left bounding box Y coordinate (pixels)
+ * @param width            bounding box width (pixels)
+ * @param height           bounding box height (pixels)
+ * @param depth            Z-depth layer offset
+ * @param color            solid interior fill color
+ * @param outline          whether outline stroke is enabled
+ * @param outlineColor     color of the outline stroke
+ * @param outlineThickness stroke thickness (pixels)
+ * @param outlineStyle     outline stroke style ("solid", "dashed", "dotted")
+ * @param cornerRadius     corner rounding radius (for rounded_rect)
+ * @param rotation         2D rotation angle around shape center (degrees)
+ * @param doubleSided      whether back faces are rendered
  */
 public record UiShapeNode(
         String shapeType,
@@ -53,10 +69,23 @@ public record UiShapeNode(
         if (outlineThickness <= 0) outlineThickness = 2.0f;
     }
 
+    /**
+     * Constructs a shape node with default settings (no outline, zero rotation, depth 0.001f).
+     *
+     * @param shapeType shape type identifier
+     * @param x         top-left X coordinate
+     * @param y         top-left Y coordinate
+     * @param width     bounding box width
+     * @param height    bounding box height
+     * @param color     interior fill color
+     */
     public UiShapeNode(String shapeType, float x, float y, float width, float height, Color color) {
         this(shapeType, x, y, width, height, 0.001f, color, false, Color.WHITE, 2.0f, "solid", 6.0f, 0.0f, false);
     }
 
+    /**
+     * Constructs a shape node with custom outline and corner rounding parameters.
+     */
     public UiShapeNode(String shapeType, float x, float y, float width, float height, float depth,
                        Color color, boolean outline, Color outlineColor, float outlineThickness,
                        String outlineStyle, float cornerRadius, boolean doubleSided) {
@@ -73,25 +102,52 @@ public record UiShapeNode(
         return y;
     }
 
+    /**
+     * Implementation from {@link UiNode#withDoubleSided(boolean)}.
+     */
     @Override
     public UiShapeNode withDoubleSided(boolean doubleSided) {
         return new UiShapeNode(shapeType, x, y, width, height, depth, color, outline, outlineColor, outlineThickness, outlineStyle, cornerRadius, rotation, doubleSided);
     }
 
+    /**
+     * Returns a copy with updated outline settings.
+     *
+     * @param outline          whether outline is enabled
+     * @param outlineColor     outline color
+     * @param outlineThickness outline thickness (pixels)
+     * @param outlineStyle     outline style ("solid", "dashed", "dotted")
+     * @return a new {@link UiShapeNode} instance
+     */
     public UiShapeNode withOutline(boolean outline, Color outlineColor, float outlineThickness, String outlineStyle) {
         return new UiShapeNode(shapeType, x, y, width, height, depth, color, outline, outlineColor, outlineThickness, outlineStyle, cornerRadius, rotation, doubleSided);
     }
 
+    /**
+     * Returns a copy with an updated 2D rotation angle around the shape center.
+     *
+     * @param rotation rotation angle in degrees
+     * @return a new {@link UiShapeNode} instance
+     */
     public UiShapeNode withRotation(float rotation) {
         return new UiShapeNode(shapeType, x, y, width, height, depth, color, outline, outlineColor, outlineThickness, outlineStyle, cornerRadius, rotation, doubleSided);
     }
 
+    /**
+     * Returns a copy with an updated layer Z-depth.
+     *
+     * @param depth new Z-depth
+     * @return a new {@link UiShapeNode} instance
+     */
     public UiShapeNode atDepth(float depth) {
         return new UiShapeNode(shapeType, x, y, width, height, depth, color, outline, outlineColor, outlineThickness, outlineStyle, cornerRadius, rotation, doubleSided);
     }
 
     /**
-     * Returns a copy of this shape scaled uniformly around its center point.
+     * Uniformly scales the shape around its geometric center.
+     *
+     * @param scale scaling factor
+     * @return a new {@link UiShapeNode} instance
      */
     public UiShapeNode scaled(float scale) {
         if (Math.abs(scale - 1.0f) < 1e-6f) return this;
@@ -108,7 +164,9 @@ public record UiShapeNode(
     }
 
     /**
-     * Computes the 2D polygon boundary vertices for this shape (including rotation if non-zero).
+     * Computes the 2D perimeter boundary vertices representing the shape (rotated if applicable).
+     *
+     * @return list of {@link PolylineNode.Point} vertices forming the boundary
      */
     public List<PolylineNode.Point> computeBoundaryPoints() {
         List<PolylineNode.Point> pts = new ArrayList<>();
@@ -387,7 +445,11 @@ public record UiShapeNode(
     }
 
     /**
-     * Triangulates the shape boundary using the robust Ear-Clipping algorithm.
+     * Triangulates the 2D polygon boundary using the Ear-Clipping algorithm.
+     * <p>
+     * Decomposes any simple planar polygon into a set of non-overlapping {@link TriangleNode} instances.
+     *
+     * @return list of {@link TriangleNode} instances tiling the shape surface
      */
     public List<TriangleNode> triangulate() {
         List<PolylineNode.Point> vertices = computeBoundaryPoints();
@@ -493,7 +555,10 @@ public record UiShapeNode(
     }
 
     /**
-     * Decomposes this shape node into standard elemental UiNodes (UiBackgroundNode, TriangleNode, ParallelogramNode, LineNode).
+     * Decomposes this high-level shape node into the library's fundamental primitive nodes
+     * (UiBackgroundNode, TriangleNode, ParallelogramNode, LineNode, PolylineNode) ready for rendering.
+     *
+     * @return list of primitive {@link UiNode} instances
      */
     public List<UiNode> decomposeToNodes() {
         List<UiNode> nodes = new ArrayList<>();
@@ -705,10 +770,23 @@ public record UiShapeNode(
         return nodes;
     }
 
+    /**
+     * Creates a builder to construct {@link UiShapeNode} instances fluently.
+     *
+     * @param shapeType shape identifier ("rect", "circle", "rounded_rect", etc.)
+     * @param x         top-left X coordinate
+     * @param y         top-left Y coordinate
+     * @param width     width
+     * @param height    height
+     * @return a new {@link Builder} instance
+     */
     public static Builder builder(String shapeType, float x, float y, float width, float height) {
         return new Builder(shapeType, x, y, width, height);
     }
 
+    /**
+     * Builder utility for configuring detailed {@link UiShapeNode} parameters.
+     */
     public static final class Builder {
         private String shapeType;
         private float x;
@@ -743,6 +821,9 @@ public record UiShapeNode(
         public Builder rotation(float rotation) { this.rotation = rotation; return this; }
         public Builder doubleSided(boolean doubleSided) { this.doubleSided = doubleSided; return this; }
 
+        /**
+         * Builds the configured {@link UiShapeNode}.
+         */
         public UiShapeNode build() {
             return new UiShapeNode(shapeType, x, y, width, height, depth, color, outline, outlineColor, outlineThickness, outlineStyle, cornerRadius, rotation, doubleSided);
         }

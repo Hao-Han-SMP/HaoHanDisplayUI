@@ -23,6 +23,20 @@ import org.bukkit.entity.TextDisplay;
 
 import java.util.Objects;
 
+/**
+ * Raw Adventure text display node bound directly to a Minecraft TextDisplay entity.
+ *
+ * @param text        Adventure text component {@link Component}
+ * @param x           horizontal coordinate in UI pixels
+ * @param y           vertical coordinate in UI pixels
+ * @param depth       Z-depth layer offset
+ * @param lineWidth   line wrapping width in UI pixels (>= 1)
+ * @param scale       uniform visual scale factor (scale > 0)
+ * @param alignment   Bukkit TextDisplay text alignment (LEFT, RIGHT, CENTER)
+ * @param shadow      whether text shadow rendering is enabled
+ * @param seeThrough  whether text renders through obstructing blocks
+ * @param doubleSided whether text is rendered on both front and back faces
+ */
 public record TextNode(
         Component text,
         float x,
@@ -47,6 +61,15 @@ public record TextNode(
         this(text, x, y, depth, lineWidth, scale, alignment, shadow, seeThrough, false);
     }
 
+    /**
+     * Convenience factory creating a left-aligned text node with standard defaults.
+     *
+     * @param text      text component
+     * @param x         horizontal origin in UI pixels
+     * @param y         vertical origin in UI pixels
+     * @param lineWidth maximum line wrap width
+     * @return a new left-aligned {@link TextNode}
+     */
     public static TextNode left(Component text, float x, float y, int lineWidth) {
         return new TextNode(text, x, y, 0.002f, lineWidth, 0.5f,
                 TextDisplay.TextAlignment.LEFT, true, false, false);
@@ -60,3 +83,4 @@ public record TextNode(
         return withDoubleSided(doubleSided);
     }
 }
+

@@ -25,8 +25,19 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Objects;
 
 /**
- * An item icon node rendered inside a UI panel with explicit source and display
- * dimensions.
+ * An item icon node rendered inside the UI canvas with distinct source UV coordinates
+ * and target viewport dimensions.
+ *
+ * @param item        the {@link ItemStack} to render as an icon
+ * @param boxX        the top-left X coordinate of the container bounding box (pixels)
+ * @param boxY        the top-left Y coordinate of the container bounding box (pixels)
+ * @param depth       Z-depth layer offset
+ * @param width       viewport display width on the UI canvas (pixels)
+ * @param height      viewport display height on the UI canvas (pixels)
+ * @param uWidth      source UV texture width
+ * @param vHeight     source UV texture height
+ * @param transform   Minecraft {@link ItemDisplay.ItemDisplayTransform} transformation mode
+ * @param doubleSided whether back faces are rendered
  */
 public record UiIconNode(
         ItemStack item,
@@ -50,17 +61,26 @@ public record UiIconNode(
         item = item.clone();
     }
 
+    /**
+     * Constructs an icon with default depth (0.003f), FIXED transform, and single-sided rendering.
+     */
     public UiIconNode(ItemStack item, float x, float y, float width, float height,
                       float uWidth, float vHeight) {
         this(item, x, y, 0.003f, width, height, uWidth, vHeight,
                 ItemDisplay.ItemDisplayTransform.FIXED, false);
     }
 
+    /**
+     * Constructs an icon fitted to bounding rectangle {@link UiRect}.
+     */
     public UiIconNode(ItemStack item, UiRect bounds, float uWidth, float vHeight) {
         this(item, bounds, 0.003f, uWidth, vHeight,
                 ItemDisplay.ItemDisplayTransform.FIXED);
     }
 
+    /**
+     * Constructs an icon fitted to bounding rectangle {@link UiRect} with custom depth and transform.
+     */
     public UiIconNode(ItemStack item, UiRect bounds, float depth,
                       float uWidth, float vHeight,
                       ItemDisplay.ItemDisplayTransform transform) {
@@ -68,37 +88,63 @@ public record UiIconNode(
                 bounds.width(), bounds.height(), uWidth, vHeight, transform, false);
     }
 
+    /**
+     * Constructs an icon with full parameters and single-sided rendering (doubleSided = false).
+     */
     public UiIconNode(ItemStack item, float boxX, float boxY, float depth,
                       float width, float height, float uWidth, float vHeight,
                       ItemDisplay.ItemDisplayTransform transform) {
         this(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, false);
     }
 
+    /** Returns a defensive copy of the ItemStack. */
     @Override public ItemStack item() { return item.clone(); }
+
+    /** Returns center X coordinate of the icon. */
     @Override public float x() { return boxX + width * 0.5f; }
+    /** Returns center Y coordinate of the icon. */
     @Override public float y() { return boxY + height * 0.5f; }
 
+    /** Returns the right boundary coordinate (boxX + width). */
     public float right() { return boxX + width; }
+    /** Returns the bottom boundary coordinate (boxY + height). */
     public float bottom() { return boxY + height; }
+    /** Returns the horizontal scaling factor (width / uWidth). */
     public float scaleU() { return width / uWidth; }
+    /** Returns the vertical scaling factor (height / vHeight). */
     public float scaleV() { return height / vHeight; }
 
+    /**
+     * Implementation from {@link UiNode#withDoubleSided(boolean)}.
+     */
     public UiIconNode withDoubleSided(boolean doubleSided) {
         return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
     }
 
+    /**
+     * Fluent alias for {@link #withDoubleSided(boolean)}.
+     */
     public UiIconNode doubleSided(boolean doubleSided) {
         return withDoubleSided(doubleSided);
     }
 
+    /**
+     * Returns a copy with updated display width and height dimensions.
+     */
     public UiIconNode withDimensions(float width, float height) {
         return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
     }
 
+    /**
+     * Returns a copy with updated source UV width and height.
+     */
     public UiIconNode withSource(float uWidth, float vHeight) {
         return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
     }
 
+    /**
+     * Returns a copy with an updated Minecraft ItemDisplay transform mode.
+     */
     public UiIconNode withTransform(ItemDisplay.ItemDisplayTransform transform) {
         return new UiIconNode(item, boxX, boxY, depth, width, height, uWidth, vHeight, transform, doubleSided);
     }

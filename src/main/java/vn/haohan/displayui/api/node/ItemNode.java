@@ -23,6 +23,17 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.Objects;
 
+/**
+ * A UI node that renders a Minecraft item ({@link ItemStack}) using an ItemDisplay entity.
+ *
+ * @param item        the Minecraft item stack to display (must not be AIR)
+ * @param x           the X coordinate (pixels)
+ * @param y           the Y coordinate (pixels)
+ * @param depth       the layer Z-depth (pixels)
+ * @param scale       the scale factor (> 0)
+ * @param transform   the ItemDisplay transformation mode (FIXED, GUI, GROUND, etc.)
+ * @param doubleSided whether the item is visible from behind (double-sided rendering)
+ */
 public record ItemNode(
         ItemStack item,
         float x,
@@ -52,15 +63,37 @@ public record ItemNode(
         return item.clone();
     }
 
+    /**
+     * Factory method creating a FIXED transform {@link ItemNode} flush with the UI surface.
+     *
+     * @param item  the item to render
+     * @param x     the X coordinate (pixels)
+     * @param y     the Y coordinate (pixels)
+     * @param scale the scaling factor
+     * @return a new {@link ItemNode} instance
+     */
     public static ItemNode fixed(ItemStack item, float x, float y, float scale) {
         return new ItemNode(item, x, y, 0.003f, scale, ItemDisplay.ItemDisplayTransform.FIXED, false);
     }
 
+    /**
+     * Returns a copy of this node with updated double-sided rendering state.
+     *
+     * @param doubleSided {@code true} to render double-sided
+     * @return a new {@link ItemNode} instance
+     */
     public ItemNode withDoubleSided(boolean doubleSided) {
         return new ItemNode(item, x, y, depth, scale, transform, doubleSided);
     }
 
+    /**
+     * Fluent alias for {@link #withDoubleSided(boolean)}.
+     *
+     * @param doubleSided {@code true} to render double-sided
+     * @return a new {@link ItemNode} instance
+     */
     public ItemNode doubleSided(boolean doubleSided) {
         return withDoubleSided(doubleSided);
     }
 }
+

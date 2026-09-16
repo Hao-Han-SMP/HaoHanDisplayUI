@@ -15,7 +15,18 @@ import net.kyori.adventure.text.Component;
 
 import java.util.Objects;
 
-/** Boolean toggle control. */
+/**
+ * Interactive toggle checkbox control with boolean state.
+ *
+ * @param id          unique control identifier ([a-z0-9_.-]+)
+ * @param x           top-left X coordinate in UI pixels
+ * @param y           top-left Y coordinate in UI pixels
+ * @param width       width of interactive hit area in UI pixels
+ * @param height      height of interactive hit area in UI pixels
+ * @param checked     current toggle state: {@code true} if checked, {@code false} if unchecked
+ * @param description tooltip or label component
+ * @param hitSlop     expanded raycast hit margin in UI pixels
+ */
 public record UiCheckbox(
         String id,
         float x,
@@ -41,33 +52,77 @@ public record UiCheckbox(
         }
     }
 
+    /**
+     * Constructs a basic checkbox with toggle state.
+     *
+     * @param id      unique control identifier
+     * @param x       top-left X in UI pixels
+     * @param y       top-left Y in UI pixels
+     * @param width   width in UI pixels
+     * @param height  height in UI pixels
+     * @param checked initial toggle state
+     */
     public UiCheckbox(String id, float x, float y, float width, float height,
                       boolean checked) {
         this(id, x, y, width, height, checked, Component.empty(), 0.0f);
     }
 
+    /**
+     * Constructs a checkbox with a description component.
+     *
+     * @param id          unique control identifier
+     * @param x           top-left X in UI pixels
+     * @param y           top-left Y in UI pixels
+     * @param width       width in UI pixels
+     * @param height      height in UI pixels
+     * @param checked     initial toggle state
+     * @param description tooltip or label component
+     */
     public UiCheckbox(String id, float x, float y, float width, float height,
                       boolean checked, Component description) {
         this(id, x, y, width, height, checked,
                 Objects.requireNonNull(description, "description"), 0.0f);
     }
 
+    /**
+     * Creates a copy of this checkbox with a modified description component.
+     *
+     * @param nextDescription new description component
+     * @return a new {@link UiCheckbox} instance
+     */
     public UiCheckbox describedBy(Component nextDescription) {
         return new UiCheckbox(id, x, y, width, height, checked,
                 Objects.requireNonNull(nextDescription, "description"), hitSlop);
     }
 
+    /**
+     * Creates a copy of this checkbox with modified raycast hit slop margin.
+     *
+     * @param pixels hit margin expansion in UI pixels
+     * @return a new {@link UiCheckbox} instance
+     */
     public UiCheckbox hitSlop(float pixels) {
         return new UiCheckbox(id, x, y, width, height, checked, description, pixels);
     }
 
+    /**
+     * Creates a copy of this checkbox with an updated toggle state.
+     *
+     * @param nextChecked new checked state
+     * @return a new {@link UiCheckbox} instance
+     */
     public UiCheckbox checked(boolean nextChecked) {
         return new UiCheckbox(id, x, y, width, height, nextChecked,
                 description, hitSlop);
     }
 
-    /** Bounds for a custom checkbox indicator. */
+    /**
+     * Returns the bounding layout rectangle {@link UiRect} for the checkbox indicator icon.
+     *
+     * @return bounding {@link UiRect}
+     */
     public UiRect indicatorRect() {
         return new UiRect(x, y, width, height);
     }
 }
+

@@ -18,13 +18,49 @@
  */
 package vn.haohan.displayui.api.node;
 
-/** One renderable node in a UI document. Coordinates are logical pixels. */
+/**
+ * Base sealed interface representing a renderable visual node in a Display UI scene hierarchy.
+ * <p>
+ * Every node has X and Y canvas coordinates, Z-depth layer offset, and double-sided rendering support.
+ */
 public sealed interface UiNode permits TextNode, AlignedTextNode, ItemNode, UiIconNode, BlockNode,
         UiBackgroundNode, UiGradientBackgroundNode, EntityModelNode, MobEntityNode, LineNode, TriangleNode,
         ParallelogramNode, PolylineNode, UiShapeNode {
+
+    /**
+     * Returns the horizontal canvas X coordinate in logical UI pixels.
+     *
+     * @return X coordinate
+     */
     float x();
+
+    /**
+     * Returns the vertical canvas Y coordinate in logical UI pixels.
+     *
+     * @return Y coordinate
+     */
     float y();
+
+    /**
+     * Returns the Z-axis layer depth determining render layering order.
+     *
+     * @return Z depth
+     */
     float depth();
+
+    /**
+     * Checks whether this node is rendered on both front and back faces.
+     *
+     * @return {@code true} if double-sided; {@code false} if front-face only
+     */
     boolean doubleSided();
+
+    /**
+     * Creates a copy of this node with double-sided rendering configured.
+     *
+     * @param doubleSided {@code true} to enable two-sided rendering
+     * @return a new {@link UiNode} instance
+     */
     UiNode withDoubleSided(boolean doubleSided);
 }
+

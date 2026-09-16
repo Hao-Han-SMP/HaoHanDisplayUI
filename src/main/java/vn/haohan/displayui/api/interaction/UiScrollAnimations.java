@@ -13,14 +13,21 @@ import vn.haohan.displayui.utils.MathUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Reusable scroll animation presets. The engine does not enable one by default. */
+/**
+ * Standard animation presets for scrollable lists.
+ */
 public final class UiScrollAnimations {
     private UiScrollAnimations() {}
 
-    /** The former demo animation: slide rows, scale/fade entering rows, and stagger them. */
+    /**
+     * Smooth slide scroll animation: translates rows vertically with scale-in and fade-in transitions.
+     *
+     * @return sliding {@link UiScrollAnimation} preset
+     */
     public static UiScrollAnimation slide() {
         return UiScrollAnimations::createSlide;
     }
+
 
     private static List<UiAnimation> createSlide(UiDocument document, UiScrollList list, int direction) {
         if (direction == 0 || document.nodes().isEmpty()) return List.of();

@@ -109,6 +109,7 @@ final class UiSceneRenderer {
             text.text(textNode.text());
             text.setShadowed(textNode.shadow());
             text.setSeeThrough(textNode.seeThrough());
+            text.setAlignment(toTextAlignment(textNode.alignment()));
             text.setLineWidth(Math.max(1, Math.round(textNode.width() * 20.0f / textNode.fontSize())));
         } else if ((node instanceof ItemNode || node instanceof UiIconNode)
                 && display instanceof ItemDisplay itemDisplay) {
@@ -212,12 +213,20 @@ final class UiSceneRenderer {
         });
     }
 
+    private static TextDisplay.TextAlignment toTextAlignment(vn.haohan.displayui.api.text.UiTextAlignment alignment) {
+        return switch (alignment) {
+            case LEFT -> TextDisplay.TextAlignment.LEFT;
+            case RIGHT -> TextDisplay.TextAlignment.RIGHT;
+            case CENTER -> TextDisplay.TextAlignment.CENTER;
+        };
+    }
+
     private List<Display> spawnAlignedText(AlignedTextNode node) {
         List<Transformation> transforms = scene.computeAlignedTextTransforms(node, 1.0f, 0.0f, 0.0f, 0.0f);
         return spawnDisplays(TextDisplay.class, transforms, display -> {
             scene.configure(display, node);
             display.text(node.text());
-            display.setAlignment(TextDisplay.TextAlignment.CENTER);
+            display.setAlignment(toTextAlignment(node.alignment()));
             display.setLineWidth(Math.max(1, Math.round(node.width() * 20.0f / node.fontSize())));
             display.setShadowed(node.shadow());
             display.setSeeThrough(node.seeThrough());

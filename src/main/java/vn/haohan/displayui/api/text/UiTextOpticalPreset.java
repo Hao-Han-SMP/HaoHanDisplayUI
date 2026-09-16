@@ -19,14 +19,21 @@
 package vn.haohan.displayui.api.text;
 
 /**
- * Manual optical X corrections for Minecraft text whose visible glyph edge
- * differs from its measured layout edge.
+ * Optical horizontal offset presets for Minecraft typography rendering nuances.
+ * <p>
+ * In Minecraft, visual glyph bounds (italic slant, bold shadows, gradient color tags)
+ * can deviate slightly from the geometric layout box. These optical presets compensate for those micro-alignments.
  */
 public enum UiTextOpticalPreset {
+    /** Compensation offset for italicized text. */
     ITALIC(-1.0f),
+    /** No offset adjustment (standard plain text). */
     PLAIN(0.0f),
+    /** Compensation offset for gradient text runs. */
     GRADIENT(1.0f),
+    /** Compensation offset for bold typeface styling. */
     BOLD(2.0f),
+    /** Compensation offset for bold text with gradient styling. */
     BOLD_GRADIENT(3.0f);
 
     private final float xOffset;
@@ -35,7 +42,13 @@ public enum UiTextOpticalPreset {
         this.xOffset = xOffset;
     }
 
+    /**
+     * Returns the horizontal optical compensation offset in UI pixels.
+     *
+     * @return X-offset adjustment in UI pixels
+     */
     public float xOffset() {
         return xOffset;
     }
 }
+

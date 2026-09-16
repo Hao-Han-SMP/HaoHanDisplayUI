@@ -23,6 +23,17 @@ import vn.haohan.displayui.api.interaction.UiControl;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.runtime.scene.UiScene;
 
+/**
+ * Raycast intersection record captured when a player interacts with or clicks a Display UI.
+ *
+ * @param scene    runtime scene instance {@link UiScene} where the hit occurred
+ * @param button   interactive button {@link UiButton} intersected, if any
+ * @param control  interactive control {@link UiControl} intersected, if any
+ * @param player   interacting {@link Player}
+ * @param localX   local canvas X-coordinate at the raycast intersection point in UI pixels
+ * @param localY   local canvas Y-coordinate at the raycast intersection point in UI pixels
+ * @param distance raycast distance from player eye location to UI canvas plane in blocks
+ */
 public record UiHit(
         UiScene scene,
         UiButton button,
@@ -32,3 +43,4 @@ public record UiHit(
         float localY,
         double distance
 ) {}
+
