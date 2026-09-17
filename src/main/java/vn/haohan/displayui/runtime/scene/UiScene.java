@@ -254,8 +254,6 @@ public final class UiScene implements UiHandle {
         this.origin = origin.clone();
         for (Display display : entities) {
             if (display.isValid()) {
-                display.setInterpolationDelay(0);
-                display.setInterpolationDuration(interpolationTicks);
                 display.setTeleportDuration(interpolationTicks);
                 display.teleport(this.origin);
                 display.setRotation(origin.getYaw(), origin.getPitch());
@@ -1713,6 +1711,7 @@ public final class UiScene implements UiHandle {
         for (int i = 0; i < next.nodes().size(); i++) {
             UiNode prev = previous.nodes().get(i);
             UiNode curr = next.nodes().get(i);
+            if (Objects.equals(prev, curr)) continue;
             if (!prev.getClass().equals(curr.getClass())) {
                 rebuildNodeDisplays(i, curr);
                 continue;

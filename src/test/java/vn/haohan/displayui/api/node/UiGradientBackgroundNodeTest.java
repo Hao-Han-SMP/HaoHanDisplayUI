@@ -132,4 +132,23 @@ class UiGradientBackgroundNodeTest {
         assertThrows(NullPointerException.class, () ->
                 new UiGradientBackgroundNode(0, 0, 0, 10, 10, (UiGradient) null));
     }
+
+    @Test
+    void testEqualityAndHashCodeContract() {
+        Color c1 = Color.fromRGB(100, 150, 200);
+        Color c2 = Color.fromRGB(50, 80, 120);
+        UiGradient g1 = UiGradient.horizontal(c1, c2);
+        UiGradient g2 = UiGradient.horizontal(c1, c2);
+
+        UiGradientBackgroundNode node1 = new UiGradientBackgroundNode(10, 20, 0.001f, 100, 50, g1).withGrid(12, 8);
+        UiGradientBackgroundNode node2 = new UiGradientBackgroundNode(10, 20, 0.001f, 100, 50, g2).withGrid(12, 8);
+        UiGradientBackgroundNode differentColor = new UiGradientBackgroundNode(10, 20, 0.001f, 100, 50,
+                UiGradient.horizontal(c1, Color.RED)).withGrid(12, 8);
+        UiGradientBackgroundNode differentBounds = new UiGradientBackgroundNode(10, 20, 0.001f, 120, 50, g1).withGrid(12, 8);
+
+        assertEquals(node1, node2);
+        assertEquals(node1.hashCode(), node2.hashCode());
+        assertNotEquals(node1, differentColor);
+        assertNotEquals(node1, differentBounds);
+    }
 }
