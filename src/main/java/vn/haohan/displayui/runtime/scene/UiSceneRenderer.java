@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -67,12 +68,6 @@ final class UiSceneRenderer {
 
     void updateNode(List<Display> displays, UiNode node) {
         if (displays == null || displays.isEmpty()) return;
-        for (Display display : displays) {
-            if (display != null && display.isValid()) {
-                display.setInterpolationDelay(0);
-                display.setInterpolationDuration(scene.interpolationTicks());
-            }
-        }
         if (node instanceof UiShapeNode shape) {
             List<UiNode> subNodes = shape.decomposeToNodes();
             int displayIdx = 0;
@@ -96,9 +91,9 @@ final class UiSceneRenderer {
 
     private void updateDisplay(Display display, UiNode node, Transformation transform, int index) {
         if (node instanceof UiBackgroundNode background && display instanceof TextDisplay text) {
-            text.setBackgroundColor(background.background());
+            updateTextBackground(text, background.background());
         } else if (node instanceof UiGradientBackgroundNode gradient && display instanceof TextDisplay text) {
-            text.setBackgroundColor(gradient.colorForDisplayIndex(index));
+            updateTextBackground(text, gradient.colorForDisplayIndex(index));
         } else if (node instanceof TextNode textNode && display instanceof TextDisplay text) {
             text.text(textNode.text());
             text.setShadowed(textNode.shadow());
@@ -131,18 +126,30 @@ final class UiSceneRenderer {
             itemDisplay.setItemStack(model.item());
             itemDisplay.setItemDisplayTransform(model.transform());
         } else if (node instanceof LineNode line && display instanceof TextDisplay text) {
-            text.setBackgroundColor(line.color());
+            updateTextBackground(text, line.color());
         } else if (node instanceof ParallelogramNode shape && display instanceof TextDisplay text) {
-            text.setBackgroundColor(shape.color());
+            updateTextBackground(text, shape.color());
         } else if (node instanceof TriangleNode shape && display instanceof TextDisplay text) {
-            text.setBackgroundColor(shape.color());
+            updateTextBackground(text, shape.color());
         } else if (node instanceof PolylineNode shape && display instanceof TextDisplay text) {
-            text.setBackgroundColor(shape.color());
+            updateTextBackground(text, shape.color());
         } else if (node instanceof UiShapeNode shape && display instanceof TextDisplay text) {
-            text.setBackgroundColor(shape.color());
+            updateTextBackground(text, shape.color());
         }
-        if (!scene.isAnimating()) {
-            display.setTransformation(transform);
+        if (!scene.isAnimating() && transform != null) {
+            if (!Objects.equals(display.getTransformation(), transform)) {
+                display.setInterpolationDelay(0);
+                display.setInterpolationDuration(scene.interpolationTicks());
+                display.setTransformation(transform);
+            }
+        }
+    }
+
+    private void updateTextBackground(TextDisplay text, Color color) {
+        if (!Objects.equals(text.getBackgroundColor(), color)) {
+            text.setInterpolationDelay(0);
+            text.setInterpolationDuration(scene.interpolationTicks());
+            text.setBackgroundColor(color);
         }
     }
 

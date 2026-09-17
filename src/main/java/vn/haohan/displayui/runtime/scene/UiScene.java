@@ -254,8 +254,6 @@ public final class UiScene implements UiHandle {
         this.origin = origin.clone();
         for (Display display : entities) {
             if (display.isValid()) {
-                display.setInterpolationDelay(0);
-                display.setInterpolationDuration(interpolationTicks);
                 display.setTeleportDuration(interpolationTicks);
                 display.teleport(this.origin);
                 display.setRotation(origin.getYaw(), origin.getPitch());
@@ -342,6 +340,16 @@ public final class UiScene implements UiHandle {
     @Override
     public Player followTarget() {
         return follow.target();
+    }
+
+    @Override
+    public boolean isFollowCatchingUp() {
+        return follow.isCatchingUp();
+    }
+
+    @Override
+    public void stopFollowCatchUp() {
+        follow.stopCatchUp();
     }
 
     @Override
@@ -432,8 +440,127 @@ public final class UiScene implements UiHandle {
         tickAnimation();
     }
 
+    public float[] calculateDocumentLocalBounds() {
+        return calculateDocumentLocalBounds(document, controlStates.values());
+    }
+
+    public static float[] calculateDocumentLocalBounds(UiDocument document, java.util.Collection<vn.haohan.displayui.api.interaction.UiControl> controls) {
+        float minX = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float maxY = Float.NEGATIVE_INFINITY;
+
+        if (document != null) {
+            for (var node : document.nodes()) {
+                switch (node) {
+                    case vn.haohan.displayui.api.node.UiBackgroundNode bg -> {
+                        minX = Math.min(minX, bg.x());
+                        maxX = Math.max(maxX, bg.x() + bg.width());
+                        minY = Math.min(minY, bg.y());
+                        maxY = Math.max(maxY, bg.y() + bg.height());
+                    }
+                    case vn.haohan.displayui.api.node.UiGradientBackgroundNode bg -> {
+                        minX = Math.min(minX, bg.x());
+                        maxX = Math.max(maxX, bg.x() + bg.width());
+                        minY = Math.min(minY, bg.y());
+                        maxY = Math.max(maxY, bg.y() + bg.height());
+                    }
+                    case vn.haohan.displayui.api.node.UiShapeNode shape -> {
+                        minX = Math.min(minX, shape.x());
+                        maxX = Math.max(maxX, shape.x() + shape.width());
+                        minY = Math.min(minY, shape.y());
+                        maxY = Math.max(maxY, shape.y() + shape.height());
+                    }
+                    case vn.haohan.displayui.api.node.AlignedTextNode text -> {
+                        minX = Math.min(minX, text.x());
+                        maxX = Math.max(maxX, text.x() + text.width());
+                        minY = Math.min(minY, text.y());
+                        maxY = Math.max(maxY, text.y() + text.height());
+                    }
+                    case vn.haohan.displayui.api.node.UiIconNode icon -> {
+                        minX = Math.min(minX, icon.x());
+                        maxX = Math.max(maxX, icon.x() + icon.width());
+                        minY = Math.min(minY, icon.y());
+                        maxY = Math.max(maxY, icon.y() + icon.height());
+                    }
+                    case vn.haohan.displayui.api.node.EntityModelNode em -> {
+                        minX = Math.min(minX, em.x());
+                        maxX = Math.max(maxX, em.x() + em.width());
+                        minY = Math.min(minY, em.y());
+                        maxY = Math.max(maxY, em.y() + em.height());
+                    }
+                    case vn.haohan.displayui.api.node.MobEntityNode mob -> {
+                        minX = Math.min(minX, mob.x());
+                        maxX = Math.max(maxX, mob.x() + mob.width());
+                        minY = Math.min(minY, mob.y());
+                        maxY = Math.max(maxY, mob.y() + mob.height());
+                    }
+                    case vn.haohan.displayui.api.node.ParallelogramNode p -> {
+                        float p4x = p.x2() + p.x3() - p.x1();
+                        float p4y = p.y2() + p.y3() - p.y1();
+                        minX = Math.min(minX, Math.min(Math.min(p.x1(), p.x2()), Math.min(p.x3(), p4x)));
+                        maxX = Math.max(maxX, Math.max(Math.max(p.x1(), p.x2()), Math.max(p.x3(), p4x)));
+                        minY = Math.min(minY, Math.min(Math.min(p.y1(), p.y2()), Math.min(p.y3(), p4y)));
+                        maxY = Math.max(maxY, Math.max(Math.max(p.y1(), p.y2()), Math.max(p.y3(), p4y)));
+                    }
+                    case vn.haohan.displayui.api.node.LineNode line -> {
+                        minX = Math.min(minX, Math.min(line.x1(), line.x2()));
+                        maxX = Math.max(maxX, Math.max(line.x1(), line.x2()));
+                        minY = Math.min(minY, Math.min(line.y1(), line.y2()));
+                        maxY = Math.max(maxY, Math.max(line.y1(), line.y2()));
+                    }
+                    case vn.haohan.displayui.api.node.TriangleNode tri -> {
+                        minX = Math.min(minX, Math.min(tri.x1(), Math.min(tri.x2(), tri.x3())));
+                        maxX = Math.max(maxX, Math.max(tri.x1(), Math.max(tri.x2(), tri.x3())));
+                        minY = Math.min(minY, Math.min(tri.y1(), Math.min(tri.y2(), tri.y3())));
+                        maxY = Math.max(maxY, Math.max(tri.y1(), Math.max(tri.y2(), tri.y3())));
+                    }
+                    case vn.haohan.displayui.api.node.PolylineNode poly -> {
+                        for (var pt : poly.points()) {
+                            minX = Math.min(minX, pt.x());
+                            maxX = Math.max(maxX, pt.x());
+                            minY = Math.min(minY, pt.y());
+                            maxY = Math.max(maxY, pt.y());
+                        }
+                    }
+                    default -> {
+                        minX = Math.min(minX, node.x());
+                        maxX = Math.max(maxX, node.x());
+                        minY = Math.min(minY, node.y());
+                        maxY = Math.max(maxY, node.y());
+                    }
+                }
+            }
+            for (var button : document.buttons()) {
+                minX = Math.min(minX, button.x() - button.hitSlop());
+                maxX = Math.max(maxX, button.x() + button.width() + button.hitSlop());
+                minY = Math.min(minY, button.y() - button.hitSlop());
+                maxY = Math.max(maxY, button.y() + button.height() + button.hitSlop());
+            }
+        }
+        if (controls != null) {
+            for (var control : controls) {
+                minX = Math.min(minX, control.x() - control.hitSlop());
+                maxX = Math.max(maxX, control.x() + control.width() + control.hitSlop());
+                minY = Math.min(minY, control.y() - control.hitSlop());
+                maxY = Math.max(maxY, control.y() + control.height() + control.hitSlop());
+            }
+        }
+
+        if (Float.isInfinite(minX) || Float.isInfinite(maxX) || Float.isInfinite(minY) || Float.isInfinite(maxY)) {
+            return new float[] {-60.0f, 60.0f, -60.0f, 60.0f};
+        }
+        return new float[] {minX, maxX, minY, maxY};
+    }
+
     private void tickFollow() {
-        Location next = follow.next(origin);
+        if (follow.mode() == UiFollowMode.NONE) return;
+        org.bukkit.entity.Player target = follow.target();
+        if (target == null || !target.isOnline()) return;
+
+        float[] b = calculateDocumentLocalBounds();
+        vn.haohan.displayui.utils.RaycastUtils.Projection cursor = projectCursor(target);
+        Location next = follow.next(origin, options.pixelsPerBlock(), b[0], b[1], b[2], b[3], cursor);
         if (next != null) move(next, follow.interpolationTicks());
     }
 
@@ -630,6 +757,7 @@ public final class UiScene implements UiHandle {
 
     private boolean triggerClick(UiHit hit) {
         if (hit == null) return false;
+        follow.stopCatchUp();
         boolean accepted = false;
         if (hit.button() != null) {
             UiClick click = new UiClick(this, hit.button(), hit.player(), hit.localX(), hit.localY(), hit.distance());
@@ -1583,6 +1711,7 @@ public final class UiScene implements UiHandle {
         for (int i = 0; i < next.nodes().size(); i++) {
             UiNode prev = previous.nodes().get(i);
             UiNode curr = next.nodes().get(i);
+            if (Objects.equals(prev, curr)) continue;
             if (!prev.getClass().equals(curr.getClass())) {
                 rebuildNodeDisplays(i, curr);
                 continue;

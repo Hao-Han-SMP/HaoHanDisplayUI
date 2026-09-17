@@ -97,4 +97,10 @@ public interface UiHandle {
 
     /** Returns the target player being followed, or null if follow is disabled. */
     Player followTarget();
+
+    /** Returns whether the follow controller is currently actively gliding toward ideal alignment. */
+    default boolean isFollowCatchingUp() { return false; }
+
+    /** Halts any ongoing glide and locks the UI at its current position immediately. */
+    default void stopFollowCatchUp() {}
 }
