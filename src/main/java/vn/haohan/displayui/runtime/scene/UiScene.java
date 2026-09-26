@@ -842,12 +842,19 @@ public final class UiScene implements UiHandle {
             interaction.setInvulnerable(true);
             interaction.addScoreboardTag(options.scoreboardTag());
             interaction.addScoreboardTag("hhdui_interaction");
+            interaction.addScoreboardTag("hhdui_scene");
             interaction.getPersistentDataContainer().set(
                     sceneKey, PersistentDataType.STRING, id.toString());
             interaction.getPersistentDataContainer().set(
                     ownerDataKey, PersistentDataType.STRING, ownerKey);
         });
-        // Replace the creation fallback with the exact rotated page AABB.
+        for (Player online : plugin.getServer().getOnlinePlayers()) {
+            if (visibleViewers.contains(online.getUniqueId())) {
+                online.showEntity(plugin, interactionEntity);
+            } else {
+                online.hideEntity(plugin, interactionEntity);
+            }
+        }
         updateInteractionHitbox();
     }
 
@@ -1582,20 +1589,21 @@ public final class UiScene implements UiHandle {
     private void syncPlayer(Player player) {
         boolean visible = shouldShow(player);
         boolean alreadyVisible = visibleViewers.contains(player.getUniqueId());
-        if (visible != alreadyVisible) {
-            for (Display display : entities) {
-                if (visible) player.showEntity(plugin, display);
-                else player.hideEntity(plugin, display);
-            }
-            if (visible) visibleViewers.add(player.getUniqueId());
-            else visibleViewers.remove(player.getUniqueId());
+        if (visible && !alreadyVisible) {
+            showEntities(player);
+        } else if (!visible && alreadyVisible) {
+            hideEntities(player);
+        } else if (visible) {
+            if (options.cullItemBackfaces()) syncItemBackfaces(player);
+            syncSideVisibility(player);
         }
-        if (visible && options.cullItemBackfaces()) syncItemBackfaces(player);
-        if (visible) syncSideVisibility(player);
     }
 
     void showEntities(Player player) {
         entities.forEach(entity -> player.showEntity(plugin, entity));
+        if (interactionEntity != null && interactionEntity.isValid()) {
+            player.showEntity(plugin, interactionEntity);
+        }
         visibleViewers.add(player.getUniqueId());
         syncItemBackfaces(player);
         syncSideVisibility(player);
@@ -1713,6 +1721,9 @@ public final class UiScene implements UiHandle {
 
     void hideEntities(Player player) {
         entities.forEach(entity -> player.hideEntity(plugin, entity));
+        if (interactionEntity != null && interactionEntity.isValid()) {
+            player.hideEntity(plugin, interactionEntity);
+        }
         visibleViewers.remove(player.getUniqueId());
     }
 

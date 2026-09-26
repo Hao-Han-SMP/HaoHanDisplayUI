@@ -18,6 +18,7 @@
  */
 package vn.haohan.displayui;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -288,6 +289,8 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
         if (oldDemo != null && oldDemo.handle() != null) oldDemo.handle().remove();
         vn.haohan.displayui.api.UiHandle oldTest = activeVisualTests.remove(playerId);
         if (oldTest != null && oldTest.isValid()) oldTest.remove();
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null) layoutManager.close(player);
     }
 
     private void onDemoClick(DemoContext context, String buttonId, Player player) {

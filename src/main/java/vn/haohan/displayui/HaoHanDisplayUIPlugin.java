@@ -97,15 +97,17 @@ public final class HaoHanDisplayUIPlugin extends JavaPlugin {
         NamespacedKey sceneKey = new NamespacedKey(this, "scene_id");
         int removed = 0;
         for (org.bukkit.World world : Bukkit.getWorlds()) {
-            for (org.bukkit.entity.Entity entity : world.getEntitiesByClass(Display.class)) {
-                if (entity.getPersistentDataContainer().has(sceneKey, PersistentDataType.STRING)) {
+            for (org.bukkit.entity.Entity entity : world.getEntitiesByClasses(Display.class, org.bukkit.entity.Interaction.class)) {
+                if (entity.getPersistentDataContainer().has(sceneKey, PersistentDataType.STRING)
+                        || entity.getScoreboardTags().contains("hhdui_interaction")
+                        || entity.getScoreboardTags().contains("hhdui_scene")) {
                     entity.remove();
                     removed++;
                 }
             }
         }
         if (removed > 0) {
-            getLogger().info("Cleaned up " + removed + " orphaned Display UI entities from previous server run.");
+            getLogger().info("Cleaned up " + removed + " orphaned Display UI entities & interaction hitboxes from previous server run.");
         }
     }
 }
