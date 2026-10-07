@@ -269,7 +269,7 @@ public final class UiDocumentBridge {
         if (container instanceof DropdownContainer dropdown) {
             dropdown.refreshLayout();
             compileDropdownHeader(layer, dropdown, globalX, globalY, effScale, effOpacity,
-                    parentAnimation, depthCounter, builder, nodeAnimations);
+                    currentAnim, depthCounter, builder, nodeAnimations);
         } else {
             // 1. Standard Container Background Node
             if (container.gradient() != null) {

@@ -154,9 +154,81 @@ public final class UiLayoutManager implements Listener {
                 candidate -> candidate.getUniqueId().equals(player.getUniqueId())
         );
 
+        vn.haohan.displayui.api.debug.UiDebugState debugState = new vn.haohan.displayui.api.debug.UiDebugState();
+        vn.haohan.displayui.api.debug.UiDebugSession layoutSession = new vn.haohan.displayui.api.debug.UiDebugSession() {
+            @Override
+            public String name() {
+                return "Layout (" + layoutName + ")";
+            }
+
+            @Override
+            public vn.haohan.displayui.api.layer.LayerManager getCurrentLayerManager() {
+                vn.haohan.displayui.api.layer.LayerManager lm = createLayerManagerFromDocument(layoutName, doc);
+                debugState.apply(lm);
+                return lm;
+            }
+
+            @Override
+            public vn.haohan.displayui.api.debug.UiDebugState getDebugState() {
+                return debugState;
+            }
+
+            @Override
+            public void forceUpdate() {
+                if (handle != null && handle.isValid()) {
+                    handle.update(getCurrentLayerManager());
+                }
+            }
+        };
+        plugin.service().debug().registerSession(player.getUniqueId(), layoutSession);
+
+        handle.onClick(click -> {
+            vn.haohan.displayui.api.debug.UiDebugSession s = plugin.service().debug().getSession(player.getUniqueId()).orElse(null);
+            if (s != null && s.handleInspectClick(player, click.button().id(), "/hhdui debug")) {
+                return;
+            }
+        });
+
         handle.animate(UiAnimation.fadeIn(8, Easings.OutCubic));
         playerActiveUis.put(player.getUniqueId(), handle);
         return true;
+    }
+
+    private vn.haohan.displayui.api.layer.LayerManager createLayerManagerFromDocument(String layoutName, UiDocument doc) {
+        vn.haohan.displayui.api.layer.LayerManager lm = new vn.haohan.displayui.api.layer.LayerManager();
+        vn.haohan.displayui.api.layer.Layer layer = lm.createLayer(layoutName != null ? layoutName : "layout_main", 0);
+        vn.haohan.displayui.api.container.Container container = new vn.haohan.displayui.api.container.Container("root");
+        layer.addContainer(container);
+
+        int nodeIdx = 0;
+        for (vn.haohan.displayui.api.node.UiNode node : doc.nodes()) {
+            final vn.haohan.displayui.api.node.UiNode n = node;
+            container.addComponent(new vn.haohan.displayui.api.component.CustomNodeComponent("node_" + (nodeIdx++),
+                    (x, y, w, h, d, s) -> n));
+        }
+        for (vn.haohan.displayui.api.interaction.UiButton btn : doc.buttons()) {
+            container.addComponent(vn.haohan.displayui.api.component.ButtonComponent.builder(btn.id())
+                    .offset(btn.x(), btn.y())
+                    .size(btn.width(), btn.height())
+                    .build());
+        }
+        for (vn.haohan.displayui.api.interaction.UiControl ctrl : doc.controls()) {
+            if (ctrl instanceof vn.haohan.displayui.api.interaction.UiSlider slider) {
+                container.addComponent(vn.haohan.displayui.api.component.SliderComponent.builder(slider.id())
+                        .offset(slider.x(), slider.y())
+                        .size(slider.width(), slider.height())
+                        .range(slider.minimum(), slider.maximum(), slider.value())
+                        .step(slider.step())
+                        .build());
+            } else if (ctrl instanceof vn.haohan.displayui.api.interaction.UiCheckbox cb) {
+                container.addComponent(vn.haohan.displayui.api.component.CheckboxComponent.builder(cb.id())
+                        .offset(cb.x(), cb.y())
+                        .size(cb.width(), cb.height())
+                        .checked(cb.checked())
+                        .build());
+            }
+        }
+        return lm;
     }
 
     /**
@@ -164,6 +236,7 @@ public final class UiLayoutManager implements Listener {
      */
     public boolean close(Player player) {
         if (player == null) return false;
+        plugin.service().debug().unregisterSession(player.getUniqueId());
         UiHandle existing = playerActiveUis.remove(player.getUniqueId());
         if (existing != null && existing.isValid()) {
             existing.remove();
@@ -176,6 +249,9 @@ public final class UiLayoutManager implements Listener {
      * Closes all active UIs for all players.
      */
     public void closeAll() {
+        for (UUID playerId : playerActiveUis.keySet()) {
+            plugin.service().debug().unregisterSession(playerId);
+        }
         playerActiveUis.values().forEach(handle -> {
             if (handle != null && handle.isValid()) {
                 handle.remove();

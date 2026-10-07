@@ -342,4 +342,24 @@ class DropdownContainerTest {
         // The 3rd item should not stick out beyond max allowed bounds
         assertFalse(item3.isVisible(), "Item beyond container bounds should be clipped/hidden");
     }
+
+    @Test
+    @DisplayName("Verify DropdownContainer header inherits container active animation during compilation")
+    void testDropdownContainerHeaderAnimationInheritance() {
+        DropdownContainer dropdown = DropdownContainer.builder("dropdown_test")
+                .headerTitle("Test Dropdown")
+                .headerHeight(16.0f)
+                .width(100.0f)
+                .build();
+
+        var anim = UiAnimation.fadeIn(12);
+        dropdown.animate(anim);
+
+        UiDocumentBridge.CompiledUi compiled = UiDocumentBridge.compileWithAnimations(dropdown);
+
+        assertTrue(compiled.hasAnimations(), "Compiled dropdown UI must contain animations");
+        assertFalse(compiled.nodeAnimations().isEmpty());
+        assertTrue(compiled.nodeAnimations().stream().anyMatch(a -> a != null && a.durationTicks() == 12),
+                "Dropdown header nodes must receive the dropdown container's active animation");
+    }
 }

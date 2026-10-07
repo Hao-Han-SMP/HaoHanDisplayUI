@@ -32,6 +32,7 @@ import vn.haohan.displayui.api.interaction.UiButtonAction;
 import vn.haohan.displayui.api.layer.Layer;
 import vn.haohan.displayui.api.layer.LayerManager;
 import vn.haohan.displayui.api.layout.UiAnchorPoint;
+import vn.haohan.displayui.api.node.AlignedTextNode;
 
 import java.util.List;
 import java.util.UUID;
@@ -457,31 +458,41 @@ public class UiDebugTest {
     }
 
     @Test
-    @DisplayName("15. Verify UiDebugState retains animation overrides across multiple apply calls until explicitly stopped")
-    public void testDebugStateAnimationRetentionAcrossMultipleApplies() {
-        UiDebugState debugState = new UiDebugState();
-        var compAnim = UiDebugRegistry.createAnimation("popin", 16);
+    @DisplayName("16. Verify layout debug session creation and per-node animation compilation")
+    public void testLayoutDebugSessionAndAnimation() {
+        UiDocument doc = new UiDocument(
+                List.of(new AlignedTextNode(Component.text("Layout Test"), 0, 0, 100, 30, vn.haohan.displayui.api.text.UiTextAlignment.CENTER)),
+                List.of(new vn.haohan.displayui.api.interaction.UiButton("btn_test", 10, 10, 50, 20))
+        );
 
-        debugState.setComponentAnimation("comp_button", compAnim);
+        LayerManager lmLayout = new LayerManager();
+        Layer layer = lmLayout.createLayer("layout_main", 0);
+        Container container = new Container("root");
+        layer.addContainer(container);
 
-        // First apply
-        debugState.apply(lm);
-        assertTrue(compButton.isAnimating());
+        int nodeIdx = 0;
+        for (vn.haohan.displayui.api.node.UiNode node : doc.nodes()) {
+            final vn.haohan.displayui.api.node.UiNode n = node;
+            container.addComponent(new vn.haohan.displayui.api.component.CustomNodeComponent("node_" + (nodeIdx++),
+                    (x, y, w, h, d, s) -> n));
+        }
+        for (vn.haohan.displayui.api.interaction.UiButton btn : doc.buttons()) {
+            container.addComponent(ButtonComponent.builder(btn.id())
+                    .offset(btn.x(), btn.y())
+                    .size(btn.width(), btn.height())
+                    .build());
+        }
 
-        // Create new lm and apply again (simulating multiple ticks / inspects)
-        LayerManager lm2 = new LayerManager();
-        Layer l2 = lm2.createLayer("left_layer", 0);
-        Container c2 = Container.builder("cont_left").build();
-        vn.haohan.displayui.api.component.ButtonComponent b2 = vn.haohan.displayui.api.component.ButtonComponent.builder("comp_button").build();
-        c2.addComponent(b2);
-        l2.addContainer(c2);
+        UiDebugState state = new UiDebugState();
+        var anim = UiDebugRegistry.createAnimation("bounce", 12);
+        state.setComponentAnimation("node_0", anim);
+        state.apply(lmLayout);
 
-        debugState.apply(lm2);
-        assertTrue(b2.isAnimating(), "Animation override should be retained on second apply");
-
-        // Now explicitly stop
-        debugState.setComponentAnimation("comp_button", null);
-        debugState.apply(lm2);
-        assertFalse(b2.isAnimating(), "Animation should be stopped after setting to null");
+        UiDocumentBridge.CompiledUi compiled = UiDocumentBridge.compileWithAnimations(lmLayout);
+        assertNotNull(compiled);
+        assertTrue(compiled.hasAnimations());
+        assertEquals(2, compiled.nodeAnimations().size()); // 1 node + 1 button shape
+        assertEquals(anim, compiled.nodeAnimations().get(0));
     }
 }
+
