@@ -97,11 +97,18 @@ public final class HaoHanDisplayUIPlugin extends JavaPlugin {
         NamespacedKey sceneKey = new NamespacedKey(this, "scene_id");
         int removed = 0;
         for (org.bukkit.World world : Bukkit.getWorlds()) {
-            for (org.bukkit.entity.Entity entity : world.getEntitiesByClasses(Display.class, org.bukkit.entity.Interaction.class)) {
-                if (entity.getPersistentDataContainer().has(sceneKey, PersistentDataType.STRING)
+            for (org.bukkit.entity.Entity entity : world.getEntities()) {
+                if (entity.getScoreboardTags().contains("hhdui_screen_cursor")
+                        || entity.getScoreboardTags().contains("hhdui_screen_tripod")
                         || entity.getScoreboardTags().contains("hhdui_interaction")
                         || entity.getScoreboardTags().contains("hhdui_scene")) {
                     entity.remove();
+                    removed++;
+                    continue;
+                }
+                if (entity instanceof Display display
+                        && display.getPersistentDataContainer().has(sceneKey, PersistentDataType.STRING)) {
+                    display.remove();
                     removed++;
                 }
             }

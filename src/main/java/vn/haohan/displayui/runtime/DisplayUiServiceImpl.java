@@ -24,6 +24,7 @@ import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.icon.UiIconRegistry;
 import vn.haohan.displayui.api.view.UiAudience;
 import vn.haohan.displayui.runtime.scene.UiScene;
+import vn.haohan.displayui.runtime.screen.UiScreenMode;
 import vn.haohan.displayui.utils.MathUtils;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
@@ -50,6 +51,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
     private final Map<UUID, HoverTarget> hovered = new LinkedHashMap<>();
     private final Map<UUID, DragSession> dragging = new LinkedHashMap<>();
     private final Map<UUID, BossBar> debugBossBars = new LinkedHashMap<>();
+    private final Map<UUID, UiScreenMode> screenModes = new LinkedHashMap<>();
 
     public DisplayUiServiceImpl(HaoHanDisplayUIPlugin plugin) {
         this.plugin = plugin;
@@ -105,14 +107,62 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
         return matches.size();
     }
 
+    public UiScreenMode enterScreenMode(Player player, UiScene scene) {
+        return enterScreenMode(player, scene, UiScreenMode.DEFAULT_DISTANCE, UiScreenMode.DEFAULT_SENSITIVITY);
+    }
+
+    public UiScreenMode enterScreenMode(Player player, UiScene scene, double distance) {
+        return enterScreenMode(player, scene, distance, UiScreenMode.DEFAULT_SENSITIVITY);
+    }
+
+    public UiScreenMode enterScreenMode(Player player, UiScene scene, double distance, double sensitivity) {
+        exitScreenMode(player);
+        var mode = new UiScreenMode(player, scene, distance, sensitivity);
+        mode.enter();
+        screenModes.put(player.getUniqueId(), mode);
+        return mode;
+    }
+
+    public void exitScreenMode(Player player) {
+        var mode = screenModes.remove(player.getUniqueId());
+        if (mode != null) mode.exit();
+    }
+
+    public Optional<UiScreenMode> screenMode(Player player) {
+        return Optional.ofNullable(screenModes.get(player.getUniqueId()));
+    }
+
+    public boolean isScreenMode(Player player) {
+        var mode = screenModes.get(player.getUniqueId());
+        return mode != null && mode.isActive();
+    }
+
     public void tick() {
         new ArrayList<>(scenes.values()).forEach(UiScene::tick);
         tickDragging();
+        tickScreenModes();
         tickHoverDescriptions();
         tickInspectBossBar();
     }
 
+    private void tickScreenModes() {
+        screenModes.entrySet().removeIf(entry -> {
+            var mode = entry.getValue();
+            if (!mode.isActive() || !entry.getValue().player().isOnline()) {
+                mode.exit();
+                return true;
+            }
+            mode.tick();
+            return !mode.isActive();
+        });
+    }
+
     public boolean handleLeftClick(Player player) {
+        var screenMode = screenModes.get(player.getUniqueId());
+        if (screenMode != null && screenMode.isActive()) {
+            return screenMode.handleLeftClick();
+        }
+
         DragSession active = dragging.get(player.getUniqueId());
         if (active != null) {
             active.stop(player);
@@ -136,6 +186,11 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
     }
 
     public boolean handleRightClick(Player player) {
+        var screenMode = screenModes.get(player.getUniqueId());
+        if (screenMode != null && screenMode.isActive()) {
+            return screenMode.handleRightClick();
+        }
+
         DragSession active = dragging.get(player.getUniqueId());
         if (active != null) {
             active.stop(player);
@@ -153,6 +208,11 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
 
     public boolean handleScroll(Player player, int direction) {
         if (direction == 0) return false;
+        var screenMode = screenModes.get(player.getUniqueId());
+        if (screenMode != null && screenMode.isActive()) {
+            return screenMode.handleScroll(direction);
+        }
+
         UiHit nearest = scenes.values().stream()
                 .map(scene -> scene.scrollHit(player))
                 .filter(Objects::nonNull)
@@ -163,6 +223,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
     }
 
     public void stopDragging(Player player) {
+        exitScreenMode(player);
         DragSession active = dragging.remove(player.getUniqueId());
         if (active != null) active.stop(player);
     }
@@ -177,6 +238,8 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
         dragging.clear();
         debugBossBars.clear();
         debug.clear();
+        screenModes.values().forEach(UiScreenMode::exit);
+        screenModes.clear();
         new ArrayList<>(scenes.values()).forEach(UiScene::remove);
         scenes.clear();
         icons.clear();
@@ -267,7 +330,7 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
 
     private void tickHoverDescriptions() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (dragging.containsKey(player.getUniqueId())) continue;
+            if (dragging.containsKey(player.getUniqueId()) || screenModes.containsKey(player.getUniqueId())) continue;
             UiHit hit = nearestHit(player);
             HoverTarget previous = hovered.get(player.getUniqueId());
             if (hit == null || interactionDescription(hit).equals(Component.empty())) {

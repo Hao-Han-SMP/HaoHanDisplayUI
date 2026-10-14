@@ -36,13 +36,37 @@ import org.bukkit.event.server.PluginDisableEvent;
 
 public final class UiInteractionListener implements Listener {
     private final DisplayUiServiceImpl service;
+    private final java.util.Map<java.util.UUID, Long> lastClickTick = new java.util.HashMap<>();
 
     public UiInteractionListener(DisplayUiServiceImpl service) {
         this.service = service;
     }
 
+    private boolean canProcessClick(Player player) {
+        long currentTick = org.bukkit.Bukkit.getCurrentTick();
+        Long lastTick = lastClickTick.get(player.getUniqueId());
+        if (lastTick != null && lastTick == currentTick) {
+            return false;
+        }
+        lastClickTick.put(player.getUniqueId(), currentTick);
+        return true;
+    }
+
     @EventHandler(priority = EventPriority.NORMAL)
     public void onInteract(PlayerInteractEvent event) {
+        if (service.isScreenMode(event.getPlayer())) {
+            event.setCancelled(true);
+            if (event.getHand() == EquipmentSlot.HAND) {
+                if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+                    service.handleRightClick(event.getPlayer());
+                } else if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK) {
+                    if (canProcessClick(event.getPlayer())) {
+                        service.handleLeftClick(event.getPlayer());
+                    }
+                }
+            }
+            return;
+        }
         if (event.getHand() != EquipmentSlot.HAND) return;
         if (event.getAction() == Action.LEFT_CLICK_AIR
                 || event.getAction() == Action.LEFT_CLICK_BLOCK) {
@@ -57,19 +81,117 @@ public final class UiInteractionListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
+    public void onArmSwing(io.papermc.paper.event.player.PlayerArmSwingEvent event) {
+        if (event.getHand() == EquipmentSlot.HAND && service.isScreenMode(event.getPlayer())) {
+            if (canProcessClick(event.getPlayer())) {
+                service.handleLeftClick(event.getPlayer());
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onKick(org.bukkit.event.player.PlayerKickEvent event) {
+        if (service.isScreenMode(event.getPlayer())
+                && event.getCause() == org.bukkit.event.player.PlayerKickEvent.Cause.SELF_INTERACTION) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         boolean isUiEntity = event.getEntity().getScoreboardTags().contains("hhdui_interaction")
-                || event.getEntity().getScoreboardTags().contains("hhdui_scene");
-        if (!isUiEntity) return;
-        event.setCancelled(true);
+                || event.getEntity().getScoreboardTags().contains("hhdui_scene")
+                || event.getEntity().getScoreboardTags().contains("hhdui_screen_tripod")
+                || event.getEntity().getScoreboardTags().contains("hhdui_screen_cursor");
+        if (isUiEntity) {
+            event.setCancelled(true);
+        }
         if (event.getDamager() instanceof Player player) {
-            service.handleLeftClick(player);
+            if (service.isScreenMode(player)) {
+                event.setCancelled(true);
+                if (canProcessClick(player)) {
+                    service.handleLeftClick(player);
+                }
+                return;
+            }
+            if (isUiEntity) {
+                service.handleLeftClick(player);
+            }
         }
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onQuit(PlayerQuitEvent event) {
+        lastClickTick.remove(event.getPlayer().getUniqueId());
+        service.exitScreenMode(event.getPlayer());
         service.stopDragging(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+        service.exitScreenMode(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onTeleport(org.bukkit.event.player.PlayerTeleportEvent event) {
+        if (service.isScreenMode(event.getPlayer())) {
+            service.exitScreenMode(event.getPlayer());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onDismount(org.bukkit.event.entity.EntityDismountEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            var screenMode = service.screenMode(player).orElse(null);
+            if (screenMode != null && screenMode.isActive()
+                    && event.getDismounted().equals(screenMode.tripodEntity())) {
+                service.exitScreenMode(player);
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onStartSpectating(com.destroystokyo.paper.event.player.PlayerStartSpectatingEntityEvent event) {
+        if (service.isScreenMode(event.getPlayer())) {
+            event.setCancelled(true);
+            if (canProcessClick(event.getPlayer())) {
+                service.handleLeftClick(event.getPlayer());
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onDropItem(org.bukkit.event.player.PlayerDropItemEvent event) {
+        if (service.isScreenMode(event.getPlayer())) {
+            event.setCancelled(true);
+            service.handleRightClick(event.getPlayer());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onAnimation(org.bukkit.event.player.PlayerAnimationEvent event) {
+        if (service.isScreenMode(event.getPlayer())) {
+            if (canProcessClick(event.getPlayer())) {
+                service.handleLeftClick(event.getPlayer());
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onToggleSneak(org.bukkit.event.player.PlayerToggleSneakEvent event) {
+        if (event.isSneaking() && service.isScreenMode(event.getPlayer())) {
+            service.exitScreenMode(event.getPlayer());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onSwapHand(org.bukkit.event.player.PlayerSwapHandItemsEvent event) {
+        if (service.isScreenMode(event.getPlayer())) {
+            event.setCancelled(true);
+            if (canProcessClick(event.getPlayer())) {
+                service.handleLeftClick(event.getPlayer());
+            }
+        }
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
@@ -97,21 +219,26 @@ public final class UiInteractionListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onEntityCombust(EntityCombustEvent event) {
-        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")) {
+        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")
+                || event.getEntity().getScoreboardTags().contains("hhdui_screen_tripod")
+                || event.getEntity().getScoreboardTags().contains("hhdui_screen_cursor")) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onEntityDamage(EntityDamageEvent event) {
-        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")) {
+        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")
+                || event.getEntity().getScoreboardTags().contains("hhdui_screen_tripod")
+                || event.getEntity().getScoreboardTags().contains("hhdui_screen_cursor")) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onEntityTarget(EntityTargetEvent event) {
-        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")) {
+        if (event.getEntity().getScoreboardTags().contains("hhdui_scene")
+                || event.getEntity().getScoreboardTags().contains("hhdui_screen_tripod")) {
             event.setCancelled(true);
         }
     }

@@ -48,7 +48,7 @@ import java.util.UUID;
 
 final class DisplayUiCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBCOMMANDS = List.of(
-            "demo", "test", "clear", "stats", "page", "follow", "camera", "open", "close", "list", "reload", "debug");
+            "demo", "test", "clear", "stats", "page", "follow", "camera", "screen", "open", "close", "list", "reload", "debug");
     private static final List<String> FOLLOW_OPTIONS = List.of("none", "follow");
     private static final List<String> CAMERA_PRESETS = List.of("fixed", "face_player", "tilt_up", "tilt_down", "rotate_left", "rotate_right", "skew", "reset");
 
@@ -104,13 +104,14 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
             case "page" -> setPage(sender, args);
             case "follow" -> setFollow(sender, args);
             case "camera" -> setCamera(sender, args);
+            case "screen" -> toggleScreenMode(sender, args);
             case "open" -> openLayout(sender, args);
             case "close" -> closeLayout(sender, args);
             case "list" -> listLayouts(sender);
             case "reload" -> reload(sender);
             case "debug" -> handleDebug(sender, args);
             default -> {
-                sender.sendMessage("§cUnknown subcommand. Use /hhdui <demo|clear|stats|page|follow|camera|open|close|list|reload|debug>");
+                sender.sendMessage("§cUnknown subcommand. Use /hhdui <demo|test|clear|stats|page|follow|camera|screen|open|close|list|reload|debug>");
                 yield true;
             }
         };
@@ -285,12 +286,79 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
 
     private void cleanupExisting(UUID playerId) {
         service.debug().unregisterSession(playerId);
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null) {
+            plugin.service().exitScreenMode(player);
+            layoutManager.close(player);
+        }
         DemoContext oldDemo = demos.remove(playerId);
         if (oldDemo != null && oldDemo.handle() != null) oldDemo.handle().remove();
         vn.haohan.displayui.api.UiHandle oldTest = activeVisualTests.remove(playerId);
         if (oldTest != null && oldTest.isValid()) oldTest.remove();
-        Player player = Bukkit.getPlayer(playerId);
-        if (player != null) layoutManager.close(player);
+    }
+
+    private boolean toggleScreenMode(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§cThis command must be run by a player.");
+            return true;
+        }
+
+        if (plugin.service().isScreenMode(player)) {
+            plugin.service().exitScreenMode(player);
+            sender.sendMessage("§cScreen Mode disabled.");
+            return true;
+        }
+
+        double distance = vn.haohan.displayui.runtime.screen.UiScreenMode.DEFAULT_DISTANCE;
+        if (args.length >= 2) {
+            try {
+                distance = Double.parseDouble(args[1]);
+                if (distance < 0.8 || distance > 10.0) {
+                    sender.sendMessage("§eDistance must be between 0.8 and 10.0 blocks. Using default: " + vn.haohan.displayui.runtime.screen.UiScreenMode.DEFAULT_DISTANCE);
+                    distance = vn.haohan.displayui.runtime.screen.UiScreenMode.DEFAULT_DISTANCE;
+                }
+            } catch (NumberFormatException ignored) {
+                sender.sendMessage("§cInvalid distance number. Using default: " + distance);
+            }
+        }
+
+        double sensitivity = vn.haohan.displayui.runtime.screen.UiScreenMode.DEFAULT_SENSITIVITY;
+        if (args.length >= 3) {
+            try {
+                sensitivity = Double.parseDouble(args[2]);
+                if (sensitivity < 0.05 || sensitivity > 2.0) {
+                    sender.sendMessage("§eSensitivity must be between 0.05 and 2.0. Using default: " + vn.haohan.displayui.runtime.screen.UiScreenMode.DEFAULT_SENSITIVITY);
+                    sensitivity = vn.haohan.displayui.runtime.screen.UiScreenMode.DEFAULT_SENSITIVITY;
+                }
+            } catch (NumberFormatException ignored) {
+                sender.sendMessage("§cInvalid sensitivity number. Using default: " + sensitivity);
+            }
+        }
+
+        DemoContext context = demos.get(player.getUniqueId());
+        if (context == null || context.handle() == null || !context.handle().isValid()) {
+            var activeScenes = plugin.service().active();
+            vn.haohan.displayui.runtime.scene.UiScene targetScene = null;
+            for (var handle : activeScenes) {
+                if (handle instanceof vn.haohan.displayui.runtime.scene.UiScene scene && scene.isValid()) {
+                    targetScene = scene;
+                    break;
+                }
+            }
+            if (targetScene == null) {
+                sender.sendMessage("§cYou don't have an active UI. Use §b/hhdui demo§c first.");
+                return true;
+            }
+            plugin.service().enterScreenMode(player, targetScene, distance, sensitivity);
+            sender.sendMessage("§aScreen Mode enabled (distance: §f" + String.format(java.util.Locale.ROOT, "%.1f", distance) + "m§a, speed: §f" + String.format(java.util.Locale.ROOT, "%.2f", sensitivity) + "§a) for active UI!");
+            return true;
+        }
+
+        if (context.handle() instanceof vn.haohan.displayui.runtime.scene.UiScene scene) {
+            plugin.service().enterScreenMode(player, scene, distance, sensitivity);
+            sender.sendMessage("§aScreen Mode enabled (distance: §f" + String.format(java.util.Locale.ROOT, "%.1f", distance) + "m§a, speed: §f" + String.format(java.util.Locale.ROOT, "%.2f", sensitivity) + "§a)! Camera locked, virtual cursor active.");
+        }
+        return true;
     }
 
     private void onDemoClick(DemoContext context, String buttonId, Player player) {
@@ -621,6 +689,10 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                         .map(Player::getName)
                         .filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase()))
                         .toList();
+            } else if ("screen".equals(sub)) {
+                return List.of("1.5", "2.0", "2.5", "3.0", "3.5", "4.0").stream()
+                        .filter(s -> s.startsWith(args[1]))
+                        .toList();
             }
         } else if (args.length == 3) {
             String sub = args[0].toLowerCase();
@@ -628,6 +700,10 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 return plugin.getServer().getOnlinePlayers().stream()
                         .map(Player::getName)
                         .filter(s -> s.toLowerCase().startsWith(args[2].toLowerCase()))
+                        .toList();
+            } else if ("screen".equals(sub)) {
+                return List.of("0.3", "0.4", "0.5", "0.6", "0.8", "1.0").stream()
+                        .filter(s -> s.startsWith(args[2]))
                         .toList();
             }
         }

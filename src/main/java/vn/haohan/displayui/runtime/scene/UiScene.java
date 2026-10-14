@@ -172,11 +172,11 @@ public final class UiScene implements UiHandle {
 
     List<UiControl> controls() { return List.copyOf(controlStates.values()); }
 
-    float pixelsPerBlock() { return options.pixelsPerBlock(); }
+    public float pixelsPerBlock() { return options.pixelsPerBlock(); }
 
-    double maxDistance() { return options.maxDistance(); }
+    public double maxDistance() { return options.maxDistance(); }
 
-    boolean isMirroredFor(Player player) {
+    public boolean isMirroredFor(Player player) {
         return mirrorSide && isTwoSided() && !isFrontFacing(player);
     }
 
@@ -256,7 +256,7 @@ public final class UiScene implements UiHandle {
         move(origin, 0);
     }
 
-    private void move(Location origin, int interpolationTicks) {
+    public void move(Location origin, int interpolationTicks) {
         ensureValid();
         Objects.requireNonNull(origin, "origin");
         if (origin.getWorld() == null) throw new IllegalArgumentException("origin must have a world");
@@ -277,6 +277,8 @@ public final class UiScene implements UiHandle {
         this.audience = Objects.requireNonNull(audience, "audience");
         syncViewers();
     }
+
+    public UiCameraTransform cameraTransform() { return cameraTransform; }
 
     @Override
     public void cameraTransform(UiCameraTransform transform) {
@@ -480,6 +482,12 @@ public final class UiScene implements UiHandle {
                         minY = Math.min(minY, shape.y());
                         maxY = Math.max(maxY, shape.y() + shape.height());
                     }
+                    case vn.haohan.displayui.api.node.BlockNode block -> {
+                        minX = Math.min(minX, block.x());
+                        maxX = Math.max(maxX, block.x() + block.width());
+                        minY = Math.min(minY, block.y());
+                        maxY = Math.max(maxY, block.y() + block.height());
+                    }
                     case vn.haohan.displayui.api.node.AlignedTextNode text -> {
                         minX = Math.min(minX, text.x());
                         maxX = Math.max(maxX, text.x() + text.width());
@@ -603,6 +611,10 @@ public final class UiScene implements UiHandle {
 
     public UiHit hit(Player player) { return interactionController.hit(player); }
 
+    public UiHit hitAt(Player player, float localX, float localY) { return interactionController.hitAt(player, localX, localY, 2.5); }
+
+    public UiHit scrollHitAt(Player player, float localX, float localY) { return interactionController.scrollHitAt(player, localX, localY, 2.5); }
+
     public RaycastUtils.Projection projectCursor(Player player) { return interactionController.projectCursor(player); }
 
     public int findModelNodeAt(float localX, float localY) { return interactionController.findModelNodeAt(localX, localY); }
@@ -699,6 +711,10 @@ public final class UiScene implements UiHandle {
         return updateSlider(player, controlId);
     }
 
+    public boolean dragSlider(Player player, String controlId, float localX) {
+        return updateSlider(player, controlId, localX);
+    }
+
     boolean updateHover(Player player) {
         if (removed || !shouldShow(player) || isAnimating() || nodeEntities.isEmpty()) return false;
         RaycastUtils.Projection projection = projectCursor(player);
@@ -764,6 +780,15 @@ public final class UiScene implements UiHandle {
 
         double nextValue = slider.valueAt(projection.localX());
         UiHit hit = new UiHit(this, null, slider, player, projection.localX(), projection.localY(), projection.distance());
+        return changeControl(hit, nextValue, false);
+    }
+
+    private boolean updateSlider(Player player, String controlId, float localX) {
+        UiControl control = controlStates.get(controlId);
+        if (!(control instanceof UiSlider slider)) return false;
+
+        double nextValue = slider.valueAt(localX);
+        UiHit hit = new UiHit(this, null, slider, player, localX, 0, 2.5);
         return changeControl(hit, nextValue, false);
     }
 

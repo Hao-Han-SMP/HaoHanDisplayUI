@@ -28,9 +28,12 @@ final class UiSceneInteractionController {
         if (!scene.canInteract(player)) return null;
         RaycastUtils.Projection projection = projectCursor(player);
         if (projection == null) return null;
+        return hitAt(player, projection.localX(), projection.localY(), projection.distance());
+    }
 
-        return findHit(scene.document(), scene.controls(),
-                projection.localX(), projection.localY(), player, projection.distance());
+    UiHit hitAt(Player player, float localX, float localY, double distance) {
+        if (!scene.canInteract(player)) return null;
+        return findHit(scene.document(), scene.controls(), localX, localY, player, distance);
     }
 
     UiHit findHit(UiDocument document, List<UiControl> controls,
@@ -82,12 +85,17 @@ final class UiSceneInteractionController {
     UiHit scrollHit(Player player) {
         RaycastUtils.Projection projection = projectCursor(player);
         if (projection == null) return null;
+        return scrollHitAt(player, projection.localX(), projection.localY(), projection.distance());
+    }
+
+    UiHit scrollHitAt(Player player, float localX, float localY, double distance) {
         List<UiControl> controls = scene.controls();
-        for (int i = controls.size() - 1; i >= 0; i--) {
-            UiControl control = controls.get(i);
-            if (control instanceof UiScrollList && control.contains(projection.localX(), projection.localY())) {
-                return new UiHit(scene, null, control, player,
-                        projection.localX(), projection.localY(), projection.distance());
+        if (controls != null) {
+            for (int i = controls.size() - 1; i >= 0; i--) {
+                UiControl control = controls.get(i);
+                if (control instanceof UiScrollList && control.contains(localX, localY)) {
+                    return new UiHit(scene, null, control, player, localX, localY, distance);
+                }
             }
         }
         return null;

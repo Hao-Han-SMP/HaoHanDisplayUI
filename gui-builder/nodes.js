@@ -640,12 +640,14 @@ function normalizeNode(n) {
   res.locked = Boolean(res.locked);
   res.depth = typeof res.depth === 'number' && !isNaN(res.depth) ? res.depth : 0.001;
 
+  const _r3 = v => Number(Number(v || 0).toFixed(3));
+
   if (type === 'shape') {
     res.shapeType = res.shapeType || 'rect';
-    res.x = Math.round(Number(res.x) || 0);
-    res.y = Math.round(Number(res.y) || 0);
-    res.width = Math.max(4, Math.round(Number(res.width) || 100));
-    res.height = Math.max(4, Math.round(Number(res.height) || 60));
+    res.x = _r3(res.x);
+    res.y = _r3(res.y);
+    res.width = Math.max(4, _r3(res.width || 100));
+    res.height = Math.max(4, _r3(res.height || 60));
     res.alpha = Math.max(0, Math.min(255, Number(res.alpha) ?? 210));
     res.color = res.color || '#1a2035';
     res.outline = Boolean(res.outline);
@@ -655,10 +657,10 @@ function normalizeNode(n) {
     res.outlineStyle = ['solid', 'dashed', 'dotted', 'dash_dot'].includes(res.outlineStyle) ? res.outlineStyle : 'solid';
     res.cornerRadius = Math.max(0, Math.round(Number(res.cornerRadius) || 0));
   } else if (type === 'text') {
-    res.boxX = Math.round(Number(res.boxX) || 0);
-    res.boxY = Math.round(Number(res.boxY) || 0);
-    res.width = Math.max(12, Math.round(Number(res.width) || 120));
-    res.height = Math.max(8, Math.round(Number(res.height) || 20));
+    res.boxX = _r3(res.boxX);
+    res.boxY = _r3(res.boxY);
+    res.width = Math.max(12, _r3(res.width || 120));
+    res.height = Math.max(8, _r3(res.height || 20));
     res.fontSize = Math.max(1, Number(res.fontSize) || 8.0);
     res.text = res.text != null ? String(res.text) : 'Text';
     res.alignment = ['LEFT', 'CENTER', 'RIGHT'].includes(res.alignment) ? res.alignment : 'CENTER';
@@ -682,24 +684,24 @@ function normalizeNode(n) {
     };
     res.shadow = res.shadow !== false;
   } else if (type === 'item') {
-    res.x = Math.round(Number(res.x) || 0);
-    res.y = Math.round(Number(res.y) || 0);
+    res.x = _r3(res.x);
+    res.y = _r3(res.y);
     res.scale = Math.max(0.1, Number(res.scale) || 0.8);
     res.material = String(res.material || 'DIAMOND_SWORD').toUpperCase();
     res.transform = ['FIXED', 'HEAD', 'GUI', 'GROUND'].includes(res.transform) ? res.transform : 'FIXED';
   } else if (type === 'block') {
-    res.x = Math.round(Number(res.x) || 0);
-    res.y = Math.round(Number(res.y) || 0);
-    res.width = Math.max(4, Math.round(Number(res.width) || 24));
-    res.height = Math.max(4, Math.round(Number(res.height) || 24));
+    res.x = _r3(res.x);
+    res.y = _r3(res.y);
+    res.width = Math.max(4, _r3(res.width || 24));
+    res.height = Math.max(4, _r3(res.height || 24));
     res.thickness = Math.max(0.1, Number(res.thickness) || 1.0);
     res.material = String(res.material || 'STONE').toUpperCase();
   } else if (type === 'line') {
     res.lineType = ['straight', 'arrow', 'double_arrow', 'elbow', 'elbow_arrow', 'curve', 'curved_arrow', 'freeform'].includes(res.lineType) ? res.lineType : 'straight';
-    res.x1 = Math.round(Number(res.x1) || 0);
-    res.y1 = Math.round(Number(res.y1) || 0);
-    res.x2 = Math.round(Number(res.x2) || 80);
-    res.y2 = Math.round(Number(res.y2) || 20);
+    res.x1 = _r3(res.x1);
+    res.y1 = _r3(res.y1);
+    res.x2 = _r3(res.x2 != null ? res.x2 : 80);
+    res.y2 = _r3(res.y2 != null ? res.y2 : 20);
     res.thickness = Math.max(1, Number(res.thickness) || 2);
     res.color = res.color || res.outlineColor || '#4a90d9';
     res.outlineColor = res.color;
@@ -710,14 +712,47 @@ function normalizeNode(n) {
     res.arrowEnd = Boolean(res.arrowEnd || res.lineType === 'arrow' || res.lineType === 'double_arrow' || res.lineType === 'elbow_arrow' || res.lineType === 'curved_arrow');
     res.arrowLength = Math.max(4, Number(res.arrowLength) || 10);
     res.arrowWidth = Math.max(4, Number(res.arrowWidth) || 8);
-    res.curveCtrlX = Number(res.curveCtrlX) || Math.round((res.x1 + res.x2) / 2);
-    res.curveCtrlY = Number(res.curveCtrlY) || Math.round((res.y1 + res.y2) / 2 - 20);
-    res.elbowMidX = Number(res.elbowMidX) || Math.round((res.x1 + res.x2) / 2);
-    res.elbowMidY = Number(res.elbowMidY) || Math.round((res.y1 + res.y2) / 2);
+    res.curveCtrlX = res.curveCtrlX != null ? _r3(res.curveCtrlX) : _r3((res.x1 + res.x2) / 2);
+    res.curveCtrlY = res.curveCtrlY != null ? _r3(res.curveCtrlY) : _r3((res.y1 + res.y2) / 2 - 20);
+    res.elbowMidX = res.elbowMidX != null ? _r3(res.elbowMidX) : _r3((res.x1 + res.x2) / 2);
+    res.elbowMidY = res.elbowMidY != null ? _r3(res.elbowMidY) : _r3((res.y1 + res.y2) / 2);
     res.points = Array.isArray(res.points) ? res.points : [];
   }
 
   return res;
+}
+
+/* ── Rich Text Parser ────────────────────────────────────────
+ * Tags: <bold>, <italic>, <color:#hex> (self-contained, nestable)
+ * Gradient mode ignores per-segment colors (gradient overrides all).
+ */
+function parseRichText(text) {
+  // Segments: [{text, bold, italic, color}]
+  const segments = [];
+  let bold = false, italic = false, color = null;
+  // Simple stack-less parser: walk the string finding <tag> and </tag>
+  const re = /<(\/?)([a-zA-Z]+(?::[^>]*)?)>/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) {
+      segments.push({ text: text.slice(last, m.index), bold, italic, color });
+    }
+    const closing = m[1] === '/';
+    const tag = m[2].toLowerCase();
+    if (!closing) {
+      if (tag === 'bold') bold = true;
+      else if (tag === 'italic') italic = true;
+      else if (tag.startsWith('color:')) color = tag.slice(6) || null;
+    } else {
+      if (tag === 'bold') bold = false;
+      else if (tag === 'italic') italic = false;
+      else if (tag === 'color') color = null;
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) segments.push({ text: text.slice(last), bold, italic, color });
+  return segments.filter(s => s.text.length > 0);
 }
 
 /* ── Node definitions ─────────────────────────────────────── */
@@ -790,7 +825,7 @@ const NodeDefs = {
     defaults: () => ({
       type: 'text',
       id: uniqueId('txt'),
-      text: 'Hello <white>World</white>',
+      text: 'Hello World',
       boxX: 10, boxY: 10, depth: 0.002,
       width: 120, height: 20,
       fontSize: 8.0, contentWidth: 114,
@@ -834,31 +869,33 @@ const NodeDefs = {
       ctx.setLineDash([3, 3]);
       ctx.strokeRect(n.boxX * zoom, n.boxY * zoom, n.width * zoom, n.height * zoom);
 
-      // Text rendering with Minecraft font
       const raw = stripFormatting(n.text);
       const fsz = Math.max(7, n.fontSize * zoom * 0.9);
-      ctx.font = `${fsz}px "Minecraft", "Minecraftia", "VT323", "JetBrains Mono", monospace`;
+      const baseFont = `${fsz}px "Minecraft", "Minecraftia", "VT323", "JetBrains Mono", monospace`;
       ctx.textBaseline = 'middle';
 
-      let tx = (n.boxX + 3) * zoom;
+      // Compute anchor X for alignment
+      let anchorX;
       if (n.alignment === 'CENTER') {
         ctx.textAlign = 'center';
-        tx = (n.boxX + n.width / 2) * zoom;
+        anchorX = (n.boxX + n.width / 2) * zoom;
       } else if (n.alignment === 'RIGHT') {
         ctx.textAlign = 'right';
-        tx = (n.boxX + n.width) * zoom - 3;
+        anchorX = (n.boxX + n.width) * zoom - 3;
       } else {
         ctx.textAlign = 'left';
+        anchorX = (n.boxX + 3) * zoom;
       }
 
-      // Shadow
+      // Shadow (always drawn on plain text)
       if (n.shadow) {
         const sOff = Math.max(1, Math.round(zoom * 0.8));
+        ctx.font = baseFont;
         ctx.fillStyle = '#3f3f3f';
-        ctx.fillText(raw, tx + sOff, cy + sOff);
+        ctx.fillText(raw, anchorX + sOff, cy + sOff);
       }
 
-      // Fill style: Solid or Linear Animated Gradient
+      // ── Gradient mode: full-text gradient fill (ignore per-segment colors) ──
       if (n.fillType === 'gradient' && n.gradient?.stops?.length >= 2) {
         const tw = n.width * zoom;
         const th = n.height * zoom;
@@ -878,61 +915,146 @@ const NodeDefs = {
           angleDeg = ((angleDeg + animTime * 0.05 * spd * dir) % 360 + 360) % 360;
         }
         const rad = (angleDeg * Math.PI) / 180;
-
         const x0 = tcx - Math.cos(rad) * diag;
         const y0 = tcy - Math.sin(rad) * diag;
         const x1 = tcx + Math.cos(rad) * diag;
         const y1 = tcy + Math.sin(rad) * diag;
-
         const grad = ctx.createLinearGradient(x0, y0, x1, y1);
 
         if (isAnim && (mode === 'scroll' || mode === 'shift')) {
           const shift = ((animTime * 0.0003 * spd * dir) % 1 + 1) % 1;
           const baseStops = n.gradient.stops;
-          const sortedStops = [];
-          for (let rep = -1; rep <= 1; rep++) {
-            baseStops.forEach(st => {
-              const pos = st.offset + rep + shift;
-              if (pos >= -0.01 && pos <= 1.01) {
-                sortedStops.push({
-                  pos: Math.max(0, Math.min(1, pos)),
-                  color: st.color,
-                  opacity: st.opacity,
-                });
+          const sorted = [...baseStops].sort((a, b) => a.offset - b.offset);
+
+          // Lerp two gradient stops by color + opacity
+          const lerpSt = (lo, hi, t) => {
+            const p = h => parseInt((h || '#ffffff').replace('#', ''), 16);
+            const lp = p(lo.color), hp = p(hi.color);
+            const hex2 = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+            return {
+              color: '#' + hex2(((lp >> 16) & 0xff) + (((hp >> 16) & 0xff) - ((lp >> 16) & 0xff)) * t)
+                + hex2(((lp >> 8) & 0xff) + (((hp >> 8) & 0xff) - ((lp >> 8) & 0xff)) * t)
+                + hex2((lp & 0xff) + ((hp & 0xff) - (lp & 0xff)) * t),
+              opacity: (lo.opacity ?? 1) + ((hi.opacity ?? 1) - (lo.opacity ?? 1)) * t,
+            };
+          };
+
+          // Interpolate the BASE gradient at offset t ∈ [0,1]
+          const baseAt = t => {
+            const clamped = Math.max(0, Math.min(1, t));
+            let lo = sorted[0], hi = sorted[sorted.length - 1];
+            for (let i = 0; i < sorted.length - 1; i++) {
+              if (clamped >= sorted[i].offset && clamped <= sorted[i + 1].offset) {
+                lo = sorted[i]; hi = sorted[i + 1]; break;
               }
-            });
-          }
-          sortedStops.sort((a, b) => a.pos - b.pos);
-          if (sortedStops.length > 0) {
-            if (sortedStops[0].pos > 0) {
-              sortedStops.unshift({ pos: 0, color: sortedStops[0].color, opacity: sortedStops[0].opacity });
             }
-            if (sortedStops[sortedStops.length - 1].pos < 1) {
-              const last = sortedStops[sortedStops.length - 1];
-              sortedStops.push({ pos: 1, color: last.color, opacity: last.opacity });
+            const span = hi.offset - lo.offset;
+            return span < 1e-9 ? { color: lo.color, opacity: lo.opacity ?? 1 }
+              : lerpSt(lo, hi, (clamped - lo.offset) / span);
+          };
+
+          // Seam = display-position where the tile wraps (base pos crosses 1→0)
+          const seam = 1 - shift;
+          const fs = [];
+
+          // display=0 → base=shift
+          fs.push({ pos: 0, ...baseAt(shift) });
+
+          // Section 1: display [0, seam] maps base [shift → 1]
+          sorted.forEach(s => {
+            if (s.offset > shift + 1e-5 && s.offset < 1 - 1e-5 && seam > 1e-5) {
+              fs.push({ pos: (s.offset - shift) / (1 - shift) * seam, color: s.color, opacity: s.opacity ?? 1 });
             }
-            sortedStops.forEach(st => {
-              const c = hexToRgba(st.color || '#ffffff', Math.round((st.opacity ?? 1) * (n.alpha ?? 255)));
-              grad.addColorStop(st.pos, c);
-            });
-          } else {
-            baseStops.forEach(st => {
-              grad.addColorStop(Math.max(0, Math.min(1, st.offset)), hexToRgba(st.color || '#ffffff', Math.round((st.opacity ?? 1) * (n.alpha ?? 255))));
-            });
-          }
+          });
+
+          // Seam blend: 3% wide lerp from base@1 → base@0 (smooth loop connect)
+          const BW = 0.015;
+          const seamLo = Math.max(0.001, seam - BW);
+          const seamHi = Math.min(0.999, seam + BW);
+          fs.push({ pos: seamLo, ...baseAt(1) });
+          fs.push({ pos: seamHi, ...baseAt(0) });
+
+          // Section 2: display [seam, 1] maps base [0 → shift]
+          sorted.forEach(s => {
+            if (s.offset > 1e-5 && s.offset < shift - 1e-5 && (1 - seam) > 1e-5) {
+              fs.push({ pos: seam + (s.offset / shift) * (1 - seam), color: s.color, opacity: s.opacity ?? 1 });
+            }
+          });
+
+          // display=1 → base=shift (same as display=0, seamless)
+          fs.push({ pos: 1, ...baseAt(shift) });
+
+          fs.sort((a, b) => a.pos - b.pos);
+          fs.forEach(st => {
+            grad.addColorStop(Math.max(0, Math.min(1, st.pos)), hexToRgba(st.color || '#ffffff', Math.round((st.opacity ?? 1) * (n.alpha ?? 255))));
+          });
+
         } else {
           n.gradient.stops.forEach(st => {
-            const c = hexToRgba(st.color || '#ffffff', Math.round((st.opacity ?? 1) * (n.alpha ?? 255)));
-            grad.addColorStop(Math.max(0, Math.min(1, st.offset)), c);
+            grad.addColorStop(Math.max(0, Math.min(1, st.offset)), hexToRgba(st.color || '#ffffff', Math.round((st.opacity ?? 1) * (n.alpha ?? 255))));
           });
         }
-
+        ctx.font = baseFont;
         ctx.fillStyle = grad;
+        ctx.fillText(raw, anchorX, cy);
+
       } else {
-        ctx.fillStyle = hexToRgba(n.color || '#ffffff', n.alpha ?? 255);
+        // ── Solid mode: render per-segment with individual color/bold/italic ──
+        const segments = parseRichText(n.text);
+        const defaultColor = hexToRgba(n.color || '#ffffff', n.alpha ?? 255);
+
+        if (segments.length <= 1 && !segments[0]?.bold && !segments[0]?.italic && !segments[0]?.color) {
+          // Trivial: just one plain segment, fast path
+          ctx.font = baseFont;
+          ctx.fillStyle = defaultColor;
+          ctx.fillText(raw, anchorX, cy);
+        } else {
+          // Measure with base font (skew/bold don't change advance significantly)
+          ctx.font = baseFont;
+          let totalW = 0;
+          const segWidths = segments.map(seg => {
+            // Bold adds ~1px, italic slightly widens apparent text
+            const w = ctx.measureText(seg.text).width + (seg.bold ? 1 : 0);
+            totalW += w;
+            return w;
+          });
+
+          let startX;
+          if (n.alignment === 'CENTER') startX = anchorX - totalW / 2;
+          else if (n.alignment === 'RIGHT') startX = anchorX - totalW;
+          else startX = anchorX;
+
+          // Helper: draw one segment with fake-bold and/or fake-italic
+          const ITALIC_SKEW = -0.25; // tan(-14°) ≈ horizontal skew factor
+          let curX = startX;
+          segments.forEach((seg, i) => {
+            ctx.font = baseFont;
+            ctx.textAlign = 'left';
+            ctx.fillStyle = seg.color ? hexToRgba(seg.color, n.alpha ?? 255) : defaultColor;
+
+            if (seg.italic) {
+              // Fake italic: skew the canvas horizontally around the text baseline
+              ctx.save();
+              // setTransform(a,b,c,d,e,f): c = horizontal skew
+              // We want skew centered at (curX, cy) so we translate, skew, translate back
+              ctx.transform(1, 0, ITALIC_SKEW, 1, -ITALIC_SKEW * cy, 0);
+              if (seg.bold) {
+                ctx.fillText(seg.text, curX + 1, cy);
+              }
+              ctx.fillText(seg.text, curX, cy);
+              ctx.restore();
+            } else if (seg.bold) {
+              // Fake bold: draw twice, shifted 1px right
+              ctx.fillText(seg.text, curX + 1, cy);
+              ctx.fillText(seg.text, curX, cy);
+            } else {
+              ctx.fillText(seg.text, curX, cy);
+            }
+            curX += segWidths[i];
+          });
+        }
       }
 
-      ctx.fillText(raw, tx, cy);
       ctx.restore();
     },
     label: n => `"${stripFormatting(n.text).slice(0, 20) || '(empty)'}"`,
