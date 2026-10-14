@@ -87,7 +87,7 @@ public final class CameraAxisLockDemoPage extends BaseDemoPage {
         UiFollowMode currentMode = context.followMode();
         addFollowButton(container, "follow_off", 0.0f, 48.0f, 40.0f, "OFF", currentMode == UiFollowMode.NONE);
         addFollowButton(container, "follow_hard", 44.0f, 48.0f, 40.0f, "RIGID",
-                currentMode == UiFollowMode.FOLLOW && context.followOptions().positionDamping() == 1.0f);
+                currentMode == UiFollowMode.FOLLOW && context.followOptions().positionDamping() == 1.0f && context.followOptions().interpolationTicks() == 2);
         addFollowButton(container, "follow_smooth", 88.0f, 48.0f, 40.0f, "SMOOTH",
                 currentMode == UiFollowMode.FOLLOW && context.followOptions().positionDamping() < 1.0f);
         addFollowButton(container, "follow_hud", 132.0f, 48.0f, 42.0f, "FAST",

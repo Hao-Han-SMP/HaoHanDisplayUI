@@ -111,6 +111,13 @@ final class UiNodeTransformations {
                     float y2 = cy + (line.y2() - cy) * scale;
                     LineNode scaledLine = new LineNode(x1, y1, x2, y2, line.thickness() * scale, line.depth(), line.color(), line.doubleSided());
                     list.addAll(resolve(scene, scaledLine, 1.0f, offsetX, offsetY, offsetZ));
+                } else if (sub instanceof PolylineNode poly) {
+                    List<PolylineNode.Point> scaledPts = new java.util.ArrayList<>(poly.points().size());
+                    for (PolylineNode.Point pt : poly.points()) {
+                        scaledPts.add(new PolylineNode.Point(cx + (pt.x() - cx) * scale, cy + (pt.y() - cy) * scale));
+                    }
+                    PolylineNode scaledPoly = new PolylineNode(scaledPts, poly.thickness() * scale, poly.depth(), poly.color(), poly.doubleSided(), poly.closed());
+                    list.addAll(resolve(scene, scaledPoly, 1.0f, offsetX, offsetY, offsetZ));
                 } else {
                     list.addAll(resolve(scene, sub, scale, offsetX, offsetY, offsetZ));
                 }

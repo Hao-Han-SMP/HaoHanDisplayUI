@@ -36,18 +36,24 @@ public final class UiControlStateStore {
     public UiControlStateStore() {}
 
     public void synchronize(UiDocument document) {
+        Map<String, UiControl> newValues = new LinkedHashMap<>();
         document.controls().forEach(control -> {
             UiControl old = values.get(control.id());
             if (old instanceof UiSlider oldSlider && control instanceof UiSlider slider
                     && sameLayout(oldSlider, slider)) {
-                values.put(control.id(), slider.withValue(oldSlider.value()));
+                newValues.put(control.id(), slider.withValue(oldSlider.value()));
             } else if (old instanceof UiCheckbox oldCheckbox && control instanceof UiCheckbox checkbox
                     && sameLayout(oldCheckbox, checkbox)) {
-                values.put(control.id(), checkbox.checked(oldCheckbox.checked()));
+                newValues.put(control.id(), checkbox.checked(oldCheckbox.checked()));
+            } else if (old instanceof UiScrollList oldScroll && control instanceof UiScrollList scroll
+                    && sameLayout(oldScroll, scroll)) {
+                newValues.put(control.id(), scroll.withOffset(oldScroll.offset()));
             } else {
-                values.put(control.id(), control);
+                newValues.put(control.id(), control);
             }
         });
+        values.clear();
+        values.putAll(newValues);
     }
 
     public UiControl get(String id) { return values.get(id); }

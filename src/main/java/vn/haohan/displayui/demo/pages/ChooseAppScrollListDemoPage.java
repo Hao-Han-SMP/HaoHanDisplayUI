@@ -17,8 +17,10 @@ import org.bukkit.Color;
 import org.bukkit.entity.Player;
 import vn.haohan.displayui.api.component.ButtonComponent;
 import vn.haohan.displayui.api.component.IconComponent;
+import vn.haohan.displayui.api.component.ScrollListComponent;
 import vn.haohan.displayui.api.component.TextComponent;
 import vn.haohan.displayui.api.container.Container;
+import vn.haohan.displayui.api.interaction.UiControlChange;
 import vn.haohan.displayui.api.layout.UiAnchorPoint;
 import vn.haohan.displayui.api.text.UiTextAlignment;
 import vn.haohan.displayui.demo.AppEntry;
@@ -41,6 +43,16 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
 
     @Override
     public void build(Container container, DemoContext context) {
+        // Scroll capture over the entire content area
+        container.addComponent(ScrollListComponent.builder("demo_apps")
+                .anchor(UiAnchorPoint.TOP_LEFT)
+                .origin(UiAnchorPoint.TOP_LEFT)
+                .offset(0.0f, 0.0f)
+                .size(174.0f, 76.0f)
+                .range(maxOffset(context), context.appOffset())
+                .step(1)
+                .build());
+
         // App rows
         float startY = 0.0f;
         for (int row = 0; row < VISIBLE_ROWS; row++) {
@@ -181,5 +193,17 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void onControlChange(DemoContext context, UiControlChange change) {
+        if ("demo_apps".equals(change.control().id())) {
+            int prev = context.appOffset();
+            int next = (int) Math.round(change.value());
+            if (prev != next) {
+                context.appOffset(next);
+                context.updateView();
+            }
+        }
     }
 }

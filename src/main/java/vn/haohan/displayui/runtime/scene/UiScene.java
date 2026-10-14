@@ -265,7 +265,6 @@ public final class UiScene implements UiHandle {
             if (display.isValid()) {
                 display.setTeleportDuration(interpolationTicks);
                 display.teleport(this.origin);
-                display.setRotation(origin.getYaw(), origin.getPitch());
             }
         }
         updateInteractionHitbox();
@@ -489,10 +488,10 @@ public final class UiScene implements UiHandle {
                         maxY = Math.max(maxY, block.y() + block.height());
                     }
                     case vn.haohan.displayui.api.node.AlignedTextNode text -> {
-                        minX = Math.min(minX, text.x());
-                        maxX = Math.max(maxX, text.x() + text.width());
-                        minY = Math.min(minY, text.y());
-                        maxY = Math.max(maxY, text.y() + text.height());
+                        minX = Math.min(minX, text.boxX());
+                        maxX = Math.max(maxX, text.boxX() + text.width());
+                        minY = Math.min(minY, text.boxY());
+                        maxY = Math.max(maxY, text.boxY() + text.height());
                     }
                     case vn.haohan.displayui.api.node.UiIconNode icon -> {
                         minX = Math.min(minX, icon.x());
@@ -1352,14 +1351,17 @@ public final class UiScene implements UiHandle {
         float pixels = options.pixelsPerBlock();
         float depth = node.depth();
         float thickness = Math.max(0.0001f, (node.thickness() / pixels) * scale);
+        float halfThick = thickness * 0.5f;
         boolean doubleSided = isDoubleSided(node);
 
-        int segmentCount = pts.size() - 1 + (node.closed() && pts.size() > 2 ? 1 : 0);
+        int n = pts.size();
+        boolean closed = node.closed() && n > 2;
+        int segmentCount = closed ? n : n - 1;
         List<Transformation> list = new ArrayList<>(doubleSided ? segmentCount * 2 : segmentCount);
 
         for (int i = 0; i < segmentCount; i++) {
-            PolylineNode.Point ptA = pts.get(i % pts.size());
-            PolylineNode.Point ptB = pts.get((i + 1) % pts.size());
+            PolylineNode.Point ptA = pts.get(i % n);
+            PolylineNode.Point ptB = pts.get((i + 1) % n);
 
             Vector3f p1 = new Vector3f((ptA.x() + offsetX) / pixels, -(ptA.y() + offsetY) / pixels, depth + offsetZ);
             Vector3f p2 = new Vector3f((ptB.x() + offsetX) / pixels, -(ptB.y() + offsetY) / pixels, depth + offsetZ);
@@ -1371,18 +1373,58 @@ public final class UiScene implements UiHandle {
                 p1.set(new Vector3f(center).add(new Vector3f(p1).sub(center).mul(scale)));
                 p2.set(new Vector3f(center).add(new Vector3f(p2).sub(center).mul(scale)));
             }
+
+            // Smooth curve / capped miter extension to keep curves seamless without protruding spurs at corners
+            float segDx = p2.x - p1.x;
+            float segDy = p2.y - p1.y;
+            float segLen = (float) Math.sqrt(segDx * segDx + segDy * segDy);
+            if (segLen > 1e-5f) {
+                float ux = segDx / segLen;
+                float uy = segDy / segLen;
+
+                // Extend start if connected to a previous segment
+                if (closed || i > 0) {
+                    PolylineNode.Point ptPrev = pts.get((i - 1 + n) % n);
+                    float prevDx = (ptA.x() - ptPrev.x()) / pixels;
+                    float prevDy = -(ptA.y() - ptPrev.y()) / pixels;
+                    float prevLen = (float) Math.sqrt(prevDx * prevDx + prevDy * prevDy);
+                    if (prevLen > 1e-5f) {
+                        float cosTheta = (prevDx / prevLen) * ux + (prevDy / prevLen) * uy;
+                        float miterExt = cosTheta > 0.9999f ? 0.0f
+                                : (cosTheta < -0.9999f ? 0.35f
+                                : Math.min(0.35f, (float) Math.sqrt(Math.max(0.0f, 1.0f - cosTheta) / Math.max(1e-4f, 1.0f + cosTheta))));
+                        float extStart = Math.min(halfThick * miterExt, segLen * 0.25f);
+                        p1.x -= ux * extStart;
+                        p1.y -= uy * extStart;
+                    }
+                }
+
+                // Extend end if connected to a next segment
+                if (closed || i < segmentCount - 1) {
+                    PolylineNode.Point ptNext = pts.get((i + 2) % n);
+                    float nextDx = (ptNext.x() - ptB.x()) / pixels;
+                    float nextDy = -(ptNext.y() - ptB.y()) / pixels;
+                    float nextLen = (float) Math.sqrt(nextDx * nextDx + nextDy * nextDy);
+                    if (nextLen > 1e-5f) {
+                        float cosTheta = ux * (nextDx / nextLen) + uy * (nextDy / nextLen);
+                        float miterExt = cosTheta > 0.9999f ? 0.0f
+                                : (cosTheta < -0.9999f ? 0.35f
+                                : Math.min(0.35f, (float) Math.sqrt(Math.max(0.0f, 1.0f - cosTheta) / Math.max(1e-4f, 1.0f + cosTheta))));
+                        float extEnd = Math.min(halfThick * miterExt, segLen * 0.25f);
+                        p2.x += ux * extEnd;
+                        p2.y += uy * extEnd;
+                    }
+                }
+            }
+
             TRSResult trs = DisplayShapeMath.computeLineTRS(p1, p2, thickness, 0.0f, false);
             list.add(toTransformation(trs));
             if (doubleSided) {
                 float backDepth = -(depth + offsetZ);
-                float backOffsetX = mirrorSide ? -offsetX : offsetX;
-                float bx1 = mirrorSide ? -ptA.x() : ptA.x();
-                float bx2 = mirrorSide ? -ptB.x() : ptB.x();
-                Vector3f p1b = new Vector3f((bx1 + backOffsetX) / pixels, -(ptA.y() + offsetY) / pixels, backDepth);
-                Vector3f p2b = new Vector3f((bx2 + backOffsetX) / pixels, -(ptB.y() + offsetY) / pixels, backDepth);
-                if (scale != 1.0f) {
-                    GeometryUtils.scaleAroundMidpoint(p1b, p2b, scale);
-                }
+                float bx1 = mirrorSide ? -p1.x : p1.x;
+                float bx2 = mirrorSide ? -p2.x : p2.x;
+                Vector3f p1b = new Vector3f(bx1, p1.y, backDepth);
+                Vector3f p2b = new Vector3f(bx2, p2.y, backDepth);
                 TRSResult backTrs = DisplayShapeMath.computeLineTRS(p1b, p2b, thickness, 0.0f, true);
                 list.add(toTransformation(backTrs));
             }
@@ -1506,7 +1548,7 @@ public final class UiScene implements UiHandle {
                 textDisplay.setBackgroundColor(ColorUtils.withOpacity(gradient.colorForDisplayIndex(displayIndex), opacity));
             } else if (node instanceof UiShapeNode shape) {
                 textDisplay.setTextOpacity((byte) 0);
-                textDisplay.setBackgroundColor(ColorUtils.withOpacity(shape.color(), opacity));
+                textDisplay.setBackgroundColor(ColorUtils.withOpacity(shape.colorForDisplayIndex(displayIndex), opacity));
             } else if (node instanceof LineNode line) {
                 textDisplay.setTextOpacity((byte) 0);
                 textDisplay.setBackgroundColor(ColorUtils.withOpacity(line.color(), opacity));
@@ -1557,7 +1599,7 @@ public final class UiScene implements UiHandle {
                 textDisplay.setBackgroundColor(gradient.colorForDisplayIndex(displayIndex));
             } else if (node instanceof UiShapeNode shape) {
                 textDisplay.setTextOpacity((byte) 0);
-                textDisplay.setBackgroundColor(shape.color());
+                textDisplay.setBackgroundColor(shape.colorForDisplayIndex(displayIndex));
             } else if (node instanceof LineNode line) {
                 textDisplay.setTextOpacity((byte) 0);
                 textDisplay.setBackgroundColor(line.color());

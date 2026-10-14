@@ -164,8 +164,7 @@ public final class UiScreenMode {
         this.screenCenter = eye.toVector().add(forward.clone().multiply(distance));
         Vector originPos = screenCenter.clone()
                 .subtract(basis.right().multiply(centerX / ppb))
-                .add(basis.up().multiply(centerY / ppb))
-                .add(basis.right().multiply(docW * 0.25));
+                .add(basis.up().multiply(centerY / ppb));
 
         Location sceneOrigin = originPos.toLocation(player.getWorld());
         sceneOrigin.setYaw(uiYaw);
@@ -286,22 +285,22 @@ public final class UiScreenMode {
 
         // Handle active slider dragging session (Hold to Drag)
         if (this.activeSliderId != null) {
-            final long now = System.currentTimeMillis();
-            // Refresh hold timer whenever cursor moves
-            if (Math.abs(deltaYaw) > 0.001f || Math.abs(deltaPitch) > 0.001f) {
-                this.lastSliderHoldTime = now;
-            }
-
-            // If user stopped holding/moving for longer than timeout, auto-release slider
-            if (now - this.lastSliderHoldTime > SLIDER_HOLD_TIMEOUT_MS) {
+            java.util.Optional<vn.haohan.displayui.api.interaction.UiControl> ctrl = scene.control(activeSliderId);
+            if (ctrl.isEmpty() || !(ctrl.get() instanceof vn.haohan.displayui.api.interaction.UiSlider)) {
                 releaseSlider();
             } else {
+                final long now = System.currentTimeMillis();
+                // If user stopped holding/moving for longer than timeout, auto-release slider
+                if (now - this.lastSliderHoldTime > SLIDER_HOLD_TIMEOUT_MS) {
+                    releaseSlider();
+                } else {
                 scene.dragSlider(player, activeSliderId, cursorX);
                 if (cursorEntity != null && cursorEntity.isValid()) {
                     cursorEntity.text(Component.text(CURSOR_CHAR, NamedTextColor.GOLD));
                 }
                 player.sendActionBar(Component.text("✦ Giữ chuột để kéo Slider · Thả chuột để thả", NamedTextColor.YELLOW));
                 return;
+                }
             }
         }
 
@@ -366,14 +365,14 @@ public final class UiScreenMode {
 
         // If currently dragging a slider
         if (this.activeSliderId != null) {
-            if (isRightClick) {
+            if (isRightClick && (this.hovered == null || (this.hovered.control() != null && this.hovered.control().id().equals(activeSliderId)))) {
                 // Continuous right-click hold packets from client refresh hold time
                 this.lastSliderHoldTime = System.currentTimeMillis();
                 return true;
             }
-            // Explicit left click releases the slider immediately
+            // Explicit left click or clicking outside releases the slider immediately
             releaseSlider();
-            return true;
+            if (this.hovered == null) return true;
         }
 
         final long now = System.currentTimeMillis();

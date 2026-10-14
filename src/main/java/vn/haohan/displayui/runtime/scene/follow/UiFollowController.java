@@ -42,17 +42,21 @@ public final class UiFollowController {
     private UiFollowOptions options = UiFollowOptions.defaults();
     private boolean isCatchingUp = false;
 
+    private Location lastEyeLocation;
+
     public void configure(Player target, UiFollowOptions options) {
         this.target = Objects.requireNonNull(target, "target");
         this.options = Objects.requireNonNull(options, "options");
         this.mode = UiFollowMode.FOLLOW;
         this.isCatchingUp = false;
+        this.lastEyeLocation = null;
     }
 
     public void stop() {
         mode = UiFollowMode.NONE;
         target = null;
         isCatchingUp = false;
+        lastEyeLocation = null;
     }
 
     public void stopCatchUp() {
@@ -97,15 +101,21 @@ public final class UiFollowController {
         if (target.getWorld() != current.getWorld()) return null;
 
         Location eye = target.getEyeLocation();
-        Location idealTarget = calculateIdealTarget(eye, options.distance());
 
-        // 1. Distance check
+        // Check if player physically moved their position in world space (> 2cm)
+        boolean playerMoved = false;
+        if (lastEyeLocation != null && lastEyeLocation.getWorld() == eye.getWorld()) {
+            double movedDistSq = eye.toVector().distanceSquared(lastEyeLocation.toVector());
+            playerMoved = (movedDistSq > 0.0004);
+        }
+        lastEyeLocation = eye.clone();
+
         double distToOrigin = eye.distance(current);
         double minDist = options.distance() * options.minDistanceRatio();
         double maxDist = options.distance() * options.maxDistanceRatio();
         boolean outOfDistance = (distToOrigin < minDist || distToOrigin > maxDist);
 
-        // 2. Gaze check within panel bounds
+        boolean crosshairInside = false;
         if (options.gazeDeadzone()) {
             float minX = options.hasCustomBounds() ? options.minX() : defaultMinX;
             float maxX = options.hasCustomBounds() ? options.maxX() : defaultMaxX;
@@ -113,7 +123,6 @@ public final class UiFollowController {
             float maxY = options.hasCustomBounds() ? options.maxY() : defaultMaxY;
             float margin = options.deadzoneMargin();
 
-            boolean crosshairInside;
             if (cursor != null) {
                 crosshairInside = (cursor.localX() >= (minX - margin) && cursor.localX() <= (maxX + margin))
                         && (cursor.localY() >= (minY - margin) && cursor.localY() <= (maxY + margin));
@@ -123,15 +132,16 @@ public final class UiFollowController {
                         pixelsPerBlock, options.distance() * 2.5);
                 crosshairInside = res.hits()
                         && (res.localX() >= (minX - margin) && res.localX() <= (maxX + margin))
-                        && (res.localY() >= (minY - margin) && res.localY <= (maxY + margin));
+                        && (res.localY() >= (minY - margin) && res.localY() <= (maxY + margin));
             }
 
-            // If crosshair is inside panel bounds and distance is healthy, stop moving
-            if (crosshairInside && !outOfDistance) {
-                isCatchingUp = false;
+            // Gaze deadzone: holds UI stationary when player is stationary, docked, and gaze is within panel
+            if (!playerMoved && !isCatchingUp && crosshairInside && !outOfDistance) {
                 return null;
             }
         }
+
+        Location idealTarget = calculateIdealTarget(eye, options.distance());
 
         double dx = idealTarget.getX() - current.getX();
         double dy = idealTarget.getY() - current.getY();
@@ -147,10 +157,16 @@ public final class UiFollowController {
         float yawDiff = MathUtils.signedAngleDifference(idealTarget.getYaw(), current.getYaw());
         float pitchDiff = idealTarget.getPitch() - current.getPitch();
 
-        // If deadzone disabled, use settling threshold
-        if (!options.gazeDeadzone() && distSq < 0.0001 && Math.abs(yawDiff) < 0.05f && Math.abs(pitchDiff) < 0.05f) {
+        // Settling threshold when close enough and player not moving
+        if (!playerMoved && distSq < 0.0001 && Math.abs(yawDiff) < 0.05f && Math.abs(pitchDiff) < 0.05f) {
             isCatchingUp = false;
             return null;
+        }
+
+        // Dock if close enough to ideal target when stationary
+        if (!playerMoved && distSq < 0.02 && Math.abs(yawDiff) < 3.0f && Math.abs(pitchDiff) < 3.0f) {
+            isCatchingUp = false;
+            return idealTarget;
         }
 
         isCatchingUp = true;
@@ -164,8 +180,7 @@ public final class UiFollowController {
             speedRot = Math.max(speedRot, 0.65);
         }
 
-        // Dock if close enough to ideal target
-        if (distSq < 0.02 && Math.abs(yawDiff) < 3.0f && Math.abs(pitchDiff) < 3.0f) {
+        if (speedPos >= 0.999f && speedRot >= 0.999f) {
             isCatchingUp = false;
             return idealTarget;
         }
@@ -189,10 +204,16 @@ public final class UiFollowController {
     }
 
     public static Location calculateIdealTarget(Location eye, double distance) {
-        Vector dir = eye.getDirection().normalize();
-        Location target = eye.clone().add(dir.multiply(distance));
-        target.setYaw(eye.getYaw() + 180.0f);
-        target.setPitch(-eye.getPitch());
+        return calculateTargetAtDirection(eye, eye.getDirection(), distance);
+    }
+
+    public static Location calculateTargetAtDirection(Location eye, Vector dir, double distance) {
+        Vector normalized = dir.clone().normalize();
+        Location target = eye.clone().add(normalized.clone().multiply(distance));
+        Location dirLoc = eye.clone();
+        dirLoc.setDirection(normalized);
+        target.setYaw(dirLoc.getYaw() + 180.0f);
+        target.setPitch(-dirLoc.getPitch());
         return target;
     }
 

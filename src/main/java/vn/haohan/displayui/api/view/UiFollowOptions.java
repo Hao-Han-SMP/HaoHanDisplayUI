@@ -46,7 +46,7 @@ public record UiFollowOptions(
     }
 
     public static UiFollowOptions defaults() {
-        return new UiFollowOptions(3.0, 0.42f, 0.45f, 4);
+        return new UiFollowOptions(3.0, 0.42f, 0.45f, 2);
     }
 
     public static UiFollowOptions of(double distance, float damping, int interpolationTicks) {
@@ -110,7 +110,7 @@ public record UiFollowOptions(
         private double distance = 3.0;
         private float positionDamping = 0.42f;
         private float rotationDamping = 0.45f;
-        private int interpolationTicks = 4;
+        private int interpolationTicks = 2;
         private boolean gazeDeadzone = true;
         private float deadzoneMargin = 8.0f;
         private Float minX = null;

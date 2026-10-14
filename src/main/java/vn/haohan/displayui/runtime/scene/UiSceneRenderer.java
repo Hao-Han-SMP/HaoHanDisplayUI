@@ -134,7 +134,7 @@ final class UiSceneRenderer {
         } else if (node instanceof PolylineNode shape && display instanceof TextDisplay text) {
             updateTextBackground(text, shape.color());
         } else if (node instanceof UiShapeNode shape && display instanceof TextDisplay text) {
-            updateTextBackground(text, shape.color());
+            updateTextBackground(text, shape.colorForDisplayIndex(index));
         }
         if (!scene.isAnimating() && transform != null) {
             Transformation current = display.getTransformation();

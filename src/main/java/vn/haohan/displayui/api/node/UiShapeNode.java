@@ -336,7 +336,7 @@ public record UiShapeNode(
                 pts.add(new PolylineNode.Point(x + w * 0.52f, y + h * 0.44f));
                 break;
             }
-            default: { // default rectangle
+            default: {
                 pts.add(new PolylineNode.Point(x, y));
                 pts.add(new PolylineNode.Point(x + w, y));
                 pts.add(new PolylineNode.Point(x + w, y + h));
@@ -345,7 +345,6 @@ public record UiShapeNode(
             }
         }
 
-        // Apply 2D rotation around center if present
         if (Math.abs(rotation) > 1e-4f) {
             double rad = Math.toRadians(rotation);
             double cos = Math.cos(rad);
@@ -504,7 +503,6 @@ public record UiShapeNode(
         float rx = width * 0.5f;
         float ry = height * 0.5f;
 
-        // 1. Fill rendering — Optimized assembly from fundamental primitives (rect, triangle, parallelogram) or triangulation
         if (!hasRotation && type.equals("rect")) {
             if (width > 0.001f && height > 0.001f) {
                 nodes.add(new UiBackgroundNode(x, y, depth, width, height, color, doubleSided));
@@ -516,60 +514,66 @@ public record UiShapeNode(
                     nodes.add(new UiBackgroundNode(x, y, depth, width, height, color, doubleSided));
                 }
             } else {
-                int cornerSteps = 8;
-                float stepH = r / cornerSteps;
+                int cornerSteps = Math.max(4, Math.min(12, Math.round(r * 1.8f)));
 
-                // 1. Top rounded corner slices
                 for (int i = 0; i < cornerSteps; i++) {
-                    float sliceY = y + i * stepH;
-                    float midY = (i + 0.5f) * stepH;
-                    float d = r - midY;
-                    float indent = (float) (r - Math.sqrt(Math.max(0, r * r - d * d)));
-                    float sliceW = width - 2.0f * indent;
-                    if (sliceW > 0.05f && stepH > 0.05f) {
-                        nodes.add(new UiBackgroundNode(x + indent, sliceY, depth, sliceW, stepH, color, doubleSided));
+                    double a1 = (Math.PI * 0.5) * (i / (double) cornerSteps);
+                    double a2 = (Math.PI * 0.5) * ((i + 1) / (double) cornerSteps);
+                    double aMid = (a1 + a2) * 0.5;
+
+                    float y1 = y + r * (1.0f - (float) Math.cos(a1));
+                    float y2 = y + r * (1.0f - (float) Math.cos(a2));
+                    float h = (y2 - y1) + 0.002f;
+
+                    float indent = r * (1.0f - (float) Math.sin(aMid));
+                    float w = width - 2.0f * indent;
+                    if (w > 0.05f && h > 0.02f) {
+                        nodes.add(new UiBackgroundNode(x + indent, y1, depth, w, h, color, doubleSided));
                     }
                 }
 
-                // 2. Middle main rectangular body
-                float middleH = height - 2.0f * r;
+                float middleH = height - 2.0f * r + 0.002f;
                 if (middleH > 0.05f) {
-                    nodes.add(new UiBackgroundNode(x, y + r, depth, width, middleH, color, doubleSided));
+                    nodes.add(new UiBackgroundNode(x, y + r - 0.001f, depth, width, middleH, color, doubleSided));
                 }
 
-                // 3. Bottom rounded corner slices
                 for (int i = 0; i < cornerSteps; i++) {
-                    float sliceY = y + height - r + i * stepH;
-                    float midY = (i + 0.5f) * stepH;
-                    float d = midY;
-                    float indent = (float) (r - Math.sqrt(Math.max(0, r * r - d * d)));
-                    float sliceW = width - 2.0f * indent;
-                    if (sliceW > 0.05f && stepH > 0.05f) {
-                        nodes.add(new UiBackgroundNode(x + indent, sliceY, depth, sliceW, stepH, color, doubleSided));
+                    double a1 = (Math.PI * 0.5) * (i / (double) cornerSteps);
+                    double a2 = (Math.PI * 0.5) * ((i + 1) / (double) cornerSteps);
+                    double aMid = (a1 + a2) * 0.5;
+
+                    float y1 = y + height - r + r * (float) Math.sin(a1);
+                    float y2 = y + height - r + r * (float) Math.sin(a2);
+                    float h = (y2 - y1) + 0.002f;
+
+                    float indent = r * (1.0f - (float) Math.cos(aMid));
+                    float w = width - 2.0f * indent;
+                    if (w > 0.05f && h > 0.02f) {
+                        nodes.add(new UiBackgroundNode(x + indent, y1, depth, w, h, color, doubleSided));
                     }
                 }
             }
-        } else if (!hasRotation && type.equals("circle") && width > 4.0f && height > 4.0f) {
-            int steps = 20;
-            float stepH = height / steps;
+        } else if (!hasRotation && type.equals("circle") && width > 2.0f && height > 2.0f) {
+            int steps = Math.max(14, Math.min(26, Math.round(ry * 2.2f)));
             for (int i = 0; i < steps; i++) {
-                float sliceY = y + i * stepH;
-                float midY = sliceY + stepH * 0.5f;
-                float dy = (midY - cy) / ry;
-                if (Math.abs(dy) <= 1.0f) {
-                    float sliceW = (float) (2.0f * rx * Math.sqrt(Math.max(0, 1.0f - dy * dy)));
-                    float sliceX = cx - sliceW * 0.5f;
-                    if (sliceW > 0.05f && stepH > 0.05f) {
-                        nodes.add(new UiBackgroundNode(sliceX, sliceY, depth, sliceW, stepH, color, doubleSided));
-                    }
+                double a1 = -Math.PI * 0.5 + Math.PI * (i / (double) steps);
+                double a2 = -Math.PI * 0.5 + Math.PI * ((i + 1) / (double) steps);
+                double aMid = (a1 + a2) * 0.5;
+
+                float y1 = cy + ry * (float) Math.sin(a1);
+                float y2 = cy + ry * (float) Math.sin(a2);
+                float h = (y2 - y1) + 0.002f;
+
+                float w = (float) (2.0 * rx * Math.cos(aMid));
+                float sliceX = cx - w * 0.5f;
+                if (w > 0.05f && h > 0.02f) {
+                    nodes.add(new UiBackgroundNode(sliceX, y1, depth, w, h, color, doubleSided));
                 }
             }
         } else if (!hasRotation && type.equals("diamond") && width > 1.0f && height > 1.0f) {
-            // Exactly 2 triangles (top & bottom)
             nodes.add(new TriangleNode(cx, y, x, cy, x + width, cy, depth, color, doubleSided));
             nodes.add(new TriangleNode(cx, y + height, x, cy, x + width, cy, depth, color, doubleSided));
         } else if (!hasRotation && type.equals("trapezoid") && width > 4.0f && height > 1.0f) {
-            // 1 core rect + 2 side triangles (0% overlap)
             float ins = Math.max(0.0f, Math.min(width * 0.22f, (width - 2.0f) * 0.5f));
             float coreW = width - 2.0f * ins;
             if (coreW > 0.05f) {
@@ -587,7 +591,6 @@ public record UiShapeNode(
         } else if (!hasRotation && type.equals("right_triangle") && width > 0.5f && height > 0.5f) {
             nodes.add(new TriangleNode(x, y, x + width, y + height, x, y + height, depth, color, doubleSided));
         } else if (!hasRotation && type.equals("arrow_right") && width > 4.0f && height > 2.0f) {
-            // 1 shaft rect + 1 head triangle (0% overlap)
             float headLen = Math.max(2.0f, Math.min(width * 0.42f, width - 2.0f));
             float shaftH = Math.max(1.0f, Math.min(height * 0.45f, height - 1.0f));
             float shaftW = width - headLen;
@@ -597,7 +600,6 @@ public record UiShapeNode(
             }
             nodes.add(new TriangleNode(x + width - headLen, y, x + width - headLen, y + height, x + width, cy, depth, color, doubleSided));
         } else if (!hasRotation && type.equals("arrow_left") && width > 4.0f && height > 2.0f) {
-            // 1 shaft rect + 1 head triangle (0% overlap)
             float headLen = Math.max(2.0f, Math.min(width * 0.42f, width - 2.0f));
             float shaftH = Math.max(1.0f, Math.min(height * 0.45f, height - 1.0f));
             float shaftW = width - headLen;
@@ -607,7 +609,6 @@ public record UiShapeNode(
             }
             nodes.add(new TriangleNode(x + headLen, y, x + headLen, y + height, x, cy, depth, color, doubleSided));
         } else if (!hasRotation && type.equals("double_arrow") && width > 6.0f && height > 2.0f) {
-            // 1 shaft rect + 2 head triangles (0% overlap)
             float headLen = Math.max(2.0f, Math.min(width * 0.28f, (width - 2.0f) * 0.5f));
             float shaftH = Math.max(1.0f, Math.min(height * 0.40f, height - 1.0f));
             float shaftW = width - 2.0f * headLen;
@@ -618,7 +619,6 @@ public record UiShapeNode(
             }
             nodes.add(new TriangleNode(x + width, cy, x + width - headLen, y, x + width - headLen, y + height, depth, color, doubleSided));
         } else if (!hasRotation && type.equals("cross") && width > 3.0f && height > 3.0f) {
-            // 3 non-overlapping rects: vertical bar + left arm + right arm (0% overlap for alpha)
             float tw = Math.max(1.0f, Math.min(width * 0.34f, width - 1.0f));
             float th = Math.max(1.0f, Math.min(height * 0.34f, height - 1.0f));
             float armW = (width - tw) * 0.5f;
@@ -628,14 +628,12 @@ public record UiShapeNode(
                 nodes.add(new UiBackgroundNode(cx + tw * 0.5f, cy - th * 0.5f, depth, armW, th, color, doubleSided));
             }
         } else if (!hasRotation && type.equals("star6") && width > 2.0f && height > 2.0f) {
-            // 2 overlapping equilateral triangles
             List<PolylineNode.Point> up = createRegularPolygonPoints(cx, cy, rx, ry, 3, -Math.PI / 2.0);
             List<PolylineNode.Point> down = createRegularPolygonPoints(cx, cy, rx, ry, 3, Math.PI / 2.0);
             nodes.add(new TriangleNode(up.get(0).x(), up.get(0).y(), up.get(1).x(), up.get(1).y(), up.get(2).x(), up.get(2).y(), depth, color, doubleSided));
             nodes.add(new TriangleNode(down.get(0).x(), down.get(0).y(), down.get(1).x(), down.get(1).y(), down.get(2).x(), down.get(2).y(), depth, color, doubleSided));
         } else if (!hasRotation && (type.equals("pentagon") || type.equals("hexagon") || type.equals("heptagon") || type.equals("octagon")
                 || type.equals("star3") || type.equals("star4") || type.equals("star5"))) {
-            // Fast, exact Triangle Fan from center for convex regular polygons and stars
             List<PolylineNode.Point> pts = computeBoundaryPoints();
             for (int i = 0; i < pts.size(); i++) {
                 PolylineNode.Point p1 = pts.get(i);
@@ -649,23 +647,20 @@ public record UiShapeNode(
             nodes.addAll(triangulate());
         }
 
-        // If decomposition yielded nothing (e.g. tiny shape with sub-threshold triangles), ensure at least 1 fallback element
         if (nodes.isEmpty()) {
             if (width > 0.001f && height > 0.001f) {
                 nodes.add(new UiBackgroundNode(x, y, depth, width, height, color, doubleSided));
             }
         }
 
-        // 2. Outline rendering
         if (outline && outlineThickness > 0) {
             String style = outlineStyle != null ? outlineStyle.toLowerCase().trim() : "solid";
+            List<PolylineNode.Point> boundary = computeBoundaryPoints();
             if ("dashed".equals(style) || "dotted".equals(style)) {
-                List<PolylineNode.Point> boundary = computeBoundaryPoints();
                 float dashLen = "dotted".equals(style) ? Math.max(2.5f, outlineThickness * 1.5f) : 6.0f;
                 float gapLen = "dotted".equals(style) ? Math.max(3.0f, outlineThickness * 2.0f) : 4.0f;
                 nodes.addAll(createDashedOutlineNodes(boundary, dashLen, gapLen, outlineThickness, depth + 0.0001f, outlineColor, doubleSided));
             } else {
-                List<PolylineNode.Point> boundary = computeBoundaryPoints();
                 nodes.add(new PolylineNode(boundary, outlineThickness, depth + 0.0001f, outlineColor, doubleSided, true));
             }
         }
@@ -703,6 +698,36 @@ public record UiShapeNode(
             }
         }
         return nodes;
+    }
+
+    /**
+     * Resolves the base color for a display entity by its index within this shape's decomposed elements.
+     * Preserves distinct fill vs outline colors during animations.
+     */
+    public Color colorForDisplayIndex(int index) {
+        List<UiNode> subNodes = decomposeToNodes();
+        int cur = 0;
+        for (UiNode sub : subNodes) {
+            int count;
+            if (sub instanceof TriangleNode) {
+                count = 3;
+            } else if (sub instanceof PolylineNode poly) {
+                count = poly.closed() ? poly.points().size() : poly.points().size() - 1;
+            } else {
+                count = 1;
+            }
+            if (doubleSided) count *= 2;
+            if (index < cur + count) {
+                if (sub instanceof UiBackgroundNode bg) return bg.background();
+                if (sub instanceof LineNode l) return l.color();
+                if (sub instanceof TriangleNode t) return t.color();
+                if (sub instanceof ParallelogramNode p) return p.color();
+                if (sub instanceof PolylineNode pl) return pl.color();
+                return color;
+            }
+            cur += count;
+        }
+        return color;
     }
 
     public static Builder builder(String shapeType, float x, float y, float width, float height) {

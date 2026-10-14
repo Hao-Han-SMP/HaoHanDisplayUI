@@ -25,6 +25,7 @@ import vn.haohan.displayui.api.container.Container;
 import vn.haohan.displayui.api.container.DropdownContainer;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
+import vn.haohan.displayui.api.interaction.UiScrollList;
 import vn.haohan.displayui.api.interaction.UiSlider;
 import vn.haohan.displayui.api.layer.Layer;
 import vn.haohan.displayui.api.layer.LayerManager;
@@ -41,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * High-performance compiler and adapter that transforms the modern 3-tier
- * hierarchy ({@link LayerManager} / {@link Layer} / {@link Container} / {@link vn.haohan.displayui.api.component.Component})
+ * hierarchy ({@link LayerManager} / {@link Layer} / {@link Container} / {@link Component})
  * into an immutable {@link UiDocument} with non-overlapping depths, zero Z-fighting,
  * and bidirectional interaction forwarding.
  */
@@ -468,6 +469,11 @@ public final class UiDocumentBridge {
 
                 builder.checkbox(new UiCheckbox(checkbox.id(), globalX, globalY, width, height,
                         checkbox.checked()));
+            }
+
+            case ScrollListComponent scrollList -> {
+                builder.scrollList(new UiScrollList(scrollList.id(), globalX, globalY, width, height,
+                        scrollList.maxOffset(), scrollList.offset(), scrollList.step(), scrollList.description(), 0.0f));
             }
 
             case ShapeComponent shape -> {
