@@ -93,6 +93,8 @@ public final class UiScreenMode {
     private boolean initializedAngles;
     private String activeSliderId;
     private long lastSliderHoldTime;
+    private String activeScrollId;
+    private long lastScrollHoldTime;
     private UiHit hovered;
     private long lastClick;
     private boolean active;
@@ -304,6 +306,26 @@ public final class UiScreenMode {
             }
         }
 
+        // Handle active scroll dragging session (Hold to Drag)
+        if (this.activeScrollId != null) {
+            java.util.Optional<vn.haohan.displayui.api.interaction.UiControl> ctrl = scene.control(activeScrollId);
+            if (ctrl.isEmpty() || !(ctrl.get() instanceof vn.haohan.displayui.api.interaction.UiScrollList)) {
+                releaseScroll();
+            } else {
+                final long now = System.currentTimeMillis();
+                if (now - this.lastScrollHoldTime > SLIDER_HOLD_TIMEOUT_MS) {
+                    releaseScroll();
+                } else {
+                    scene.dragScroll(player, activeScrollId, cursorY);
+                    if (cursorEntity != null && cursorEntity.isValid()) {
+                        cursorEntity.text(Component.text(CURSOR_CHAR, NamedTextColor.GOLD));
+                    }
+                    player.sendActionBar(Component.text("✦ Giữ chuột để cuộn danh sách · Thả chuột để thả", NamedTextColor.YELLOW));
+                    return;
+                }
+            }
+        }
+
         final UiHit button = scene.hitAt(player, cursorX, cursorY);
 
         // Prevent redundant sound trigger and actionbar flicker if hovering the same target
@@ -375,6 +397,16 @@ public final class UiScreenMode {
             if (this.hovered == null) return true;
         }
 
+        // If currently dragging a scroll list
+        if (this.activeScrollId != null) {
+            if (isRightClick && (this.hovered == null || (this.hovered.control() != null && this.hovered.control().id().equals(activeScrollId)))) {
+                this.lastScrollHoldTime = System.currentTimeMillis();
+                return true;
+            }
+            releaseScroll();
+            if (this.hovered == null) return true;
+        }
+
         final long now = System.currentTimeMillis();
         if (now - this.lastClick < CLICK_DELAY) return false;
         this.lastClick = now;
@@ -386,6 +418,18 @@ public final class UiScreenMode {
             this.activeSliderId = slider.id();
             this.lastSliderHoldTime = System.currentTimeMillis();
             scene.dragSlider(player, activeSliderId, cursorX);
+            if (cursorEntity != null && cursorEntity.isValid()) {
+                cursorEntity.text(Component.text(CURSOR_CHAR, NamedTextColor.GOLD));
+            }
+            playSound(this.player, Sound.UI_BUTTON_CLICK, 1.2f);
+            return true;
+        }
+
+        // If clicked on a scroll list, begin scroll dragging hold session
+        if (this.hovered.control() instanceof vn.haohan.displayui.api.interaction.UiScrollList scroll) {
+            this.activeScrollId = scroll.id();
+            this.lastScrollHoldTime = System.currentTimeMillis();
+            scene.dragScroll(player, activeScrollId, cursorY);
             if (cursorEntity != null && cursorEntity.isValid()) {
                 cursorEntity.text(Component.text(CURSOR_CHAR, NamedTextColor.GOLD));
             }
@@ -407,6 +451,16 @@ public final class UiScreenMode {
         playSound(this.player, Sound.UI_BUTTON_CLICK, 0.9f);
     }
 
+    private void releaseScroll() {
+        if (this.activeScrollId == null) return;
+        this.activeScrollId = null;
+        if (cursorEntity != null && cursorEntity.isValid()) {
+            cursorEntity.text(Component.text(CURSOR_CHAR, this.hovered != null ? NamedTextColor.AQUA : NamedTextColor.WHITE));
+        }
+        player.sendActionBar(Component.empty());
+        playSound(this.player, Sound.UI_BUTTON_CLICK, 0.9f);
+    }
+
     /** Scrolls the scroll list under the virtual cursor. */
     public boolean handleScroll(int direction) {
         if (!active || direction == 0) return false;
@@ -420,6 +474,7 @@ public final class UiScreenMode {
         if (!active) return;
         active = false;
         this.activeSliderId = null;
+        this.activeScrollId = null;
         this.initializedAngles = false;
 
         if (cursorEntity != null && cursorEntity.isValid()) {

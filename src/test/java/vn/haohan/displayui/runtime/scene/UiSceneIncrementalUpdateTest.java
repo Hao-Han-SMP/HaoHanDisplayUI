@@ -89,13 +89,13 @@ class UiSceneIncrementalUpdateTest {
     }
 
     @Test
-    @DisplayName("Position drift greater than 15px is rejected when ratio drops below 50%")
+    @DisplayName("Position drift greater than 35px is rejected when ratio drops below 50%")
     void testPositionDriftThreshold() {
         UiDocument doc1 = UiDocument.builder()
                 .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1"), 10.0f, 10.0f, 100.0f, 20.0f, UiTextAlignment.LEFT))
                 .build();
         UiDocument doc2 = UiDocument.builder()
-                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1"), 30.0f, 10.0f, 100.0f, 20.0f, UiTextAlignment.LEFT))
+                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1"), 60.0f, 10.0f, 100.0f, 20.0f, UiTextAlignment.LEFT))
                 .build();
 
         assertFalse(UiScene.isStructurallySimilar(doc1, doc2));

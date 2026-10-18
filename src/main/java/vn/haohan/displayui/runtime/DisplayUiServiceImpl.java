@@ -202,6 +202,8 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
         boolean handled = nearest.scene().activate(nearest);
         if (nearest.control() instanceof vn.haohan.displayui.api.interaction.UiSlider slider) {
             dragging.put(player.getUniqueId(), new SliderDragSession(nearest.scene(), slider.id()));
+        } else if (nearest.control() instanceof vn.haohan.displayui.api.interaction.UiScrollList scroll) {
+            dragging.put(player.getUniqueId(), new ScrollDragSession(nearest.scene(), scroll.id()));
         }
         return handled;
     }
@@ -410,6 +412,62 @@ public final class DisplayUiServiceImpl implements DisplayUiService {
             if (!viewChanged(player)) return true;
             rememberView(player);
             return scene.dragSlider(player, controlId);
+        }
+
+        @Override
+        public void stop(Player player) {
+        }
+
+        private boolean viewChanged(Player player) {
+            Location eye = player.getEyeLocation();
+            if (!hasView) return true;
+            return Math.abs(eye.getX() - lastX) > POSITION_EPSILON
+                    || Math.abs(eye.getY() - lastY) > POSITION_EPSILON
+                    || Math.abs(eye.getZ() - lastZ) > POSITION_EPSILON
+                    || angleChanged(eye.getYaw(), lastYaw)
+                    || angleChanged(eye.getPitch(), lastPitch);
+        }
+
+        private void rememberView(Player player) {
+            Location eye = player.getEyeLocation();
+            lastX = eye.getX();
+            lastY = eye.getY();
+            lastZ = eye.getZ();
+            lastYaw = eye.getYaw();
+            lastPitch = eye.getPitch();
+            hasView = true;
+        }
+
+        private static boolean angleChanged(float current, float previous) {
+            return MathUtils.angleDifference(current, previous) > ANGLE_EPSILON;
+        }
+    }
+
+    private static final class ScrollDragSession implements DragSession {
+        private static final double POSITION_EPSILON = 0.0001;
+        private static final float ANGLE_EPSILON = 0.01f;
+
+        private final UiScene scene;
+        private final String controlId;
+        private double lastX, lastY, lastZ;
+        private float lastYaw, lastPitch;
+        private boolean hasView;
+
+        private ScrollDragSession(UiScene scene, String controlId) {
+            this.scene = scene;
+            this.controlId = controlId;
+        }
+
+        @Override
+        public boolean isValid() {
+            return scene.isValid();
+        }
+
+        @Override
+        public boolean update(Player player) {
+            if (!viewChanged(player)) return true;
+            rememberView(player);
+            return scene.dragScroll(player, controlId);
         }
 
         @Override

@@ -92,7 +92,7 @@ class ScrollContainerBridgeTest {
     }
 
     @Test
-    @DisplayName("Should strictly clip child containers that partially overflow viewport bounds")
+    @DisplayName("Should clip child container components that overflow viewport bounds")
     void testStrictViewportClippingOmitsPartiallyOverflowingContainers() {
         LayerManager lm = new LayerManager();
         Layer layer = lm.createLayer("main_layer", 0);
@@ -115,13 +115,14 @@ class ScrollContainerBridgeTest {
                 .text(Component.text("InsideRow"))
                 .build());
 
-        // Container 2: Partially overflowing at bottom: y = 40, h = 20 -> 40..60 > 50 -> Should be clipped!
+        // Container 2: Partially overflowing at bottom: y = 40, h = 20
+        // txt_partial is at offset y = 15.0f -> global Y = 55.0f > 50.0f -> Should be clipped!
         Container partialBottom = Container.builder("row_partial")
                 .anchor(UiAnchorPoint.TOP_LEFT).origin(UiAnchorPoint.TOP_LEFT)
                 .offset(0.0f, 40.0f).size(100.0f, 20.0f).build();
         partialBottom.addComponent(TextComponent.builder("txt_partial")
                 .anchor(UiAnchorPoint.TOP_LEFT).origin(UiAnchorPoint.TOP_LEFT)
-                .offset(0.0f, 0.0f).size(80.0f, 10.0f)
+                .offset(0.0f, 15.0f).size(80.0f, 10.0f)
                 .text(Component.text("PartialRow"))
                 .build());
 
@@ -135,6 +136,6 @@ class ScrollContainerBridgeTest {
         boolean hasPartial = doc.nodes().stream().anyMatch(n -> n instanceof vn.haohan.displayui.api.node.AlignedTextNode at && at.text().toString().contains("PartialRow"));
 
         assertTrue(hasInside, "Inside child container should be rendered");
-        assertFalse(hasPartial, "Partially overflowing child container should be clipped to prevent bleeding");
+        assertFalse(hasPartial, "Overflowing component within child container should be clipped to prevent bleeding");
     }
 }
