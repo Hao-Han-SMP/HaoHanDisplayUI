@@ -714,6 +714,14 @@ public final class UiScene implements UiHandle {
         return updateSlider(player, controlId, localX);
     }
 
+    public boolean dragScroll(Player player, String controlId) {
+        return updateScroll(player, controlId);
+    }
+
+    public boolean dragScroll(Player player, String controlId, float localY) {
+        return updateScroll(player, controlId, localY);
+    }
+
     boolean updateHover(Player player) {
         if (removed || !shouldShow(player) || isAnimating() || nodeEntities.isEmpty()) return false;
         RaycastUtils.Projection projection = projectCursor(player);
@@ -788,6 +796,27 @@ public final class UiScene implements UiHandle {
 
         double nextValue = slider.valueAt(localX);
         UiHit hit = new UiHit(this, null, slider, player, localX, 0, 2.5);
+        return changeControl(hit, nextValue, false);
+    }
+
+    private boolean updateScroll(Player player, String controlId) {
+        UiControl control = controlStates.get(controlId);
+        if (!(control instanceof UiScrollList)) return false;
+
+        RaycastUtils.Projection projection = projectCursor(player);
+        if (projection == null) return false;
+
+        return updateScroll(player, controlId, projection.localY());
+    }
+
+    private boolean updateScroll(Player player, String controlId, float localY) {
+        UiControl control = controlStates.get(controlId);
+        if (!(control instanceof UiScrollList scrollList)) return false;
+
+        float relativeY = localY - scrollList.y();
+        float fraction = Math.clamp(relativeY / Math.max(1.0f, scrollList.height()), 0.0f, 1.0f);
+        double nextValue = fraction * scrollList.maxOffset();
+        UiHit hit = new UiHit(this, null, scrollList, player, scrollList.x(), localY, 2.5);
         return changeControl(hit, nextValue, false);
     }
 
@@ -1834,7 +1863,7 @@ public final class UiScene implements UiHandle {
 
         int common = Math.min(prevSize, nextSize);
         int matched = 0;
-        float maxAllowedDrift = 15.0f; // in pixels
+        float maxAllowedDrift = 35.0f; // in pixels
 
         for (int i = 0; i < common; i++) {
             UiNode prev = previous.nodes().get(i);
