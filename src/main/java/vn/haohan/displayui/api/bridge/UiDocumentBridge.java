@@ -256,6 +256,20 @@ public final class UiDocumentBridge {
                                          AtomicInteger depthCounter,
                                          UiDocument.Builder builder,
                                          List<UiAnimation> nodeAnimations) {
+        compileContainer(layer, container, parentGlobalX, parentGlobalY, parentWidth, parentHeight,
+                parentScale, parentOpacity, parentAnimation, depthCounter, builder, nodeAnimations,
+                Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY);
+    }
+
+    private static void compileContainer(Layer layer, Container container,
+                                         float parentGlobalX, float parentGlobalY,
+                                         float parentWidth, float parentHeight,
+                                         float parentScale, float parentOpacity,
+                                         UiAnimation parentAnimation,
+                                         AtomicInteger depthCounter,
+                                         UiDocument.Builder builder,
+                                         List<UiAnimation> nodeAnimations,
+                                         float viewportMinY, float viewportMaxY) {
 
         float effScale = parentScale * container.scale();
         float effOpacity = parentOpacity * container.opacity();
@@ -277,17 +291,21 @@ public final class UiDocumentBridge {
         float width = container.width() * effScale;
         float height = container.height() * effScale;
 
+        float bgTop = Math.max(globalY, viewportMinY);
+        float bgBottom = Math.min(globalY + height, viewportMaxY);
+        float bgHeight = Math.max(0.0f, bgBottom - bgTop);
+
         // Specialized Dropdown Container Header Compilation
         if (container instanceof DropdownContainer dropdown) {
             dropdown.refreshLayout();
             compileDropdownHeader(layer, dropdown, globalX, globalY, effScale, effOpacity,
                     currentAnim, depthCounter, builder, nodeAnimations);
-        } else {
-            // 1. Standard Container Background Node
+        } else if (bgHeight > 0.0f) {
+            // 1. Standard Container Background Node (rendered within clamped viewport bounds)
             if (container.gradient() != null) {
                 float depth = layer.allocateDepth(depthCounter.getAndIncrement());
-                addNode(builder, nodeAnimations, new UiGradientBackgroundNode(globalX, globalY, depth, width, height, container.gradient()), currentAnim);
-            } else if (container.borderRound() > 0.0f && container.backgroundColor() != null) {
+                addNode(builder, nodeAnimations, new UiGradientBackgroundNode(globalX, bgTop, depth, width, bgHeight, container.gradient()), currentAnim);
+            } else if (container.borderRound() > 0.0f && container.backgroundColor() != null && bgTop == globalY && bgHeight == height) {
                 float depth = layer.allocateDepth(depthCounter.getAndIncrement());
                 addNode(builder, nodeAnimations, UiShapeNode.builder("rounded_rect", globalX, globalY, width, height)
                         .color(container.backgroundColor())
@@ -296,7 +314,7 @@ public final class UiDocumentBridge {
                         .build(), currentAnim);
             } else if (container.backgroundColor() != null) {
                 float depth = layer.allocateDepth(depthCounter.getAndIncrement());
-                addNode(builder, nodeAnimations, new UiBackgroundNode(globalX, globalY, depth, width, height, container.backgroundColor()), currentAnim);
+                addNode(builder, nodeAnimations, new UiBackgroundNode(globalX, bgTop, depth, width, bgHeight, container.backgroundColor()), currentAnim);
             }
         }
 
@@ -304,6 +322,9 @@ public final class UiDocumentBridge {
         float childShiftY = 0.0f;
         boolean isScroll = container instanceof ScrollContainer;
         ScrollContainer scrollContainer = isScroll ? (ScrollContainer) container : null;
+
+        float nextViewportMinY = isScroll ? Math.max(viewportMinY, globalY) : viewportMinY;
+        float nextViewportMaxY = isScroll ? Math.min(viewportMaxY, globalY + height) : viewportMaxY;
 
         if (isScroll) {
             childShiftY = -scrollContainer.scrollOffset() * effScale;
@@ -323,42 +344,39 @@ public final class UiDocumentBridge {
             ));
         }
 
-        // 3. Container Components (with strict viewport clipping for ScrollContainer)
+        // 3. Container Components (clipped gracefully against viewport bounds)
         for (vn.haohan.displayui.api.component.Component comp : container.components()) {
             if (!comp.isVisible()) continue;
 
-            if (isScroll) {
-                float[] compLocal = comp.computePosition(container.width(), container.height());
-                float compGlobalY = globalY + childShiftY + compLocal[1] * effScale;
-                float compH = comp.height() * effScale * comp.scale();
+            float[] compLocal = comp.computePosition(container.width(), container.height());
+            float compGlobalY = globalY + childShiftY + compLocal[1] * effScale;
+            float compH = comp.height() * effScale * comp.scale();
 
-                // Skip component if any part exceeds ScrollContainer viewport bounds [globalY, globalY + height]
-                if (compGlobalY < globalY - 1.0f || compGlobalY + compH > globalY + height + 1.0f) {
-                    continue;
-                }
+            // Skip component if completely outside viewport
+            if (compGlobalY < nextViewportMinY - 1.0f || compGlobalY + compH > nextViewportMaxY + 1.0f) {
+                continue;
             }
 
             compileComponent(layer, container, comp, globalX, globalY + childShiftY, effScale, effOpacity,
                     currentAnim, depthCounter, builder, nodeAnimations);
         }
 
-        // 4. Child Containers (Recursive nesting with strict viewport clipping for ScrollContainer)
+        // 4. Child Containers (Recursive nesting with viewport clipping and clamping)
         for (Container child : container.childContainers()) {
             if (!child.isVisible()) continue;
 
-            if (isScroll) {
-                float[] childLocal = child.computePosition(container.width(), container.height());
-                float childGlobalY = globalY + childShiftY + childLocal[1] * effScale;
-                float childH = child.height() * effScale * child.scale();
+            float[] childLocal = child.computePosition(container.width(), container.height());
+            float childGlobalY = globalY + childShiftY + childLocal[1] * effScale;
+            float childH = child.height() * effScale * child.scale();
 
-                // Skip child container if any part exceeds ScrollContainer viewport bounds [globalY, globalY + height]
-                if (childGlobalY < globalY - 1.0f || childGlobalY + childH > globalY + height + 1.0f) {
-                    continue;
-                }
+            // Skip child container if completely outside viewport bounds
+            if (childGlobalY + childH <= nextViewportMinY || childGlobalY >= nextViewportMaxY) {
+                continue;
             }
 
             compileContainer(layer, child, globalX, globalY + childShiftY, container.width(), container.height(),
-                    effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations);
+                    effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations,
+                    nextViewportMinY, nextViewportMaxY);
         }
 
         // 5. Render Native Scrollbar on top of children with higher Z-depth
