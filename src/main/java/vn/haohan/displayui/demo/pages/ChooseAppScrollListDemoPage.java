@@ -53,7 +53,7 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
                 .offset(0.0f, 0.0f)
                 .size(174.0f, listHeight)
                 .maxScrollOffset(maxScroll)
-                .scrollOffset((float) context.appOffset())
+                .scrollOffset(context.appOffset())
                 .scrollStep(ROW_HEIGHT) // Scroll by 1 row height per step
                 .showScrollbar(true)
                 .scrollbarWidth(3.0f)
@@ -170,7 +170,8 @@ public final class ChooseAppScrollListDemoPage extends BaseDemoPage {
     @Override
     public void onControlChange(DemoContext context, UiControlChange change) {
         if ("demo_apps".equals(change.control().id())) {
-            context.appOffset((int) Math.round(change.value()));
+            context.appOffset((float) change.value());
+            context.updateView();
         }
     }
 }
