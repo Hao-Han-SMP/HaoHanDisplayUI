@@ -102,6 +102,19 @@ class UiSceneIncrementalUpdateTest {
     }
 
     @Test
+    @DisplayName("Horizontal drift greater than 15px is rejected even if total hypot is within 35px")
+    void testHorizontalDriftRejectionInStructuralSimilarity() {
+        UiDocument doc1 = UiDocument.builder()
+                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("<"), 15.0f, 110.0f, 18.0f, 14.0f, UiTextAlignment.CENTER))
+                .build();
+        UiDocument doc2 = UiDocument.builder()
+                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1 / 4"), 40.0f, 110.0f, 36.0f, 14.0f, UiTextAlignment.CENTER))
+                .build();
+
+        assertFalse(UiScene.isStructurallySimilar(doc1, doc2), "Horizontal jump of 25px must not be treated as structurally similar");
+    }
+
+    @Test
     @DisplayName("Large coordinate displacement exceeds threshold")
     void testDisplacementThresholdCalculation() {
         float x1 = 62.0f, y1 = 110.0f;

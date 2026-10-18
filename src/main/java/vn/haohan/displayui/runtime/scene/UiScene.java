@@ -1864,6 +1864,7 @@ public final class UiScene implements UiHandle {
         int common = Math.min(prevSize, nextSize);
         int matched = 0;
         float maxAllowedDrift = 35.0f; // in pixels
+        float maxAllowedHorizontalDrift = 15.0f;
 
         for (int i = 0; i < common; i++) {
             UiNode prev = previous.nodes().get(i);
@@ -1871,7 +1872,7 @@ public final class UiScene implements UiHandle {
             if (prev.getClass().equals(curr.getClass())) {
                 float dx = nodeX(prev) - nodeX(curr);
                 float dy = nodeY(prev) - nodeY(curr);
-                if (Math.hypot(dx, dy) <= maxAllowedDrift) {
+                if (Math.abs(dx) <= maxAllowedHorizontalDrift && Math.hypot(dx, dy) <= maxAllowedDrift) {
                     matched++;
                 }
             }
@@ -1900,12 +1901,20 @@ public final class UiScene implements UiHandle {
         int prevSize = previous.nodes().size();
         int nextSize = next.nodes().size();
         int common = Math.min(prevSize, nextSize);
+        float maxAllowedDrift = 35.0f;
+        float maxAllowedHorizontalDrift = 15.0f;
 
         for (int i = 0; i < common; i++) {
             UiNode prev = previous.nodes().get(i);
             UiNode curr = next.nodes().get(i);
             if (Objects.equals(prev, curr)) continue;
             if (!prev.getClass().equals(curr.getClass())) {
+                rebuildNodeDisplays(i, curr);
+                continue;
+            }
+            float dx = nodeX(prev) - nodeX(curr);
+            float dy = nodeY(prev) - nodeY(curr);
+            if (Math.abs(dx) > maxAllowedHorizontalDrift || Math.hypot(dx, dy) > maxAllowedDrift) {
                 rebuildNodeDisplays(i, curr);
                 continue;
             }
