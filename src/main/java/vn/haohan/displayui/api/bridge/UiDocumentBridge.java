@@ -23,6 +23,7 @@ import vn.haohan.displayui.api.component.event.ComponentChangeEvent;
 import vn.haohan.displayui.api.component.event.ComponentClickEvent;
 import vn.haohan.displayui.api.container.Container;
 import vn.haohan.displayui.api.container.DropdownContainer;
+import vn.haohan.displayui.api.container.ScrollContainer;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiScrollList;
@@ -156,11 +157,21 @@ public final class UiDocumentBridge {
             }
         });
 
-        // Control change dispatching (Sliders & Checkboxes)
+        // Control change dispatching (Sliders, Checkboxes & ScrollContainers)
         handle.onControlChange(event -> {
             String id = event.control().id();
             for (Layer layer : layerManager.layers()) {
                 for (Container root : layer.containers()) {
+                    Optional<Container> foundContainer = root.findContainer(id);
+                    if (foundContainer.isEmpty() && root.id().equals(id)) {
+                        foundContainer = Optional.of(root);
+                    }
+                    if (foundContainer.isPresent() && foundContainer.get() instanceof ScrollContainer scroll) {
+                        scroll.scrollOffset((float) event.value());
+                        handle.update(layerManager);
+                        return;
+                    }
+
                     Optional<vn.haohan.displayui.api.component.Component> found = root.findComponent(id);
                     if (found.isPresent()) {
                         vn.haohan.displayui.api.component.Component comp = found.get();
@@ -289,18 +300,93 @@ public final class UiDocumentBridge {
             }
         }
 
-        // 2. Container Components
+        // 2. Specialized ScrollContainer Hitbox & Viewport Configuration
+        float childShiftY = 0.0f;
+        boolean isScroll = container instanceof ScrollContainer;
+        ScrollContainer scrollContainer = isScroll ? (ScrollContainer) container : null;
+
+        if (isScroll) {
+            childShiftY = -scrollContainer.scrollOffset() * effScale;
+
+            // Register scroll input hitbox covering container viewport
+            builder.scrollList(new UiScrollList(
+                    scrollContainer.id(),
+                    globalX,
+                    globalY,
+                    width,
+                    height,
+                    Math.round(scrollContainer.maxScrollOffset()),
+                    Math.round(scrollContainer.scrollOffset()),
+                    Math.round(scrollContainer.scrollStep()),
+                    Component.empty(),
+                    0.0f
+            ));
+        }
+
+        // 3. Container Components (with strict viewport clipping for ScrollContainer)
         for (vn.haohan.displayui.api.component.Component comp : container.components()) {
             if (!comp.isVisible()) continue;
-            compileComponent(layer, container, comp, globalX, globalY, effScale, effOpacity,
+
+            if (isScroll) {
+                float[] compLocal = comp.computePosition(container.width(), container.height());
+                float compGlobalY = globalY + childShiftY + compLocal[1] * effScale;
+                float compH = comp.height() * effScale * comp.scale();
+
+                // Skip component if any part exceeds ScrollContainer viewport bounds [globalY, globalY + height]
+                if (compGlobalY < globalY - 1.0f || compGlobalY + compH > globalY + height + 1.0f) {
+                    continue;
+                }
+            }
+
+            compileComponent(layer, container, comp, globalX, globalY + childShiftY, effScale, effOpacity,
                     currentAnim, depthCounter, builder, nodeAnimations);
         }
 
-        // 3. Child Containers (Recursive nesting)
+        // 4. Child Containers (Recursive nesting with strict viewport clipping for ScrollContainer)
         for (Container child : container.childContainers()) {
             if (!child.isVisible()) continue;
-            compileContainer(layer, child, globalX, globalY, container.width(), container.height(),
+
+            if (isScroll) {
+                float[] childLocal = child.computePosition(container.width(), container.height());
+                float childGlobalY = globalY + childShiftY + childLocal[1] * effScale;
+                float childH = child.height() * effScale * child.scale();
+
+                // Skip child container if any part exceeds ScrollContainer viewport bounds [globalY, globalY + height]
+                if (childGlobalY < globalY - 1.0f || childGlobalY + childH > globalY + height + 1.0f) {
+                    continue;
+                }
+            }
+
+            compileContainer(layer, child, globalX, globalY + childShiftY, container.width(), container.height(),
                     effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations);
+        }
+
+        // 5. Render Native Scrollbar on top of children with higher Z-depth
+        if (isScroll && scrollContainer.showScrollbar() && scrollContainer.maxScrollOffset() > 0) {
+            float sbW = scrollContainer.scrollbarWidth() * effScale;
+            float sbPad = scrollContainer.scrollbarPadding() * effScale;
+            float trackX = globalX + width - sbW - sbPad;
+            float trackY = globalY + sbPad;
+            float trackH = Math.max(1.0f, height - 2 * sbPad);
+
+            // Scrollbar Track
+            float trackDepth = layer.allocateDepth(depthCounter.getAndIncrement());
+            addNode(builder, nodeAnimations, new UiBackgroundNode(
+                    trackX, trackY, trackDepth, sbW, trackH, scrollContainer.scrollbarTrackColor()
+            ), currentAnim);
+
+            // Scrollbar Thumb
+            float viewRatio = height / (height + scrollContainer.maxScrollOffset());
+            float thumbH = Math.max(4.0f * effScale, trackH * viewRatio);
+            float scrollFraction = scrollContainer.maxScrollOffset() > 0
+                    ? scrollContainer.scrollOffset() / scrollContainer.maxScrollOffset()
+                    : 0.0f;
+            float thumbY = trackY + scrollFraction * (trackH - thumbH);
+
+            float thumbDepth = layer.allocateDepth(depthCounter.getAndIncrement());
+            addNode(builder, nodeAnimations, new UiBackgroundNode(
+                    trackX, thumbY, thumbDepth, sbW, thumbH, scrollContainer.scrollbarThumbColor()
+            ), currentAnim);
         }
     }
 

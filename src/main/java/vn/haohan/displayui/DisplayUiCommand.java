@@ -150,7 +150,6 @@ final class DisplayUiCommand implements CommandExecutor, TabCompleter {
                 new UiOptions(80.0f, 12.0, false, 0.2f, "haohan_display_ui", context.cameraTransform())
                         .withSides(context.doubleSided(), context.mirrorSide()),
                 candidate -> candidate.getUniqueId().equals(player.getUniqueId())));
-        context.handle().scrollAnimation(UiScrollAnimations.slide());
 
         vn.haohan.displayui.api.debug.UiDebugSession demoSession = new vn.haohan.displayui.api.debug.UiDebugSession() {
             @Override
