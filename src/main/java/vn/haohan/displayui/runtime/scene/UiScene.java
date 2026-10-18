@@ -714,6 +714,14 @@ public final class UiScene implements UiHandle {
         return updateSlider(player, controlId, localX);
     }
 
+    public boolean dragScroll(Player player, String controlId) {
+        return updateScroll(player, controlId);
+    }
+
+    public boolean dragScroll(Player player, String controlId, float localY) {
+        return updateScroll(player, controlId, localY);
+    }
+
     boolean updateHover(Player player) {
         if (removed || !shouldShow(player) || isAnimating() || nodeEntities.isEmpty()) return false;
         RaycastUtils.Projection projection = projectCursor(player);
@@ -788,6 +796,27 @@ public final class UiScene implements UiHandle {
 
         double nextValue = slider.valueAt(localX);
         UiHit hit = new UiHit(this, null, slider, player, localX, 0, 2.5);
+        return changeControl(hit, nextValue, false);
+    }
+
+    private boolean updateScroll(Player player, String controlId) {
+        UiControl control = controlStates.get(controlId);
+        if (!(control instanceof UiScrollList)) return false;
+
+        RaycastUtils.Projection projection = projectCursor(player);
+        if (projection == null) return false;
+
+        return updateScroll(player, controlId, projection.localY());
+    }
+
+    private boolean updateScroll(Player player, String controlId, float localY) {
+        UiControl control = controlStates.get(controlId);
+        if (!(control instanceof UiScrollList scrollList)) return false;
+
+        float relativeY = localY - scrollList.y();
+        float fraction = Math.clamp(relativeY / Math.max(1.0f, scrollList.height()), 0.0f, 1.0f);
+        double nextValue = fraction * scrollList.maxOffset();
+        UiHit hit = new UiHit(this, null, scrollList, player, scrollList.x(), localY, 2.5);
         return changeControl(hit, nextValue, false);
     }
 
@@ -1834,7 +1863,8 @@ public final class UiScene implements UiHandle {
 
         int common = Math.min(prevSize, nextSize);
         int matched = 0;
-        float maxAllowedDrift = 15.0f; // in pixels
+        float maxAllowedDrift = 35.0f; // in pixels
+        float maxAllowedHorizontalDrift = 15.0f;
 
         for (int i = 0; i < common; i++) {
             UiNode prev = previous.nodes().get(i);
@@ -1842,7 +1872,7 @@ public final class UiScene implements UiHandle {
             if (prev.getClass().equals(curr.getClass())) {
                 float dx = nodeX(prev) - nodeX(curr);
                 float dy = nodeY(prev) - nodeY(curr);
-                if (Math.hypot(dx, dy) <= maxAllowedDrift) {
+                if (Math.abs(dx) <= maxAllowedHorizontalDrift && Math.hypot(dx, dy) <= maxAllowedDrift) {
                     matched++;
                 }
             }
@@ -1871,12 +1901,20 @@ public final class UiScene implements UiHandle {
         int prevSize = previous.nodes().size();
         int nextSize = next.nodes().size();
         int common = Math.min(prevSize, nextSize);
+        float maxAllowedDrift = 35.0f;
+        float maxAllowedHorizontalDrift = 15.0f;
 
         for (int i = 0; i < common; i++) {
             UiNode prev = previous.nodes().get(i);
             UiNode curr = next.nodes().get(i);
             if (Objects.equals(prev, curr)) continue;
             if (!prev.getClass().equals(curr.getClass())) {
+                rebuildNodeDisplays(i, curr);
+                continue;
+            }
+            float dx = nodeX(prev) - nodeX(curr);
+            float dy = nodeY(prev) - nodeY(curr);
+            if (Math.abs(dx) > maxAllowedHorizontalDrift || Math.hypot(dx, dy) > maxAllowedDrift) {
                 rebuildNodeDisplays(i, curr);
                 continue;
             }

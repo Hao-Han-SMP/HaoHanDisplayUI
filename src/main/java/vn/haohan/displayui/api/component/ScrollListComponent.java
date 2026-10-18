@@ -17,7 +17,11 @@ import java.util.Objects;
 /**
  * Interactive scroll list component defining a scrollable viewport
  * that captures hotbar / mouse-wheel scroll events.
+ *
+ * @deprecated Use {@link vn.haohan.displayui.api.container.ScrollContainer} instead,
+ *             which provides automatic child layout, clipping, and scrollbars.
  */
+@Deprecated(since = "1.1.0", forRemoval = false)
 public class ScrollListComponent extends AbstractComponent {
 
     private int maxOffset = 0;

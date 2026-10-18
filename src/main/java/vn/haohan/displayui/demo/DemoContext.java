@@ -28,7 +28,7 @@ public final class DemoContext {
     private UiGradient rootGradient = DEFAULT_ROOT_GRADIENT;
     private double volume = 0.65;
     private boolean enabled = true;
-    private int appOffset;
+    private float appOffset;
     private int selectedApp;
     private final List<AppEntry> appEntries = new ArrayList<>(AppEntry.defaultApps());
     private UiCameraTransform cameraTransform = UiCameraTransform.fixed();
@@ -67,8 +67,8 @@ public final class DemoContext {
     public boolean enabled() { return enabled; }
     public void enabled(boolean enabled) { this.enabled = enabled; }
 
-    public int appOffset() { return appOffset; }
-    public void appOffset(int appOffset) { this.appOffset = appOffset; }
+    public float appOffset() { return appOffset; }
+    public void appOffset(float appOffset) { this.appOffset = appOffset; }
 
     public int selectedApp() { return selectedApp; }
     public void selectedApp(int selectedApp) { this.selectedApp = selectedApp; }

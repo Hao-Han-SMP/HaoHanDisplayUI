@@ -23,6 +23,7 @@ import vn.haohan.displayui.api.component.event.ComponentChangeEvent;
 import vn.haohan.displayui.api.component.event.ComponentClickEvent;
 import vn.haohan.displayui.api.container.Container;
 import vn.haohan.displayui.api.container.DropdownContainer;
+import vn.haohan.displayui.api.container.ScrollContainer;
 import vn.haohan.displayui.api.interaction.UiButton;
 import vn.haohan.displayui.api.interaction.UiCheckbox;
 import vn.haohan.displayui.api.interaction.UiScrollList;
@@ -156,11 +157,21 @@ public final class UiDocumentBridge {
             }
         });
 
-        // Control change dispatching (Sliders & Checkboxes)
+        // Control change dispatching (Sliders, Checkboxes & ScrollContainers)
         handle.onControlChange(event -> {
             String id = event.control().id();
             for (Layer layer : layerManager.layers()) {
                 for (Container root : layer.containers()) {
+                    Optional<Container> foundContainer = root.findContainer(id);
+                    if (foundContainer.isEmpty() && root.id().equals(id)) {
+                        foundContainer = Optional.of(root);
+                    }
+                    if (foundContainer.isPresent() && foundContainer.get() instanceof ScrollContainer scroll) {
+                        scroll.scrollOffset((float) event.value());
+                        handle.update(layerManager);
+                        return;
+                    }
+
                     Optional<vn.haohan.displayui.api.component.Component> found = root.findComponent(id);
                     if (found.isPresent()) {
                         vn.haohan.displayui.api.component.Component comp = found.get();
@@ -245,6 +256,20 @@ public final class UiDocumentBridge {
                                          AtomicInteger depthCounter,
                                          UiDocument.Builder builder,
                                          List<UiAnimation> nodeAnimations) {
+        compileContainer(layer, container, parentGlobalX, parentGlobalY, parentWidth, parentHeight,
+                parentScale, parentOpacity, parentAnimation, depthCounter, builder, nodeAnimations,
+                Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY);
+    }
+
+    private static void compileContainer(Layer layer, Container container,
+                                         float parentGlobalX, float parentGlobalY,
+                                         float parentWidth, float parentHeight,
+                                         float parentScale, float parentOpacity,
+                                         UiAnimation parentAnimation,
+                                         AtomicInteger depthCounter,
+                                         UiDocument.Builder builder,
+                                         List<UiAnimation> nodeAnimations,
+                                         float viewportMinY, float viewportMaxY) {
 
         float effScale = parentScale * container.scale();
         float effOpacity = parentOpacity * container.opacity();
@@ -266,17 +291,21 @@ public final class UiDocumentBridge {
         float width = container.width() * effScale;
         float height = container.height() * effScale;
 
+        float bgTop = Math.max(globalY, viewportMinY);
+        float bgBottom = Math.min(globalY + height, viewportMaxY);
+        float bgHeight = Math.max(0.0f, bgBottom - bgTop);
+
         // Specialized Dropdown Container Header Compilation
         if (container instanceof DropdownContainer dropdown) {
             dropdown.refreshLayout();
             compileDropdownHeader(layer, dropdown, globalX, globalY, effScale, effOpacity,
                     currentAnim, depthCounter, builder, nodeAnimations);
-        } else {
-            // 1. Standard Container Background Node
+        } else if (bgHeight > 0.0f) {
+            // 1. Standard Container Background Node (rendered within clamped viewport bounds)
             if (container.gradient() != null) {
                 float depth = layer.allocateDepth(depthCounter.getAndIncrement());
-                addNode(builder, nodeAnimations, new UiGradientBackgroundNode(globalX, globalY, depth, width, height, container.gradient()), currentAnim);
-            } else if (container.borderRound() > 0.0f && container.backgroundColor() != null) {
+                addNode(builder, nodeAnimations, new UiGradientBackgroundNode(globalX, bgTop, depth, width, bgHeight, container.gradient()), currentAnim);
+            } else if (container.borderRound() > 0.0f && container.backgroundColor() != null && bgTop == globalY && bgHeight == height) {
                 float depth = layer.allocateDepth(depthCounter.getAndIncrement());
                 addNode(builder, nodeAnimations, UiShapeNode.builder("rounded_rect", globalX, globalY, width, height)
                         .color(container.backgroundColor())
@@ -285,22 +314,97 @@ public final class UiDocumentBridge {
                         .build(), currentAnim);
             } else if (container.backgroundColor() != null) {
                 float depth = layer.allocateDepth(depthCounter.getAndIncrement());
-                addNode(builder, nodeAnimations, new UiBackgroundNode(globalX, globalY, depth, width, height, container.backgroundColor()), currentAnim);
+                addNode(builder, nodeAnimations, new UiBackgroundNode(globalX, bgTop, depth, width, bgHeight, container.backgroundColor()), currentAnim);
             }
         }
 
-        // 2. Container Components
+        // 2. Specialized ScrollContainer Hitbox & Viewport Configuration
+        float childShiftY = 0.0f;
+        boolean isScroll = container instanceof ScrollContainer;
+        ScrollContainer scrollContainer = isScroll ? (ScrollContainer) container : null;
+
+        float nextViewportMinY = isScroll ? Math.max(viewportMinY, globalY) : viewportMinY;
+        float nextViewportMaxY = isScroll ? Math.min(viewportMaxY, globalY + height) : viewportMaxY;
+
+        if (isScroll) {
+            childShiftY = -scrollContainer.scrollOffset() * effScale;
+
+            // Register scroll input hitbox covering container viewport
+            builder.scrollList(new UiScrollList(
+                    scrollContainer.id(),
+                    globalX,
+                    globalY,
+                    width,
+                    height,
+                    Math.round(scrollContainer.maxScrollOffset()),
+                    Math.round(scrollContainer.scrollOffset()),
+                    Math.round(scrollContainer.scrollStep()),
+                    Component.empty(),
+                    0.0f
+            ));
+        }
+
+        // 3. Container Components (clipped gracefully against viewport bounds)
         for (vn.haohan.displayui.api.component.Component comp : container.components()) {
             if (!comp.isVisible()) continue;
-            compileComponent(layer, container, comp, globalX, globalY, effScale, effOpacity,
+
+            float[] compLocal = comp.computePosition(container.width(), container.height());
+            float compGlobalY = globalY + childShiftY + compLocal[1] * effScale;
+            float compH = comp.height() * effScale * comp.scale();
+
+            // Skip component if completely outside viewport
+            if (compGlobalY < nextViewportMinY - 1.0f || compGlobalY + compH > nextViewportMaxY + 1.0f) {
+                continue;
+            }
+
+            compileComponent(layer, container, comp, globalX, globalY + childShiftY, effScale, effOpacity,
                     currentAnim, depthCounter, builder, nodeAnimations);
         }
 
-        // 3. Child Containers (Recursive nesting)
+        // 4. Child Containers (Recursive nesting with viewport clipping and clamping)
         for (Container child : container.childContainers()) {
             if (!child.isVisible()) continue;
-            compileContainer(layer, child, globalX, globalY, container.width(), container.height(),
-                    effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations);
+
+            float[] childLocal = child.computePosition(container.width(), container.height());
+            float childGlobalY = globalY + childShiftY + childLocal[1] * effScale;
+            float childH = child.height() * effScale * child.scale();
+
+            // Skip child container if completely outside viewport bounds
+            if (childGlobalY + childH <= nextViewportMinY || childGlobalY >= nextViewportMaxY) {
+                continue;
+            }
+
+            compileContainer(layer, child, globalX, globalY + childShiftY, container.width(), container.height(),
+                    effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations,
+                    nextViewportMinY, nextViewportMaxY);
+        }
+
+        // 5. Render Native Scrollbar on top of children with higher Z-depth
+        if (isScroll && scrollContainer.showScrollbar() && scrollContainer.maxScrollOffset() > 0) {
+            float sbW = scrollContainer.scrollbarWidth() * effScale;
+            float sbPad = scrollContainer.scrollbarPadding() * effScale;
+            float trackX = globalX + width - sbW - sbPad;
+            float trackY = globalY + sbPad;
+            float trackH = Math.max(1.0f, height - 2 * sbPad);
+
+            // Scrollbar Track
+            float trackDepth = layer.allocateDepth(depthCounter.getAndIncrement());
+            addNode(builder, nodeAnimations, new UiBackgroundNode(
+                    trackX, trackY, trackDepth, sbW, trackH, scrollContainer.scrollbarTrackColor()
+            ), currentAnim);
+
+            // Scrollbar Thumb
+            float viewRatio = height / (height + scrollContainer.maxScrollOffset());
+            float thumbH = Math.max(4.0f * effScale, trackH * viewRatio);
+            float scrollFraction = scrollContainer.maxScrollOffset() > 0
+                    ? scrollContainer.scrollOffset() / scrollContainer.maxScrollOffset()
+                    : 0.0f;
+            float thumbY = trackY + scrollFraction * (trackH - thumbH);
+
+            float thumbDepth = layer.allocateDepth(depthCounter.getAndIncrement());
+            addNode(builder, nodeAnimations, new UiBackgroundNode(
+                    trackX, thumbY, thumbDepth, sbW, thumbH, scrollContainer.scrollbarThumbColor()
+            ), currentAnim);
         }
     }
 

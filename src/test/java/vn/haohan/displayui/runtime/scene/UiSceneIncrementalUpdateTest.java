@@ -89,16 +89,29 @@ class UiSceneIncrementalUpdateTest {
     }
 
     @Test
-    @DisplayName("Position drift greater than 15px is rejected when ratio drops below 50%")
+    @DisplayName("Position drift greater than 35px is rejected when ratio drops below 50%")
     void testPositionDriftThreshold() {
         UiDocument doc1 = UiDocument.builder()
                 .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1"), 10.0f, 10.0f, 100.0f, 20.0f, UiTextAlignment.LEFT))
                 .build();
         UiDocument doc2 = UiDocument.builder()
-                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1"), 30.0f, 10.0f, 100.0f, 20.0f, UiTextAlignment.LEFT))
+                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1"), 60.0f, 10.0f, 100.0f, 20.0f, UiTextAlignment.LEFT))
                 .build();
 
         assertFalse(UiScene.isStructurallySimilar(doc1, doc2));
+    }
+
+    @Test
+    @DisplayName("Horizontal drift greater than 15px is rejected even if total hypot is within 35px")
+    void testHorizontalDriftRejectionInStructuralSimilarity() {
+        UiDocument doc1 = UiDocument.builder()
+                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("<"), 15.0f, 110.0f, 18.0f, 14.0f, UiTextAlignment.CENTER))
+                .build();
+        UiDocument doc2 = UiDocument.builder()
+                .add(new AlignedTextNode(net.kyori.adventure.text.Component.text("1 / 4"), 40.0f, 110.0f, 36.0f, 14.0f, UiTextAlignment.CENTER))
+                .build();
+
+        assertFalse(UiScene.isStructurallySimilar(doc1, doc2), "Horizontal jump of 25px must not be treated as structurally similar");
     }
 
     @Test

@@ -77,7 +77,11 @@ public final class HierarchicalDemoRenderer {
         Container headerSub = buildHeaderSubContainer(activePage.title());
         mainDialog.addContainer(headerSub);
 
-        // SubContainer B: Content SubContainer
+        // SubContainer B: Footer Navigation & Toggles (static chrome registered before dynamic content)
+        Container footerSub = buildFooterSubContainer(pageIndex, pages.size(), context.doubleSided(), context.mirrorSide());
+        mainDialog.addContainer(footerSub);
+
+        // SubContainer C: Content SubContainer (dynamic scrollable content registered last)
         Container contentSub = Container.builder("demo_content_sub")
                 .anchor(UiAnchorPoint.CENTER)
                 .origin(UiAnchorPoint.CENTER)
@@ -86,10 +90,6 @@ public final class HierarchicalDemoRenderer {
                 .build();
         activePage.build(contentSub, context);
         mainDialog.addContainer(contentSub);
-
-        // SubContainer C: Footer Navigation & Toggles
-        Container footerSub = buildFooterSubContainer(pageIndex, pages.size(), context.doubleSided(), context.mirrorSide());
-        mainDialog.addContainer(footerSub);
 
         dialogLayer.addContainer(mainDialog);
         return manager;

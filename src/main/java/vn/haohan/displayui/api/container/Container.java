@@ -347,10 +347,13 @@ public class Container {
             };
         }
         float[] parentGlobal = parentContainer.computeGlobalPosition();
+        float scrollShiftY = (parentContainer instanceof ScrollContainer scroll)
+                ? -scroll.scrollOffset() * parentContainer.scale()
+                : 0.0f;
         float[] local = computePosition(parentContainer.width(), parentContainer.height());
         return new float[]{
                 parentGlobal[0] + local[0] * parentContainer.scale(),
-                parentGlobal[1] + local[1] * parentContainer.scale()
+                parentGlobal[1] + scrollShiftY + local[1] * parentContainer.scale()
         };
     }
 
