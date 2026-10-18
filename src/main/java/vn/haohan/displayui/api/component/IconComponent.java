@@ -76,8 +76,12 @@ public class IconComponent extends AbstractComponent {
 
     public ItemStack resolveItemStack() {
         if (itemStack != null) return itemStack;
-        if (material != null && !material.isAir()) {
-            return new ItemStack(material);
+        if (material != null && material != Material.AIR) {
+            try {
+                return new ItemStack(material);
+            } catch (Throwable ignored) {
+                return null;
+            }
         }
         return null;
     }
