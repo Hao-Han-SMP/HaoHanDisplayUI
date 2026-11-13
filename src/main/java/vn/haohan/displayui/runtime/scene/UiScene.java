@@ -1859,12 +1859,13 @@ public final class UiScene implements UiHandle {
 
         // If the size ratio is too disparate, treat as page change
         float sizeRatio = (float) Math.min(prevSize, nextSize) / (float) Math.max(prevSize, nextSize);
-        if (sizeRatio < 0.5f) return false;
+        if (sizeRatio < 0.40f) return false;
 
         int common = Math.min(prevSize, nextSize);
         int matched = 0;
         float maxAllowedDrift = 35.0f; // in pixels
         float maxAllowedHorizontalDrift = 15.0f;
+        float maxAllowedVerticalDrift = 60.0f;
 
         for (int i = 0; i < common; i++) {
             UiNode prev = previous.nodes().get(i);
@@ -1872,14 +1873,15 @@ public final class UiScene implements UiHandle {
             if (prev.getClass().equals(curr.getClass())) {
                 float dx = nodeX(prev) - nodeX(curr);
                 float dy = nodeY(prev) - nodeY(curr);
-                if (Math.abs(dx) <= maxAllowedHorizontalDrift && Math.hypot(dx, dy) <= maxAllowedDrift) {
+                if ((Math.abs(dx) <= 1.0f && Math.abs(dy) <= maxAllowedVerticalDrift)
+                        || (Math.abs(dx) <= maxAllowedHorizontalDrift && Math.hypot(dx, dy) <= maxAllowedDrift)) {
                     matched++;
                 }
             }
         }
 
         float matchRatio = (float) matched / (float) Math.max(prevSize, nextSize);
-        return matchRatio >= 0.5f;
+        return matchRatio >= 0.5f || (common >= 10 && (float) matched / (float) common >= 0.85f);
     }
 
     private static float nodeX(UiNode node) {
@@ -1903,6 +1905,7 @@ public final class UiScene implements UiHandle {
         int common = Math.min(prevSize, nextSize);
         float maxAllowedDrift = 35.0f;
         float maxAllowedHorizontalDrift = 15.0f;
+        float maxAllowedVerticalDrift = 60.0f;
 
         for (int i = 0; i < common; i++) {
             UiNode prev = previous.nodes().get(i);
@@ -1914,7 +1917,9 @@ public final class UiScene implements UiHandle {
             }
             float dx = nodeX(prev) - nodeX(curr);
             float dy = nodeY(prev) - nodeY(curr);
-            if (Math.abs(dx) > maxAllowedHorizontalDrift || Math.hypot(dx, dy) > maxAllowedDrift) {
+            boolean withinDrift = (Math.abs(dx) <= 1.0f && Math.abs(dy) <= maxAllowedVerticalDrift)
+                    || (Math.abs(dx) <= maxAllowedHorizontalDrift && Math.hypot(dx, dy) <= maxAllowedDrift);
+            if (!withinDrift) {
                 rebuildNodeDisplays(i, curr);
                 continue;
             }
