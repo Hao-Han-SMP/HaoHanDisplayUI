@@ -258,7 +258,7 @@ public final class UiDocumentBridge {
                                          List<UiAnimation> nodeAnimations) {
         compileContainer(layer, container, parentGlobalX, parentGlobalY, parentWidth, parentHeight,
                 parentScale, parentOpacity, parentAnimation, depthCounter, builder, nodeAnimations,
-                Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY);
+                Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, true);
     }
 
     private static void compileContainer(Layer layer, Container container,
@@ -269,7 +269,8 @@ public final class UiDocumentBridge {
                                          AtomicInteger depthCounter,
                                          UiDocument.Builder builder,
                                          List<UiAnimation> nodeAnimations,
-                                         float viewportMinY, float viewportMaxY) {
+                                         float viewportMinY, float viewportMaxY,
+                                         boolean includeChildContainers) {
 
         float effScale = parentScale * container.scale();
         float effOpacity = parentOpacity * container.opacity();
@@ -362,21 +363,40 @@ public final class UiDocumentBridge {
         }
 
         // 4. Child Containers (Recursive nesting with viewport clipping and clamping)
-        for (Container child : container.childContainers()) {
-            if (!child.isVisible()) continue;
+        if (includeChildContainers) {
+            List<DropdownContainer> deferredDropdowns = null;
+            for (Container child : container.childContainers()) {
+                if (!child.isVisible()) continue;
 
-            float[] childLocal = child.computePosition(container.width(), container.height());
-            float childGlobalY = globalY + childShiftY + childLocal[1] * effScale;
-            float childH = child.height() * effScale * child.scale();
+                float[] childLocal = child.computePosition(container.width(), container.height());
+                float childGlobalY = globalY + childShiftY + childLocal[1] * effScale;
+                float childH = child.height() * effScale * child.scale();
 
-            // Skip child container if completely outside viewport bounds
-            if (childGlobalY + childH <= nextViewportMinY || childGlobalY >= nextViewportMaxY) {
-                continue;
+                // Skip child container if completely outside viewport bounds
+                if (childGlobalY + childH <= nextViewportMinY || childGlobalY >= nextViewportMaxY) {
+                    continue;
+                }
+
+                if (child instanceof DropdownContainer dropdown) {
+                    compileContainer(layer, child, globalX, globalY + childShiftY, container.width(), container.height(),
+                            effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations,
+                            nextViewportMinY, nextViewportMaxY, false);
+                    if (deferredDropdowns == null) deferredDropdowns = new ArrayList<>();
+                    deferredDropdowns.add(dropdown);
+                } else {
+                    compileContainer(layer, child, globalX, globalY + childShiftY, container.width(), container.height(),
+                            effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations,
+                            nextViewportMinY, nextViewportMaxY, true);
+                }
             }
 
-            compileContainer(layer, child, globalX, globalY + childShiftY, container.width(), container.height(),
-                    effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations,
-                    nextViewportMinY, nextViewportMaxY);
+            if (deferredDropdowns != null) {
+                for (DropdownContainer dropdown : deferredDropdowns) {
+                    compileDropdownChildContainers(layer, dropdown, globalX, globalY + childShiftY,
+                            container.width(), container.height(), effScale, effOpacity, currentAnim,
+                            depthCounter, builder, nodeAnimations, nextViewportMinY, nextViewportMaxY);
+                }
+            }
         }
 
         // 5. Render Native Scrollbar on top of children with higher Z-depth
@@ -449,6 +469,39 @@ public final class UiDocumentBridge {
 
         // 4. Header Click Button Hit Zone
         builder.button(new UiButton(dropdown.toggleButtonId(), globalX, globalY, headerW, headerH));
+    }
+
+    private static void compileDropdownChildContainers(Layer layer, DropdownContainer dropdown,
+                                                       float parentGlobalX, float parentGlobalY,
+                                                       float parentWidth, float parentHeight,
+                                                       float parentScale, float parentOpacity,
+                                                       UiAnimation parentAnimation,
+                                                       AtomicInteger depthCounter,
+                                                       UiDocument.Builder builder,
+                                                       List<UiAnimation> nodeAnimations,
+                                                       float viewportMinY, float viewportMaxY) {
+        float effScale = parentScale * dropdown.scale();
+        float effOpacity = parentOpacity * dropdown.opacity();
+        UiAnimation currentAnim = dropdown.activeAnimation().orElse(parentAnimation);
+        float[] localPos = dropdown.computePosition(parentWidth, parentHeight);
+        float globalX = parentGlobalX + localPos[0] * parentScale;
+        float globalY = parentGlobalY + localPos[1] * parentScale;
+
+        for (Container child : dropdown.childContainers()) {
+            if (!child.isVisible()) continue;
+
+            float[] childLocal = child.computePosition(dropdown.width(), dropdown.height());
+            float childGlobalY = globalY + childLocal[1] * effScale;
+            float childH = child.height() * effScale * child.scale();
+
+            if (childGlobalY + childH <= viewportMinY || childGlobalY >= viewportMaxY) {
+                continue;
+            }
+
+            compileContainer(layer, child, globalX, globalY, dropdown.width(), dropdown.height(),
+                    effScale, effOpacity, currentAnim, depthCounter, builder, nodeAnimations,
+                    viewportMinY, viewportMaxY, true);
+        }
     }
 
     private static void compileComponent(Layer layer, Container container,

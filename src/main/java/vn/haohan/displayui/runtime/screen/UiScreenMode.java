@@ -27,6 +27,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
@@ -98,6 +99,7 @@ public final class UiScreenMode {
     private UiHit hovered;
     private long lastClick;
     private boolean active;
+    private ItemStack[] savedHotbar;
 
     public UiScreenMode(Player player, UiScene scene) {
         this(player, scene, DEFAULT_DISTANCE, DEFAULT_SENSITIVITY);
@@ -119,6 +121,7 @@ public final class UiScreenMode {
     public void enter() {
         if (active) return;
         active = true;
+        clearAndSaveHotbar();
 
         // Clean up any stale cursor or tripod entities near player before spawning new ones
         for (Entity e : player.getWorld().getNearbyEntities(player.getLocation(), 20, 20, 20)) {
@@ -490,6 +493,7 @@ public final class UiScreenMode {
             }
             tripod = null;
             this.player.setInvisible(false);
+            restoreHotbar();
             playSound(this.player, Sound.UI_TOAST_OUT, 1.0f);
             if (start != null) {
                 this.player.teleport(this.start);
@@ -505,6 +509,27 @@ public final class UiScreenMode {
         if (scene.isValid() && originalSceneOrigin != null) {
             scene.move(originalSceneOrigin, 0);
         }
+    }
+
+    /** Saves hotbar slots 0..8 and clears them so the player holds no items in screen mode. */
+    void clearAndSaveHotbar() {
+        var inventory = player.getInventory();
+        savedHotbar = new ItemStack[9];
+        for (int i = 0; i < 9; i++) {
+            ItemStack item = inventory.getItem(i);
+            savedHotbar[i] = item != null ? item.clone() : null;
+            inventory.setItem(i, null);
+        }
+    }
+
+    /** Restores previously saved hotbar slots 0..8. */
+    void restoreHotbar() {
+        if (savedHotbar == null) return;
+        var inventory = player.getInventory();
+        for (int i = 0; i < 9; i++) {
+            inventory.setItem(i, savedHotbar[i]);
+        }
+        savedHotbar = null;
     }
 
     /**
